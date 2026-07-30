@@ -1,0 +1,143 @@
+{
+  "$comment": "Repos that share the ai/ + .claude/ workflow scaffolding, and the rules for which files are supposed to be shared. Edit paths/vars when you add a repo.",
+
+  "repos": [
+    {
+      "name": "glossr-api",
+      "path": "D:/projects/glossr/glossr-api",
+      "stack": "backend",
+      "vars": {
+        "jiraKey": "GLO",
+        "storyType": "Story",
+        "subtaskType": "Sub-task",
+        "architectAgent": "NodeArchitectAgent",
+        "architectDoc": "ai/agents/node-architect.md",
+        "developerAgent": "NodeDeveloperAgent",
+        "developerDoc": "ai/agents/node-developer.md",
+        "reviewerAgent": "NodeReviewerAgent",
+        "reviewerDoc": "ai/agents/node-reviewer.md",
+        "qaArchitectAgent": "NodeQAArchitectAgent",
+        "qaArchitectDoc": "ai/agents/node-qa-architect.md",
+        "qaDeveloperAgent": "NodeQADeveloperAgent",
+        "qaDeveloperDoc": "ai/agents/node-qa-developer.md",
+        "qaOrchestratorAgent": "NodeQAOrchestratorAgent",
+        "qaOrchestratorDoc": "ai/agents/node-qa-orchestrator.md"
+      }
+    },
+    {
+      "name": "snap-backend",
+      "path": "D:/projects/snap-proof/backend",
+      "stack": "backend",
+      "vars": {
+        "jiraKey": "PROOF",
+        "storyType": "Task",
+        "subtaskType": "Sub-task",
+        "architectAgent": "NodeArchitectAgent",
+        "architectDoc": "ai/agents/node-architect.md",
+        "developerAgent": "NodeDeveloperAgent",
+        "developerDoc": "ai/agents/node-developer.md",
+        "reviewerAgent": "NodeReviewerAgent",
+        "reviewerDoc": "ai/agents/node-reviewer.md",
+        "qaArchitectAgent": "NodeQAArchitectAgent",
+        "qaArchitectDoc": "ai/agents/node-qa-architect.md",
+        "qaDeveloperAgent": "NodeQADeveloperAgent",
+        "qaDeveloperDoc": "ai/agents/node-qa-developer.md",
+        "qaOrchestratorAgent": "NodeQAOrchestratorAgent",
+        "qaOrchestratorDoc": "ai/agents/node-qa-orchestrator.md"
+      }
+    },
+    {
+      "name": "snap-frontend",
+      "path": "D:/projects/snap-proof/frontend",
+      "stack": "frontend",
+      "vars": {
+        "jiraKey": "PROOF",
+        "storyType": "Task",
+        "subtaskType": "Sub-task",
+        "architectAgent": "AngularArchitectAgent",
+        "architectDoc": "ai/agents/architect-lead.md",
+        "developerAgent": "AngularDeveloperAgent",
+        "developerDoc": "ai/agents/angular-developer.md",
+        "reviewerAgent": "AngularReviewerAgent",
+        "reviewerDoc": "ai/agents/angular-reviewer.md",
+        "qaDeveloperAgent": "AngularQAAgent",
+        "qaDeveloperDoc": "ai/agents/angular-qa.md"
+      }
+    },
+    {
+      "name": "glossr-frontend",
+      "path": "D:/projects/glossr/glossr-frontend",
+      "stack": "frontend",
+      "vars": {
+        "jiraKey": "GLO",
+        "storyType": "Story",
+        "subtaskType": "Sub-task",
+        "architectAgent": "AngularArchitectAgent",
+        "architectDoc": "ai/agents/architect-lead.md",
+        "developerAgent": "AngularDeveloperAgent",
+        "developerDoc": "ai/agents/angular-developer.md",
+        "reviewerAgent": "AngularReviewerAgent",
+        "reviewerDoc": "ai/agents/angular-reviewer.md"
+      }
+    }
+  ],
+
+  "shared": [
+    {
+      "glob": ".claude/commands/*.md",
+      "cohort": "all",
+      "note": "Command stubs — should be byte-identical modulo the task-ID example."
+    },
+    {
+      "glob": "ai/scripts/*.js",
+      "cohort": "all",
+      "note": "Jira client and friends — prime extraction candidate."
+    },
+    {
+      "glob": "ai/*.md",
+      "cohort": "all",
+      "exclude": [
+        "ai/PROGRESS.md",
+        "ai/PROJECT_SUMMARY.md",
+        "ai/STATS.md",
+        "ai/DISTRIBUTED_SETUP.md"
+      ],
+      "note": "AGENTS.md / INITIAL_PROMPT.md / JIRA_MARKUP.md / WORKFLOW.md — template + vars."
+    },
+    {
+      "glob": "ai/agents/*.md",
+      "cohort": "stack",
+      "note": "Role contract is shareable within a stack; persona body is not."
+    },
+    {
+      "glob": "ai/infrastructure/code-guidelines.md",
+      "cohort": "stack"
+    },
+    {
+      "glob": "ai/infrastructure/project-structure.md",
+      "cohort": "stack"
+    }
+  ],
+
+  "normalize": {
+    "trailingWhitespace": true,
+    "jiraKeys": true,
+    "repoPaths": true,
+    "issueTypes": false,
+    "$comment": "vars listed here are folded to {{placeholders}} before comparing, so stack-specific naming stops counting as drift. What survives folding is the real divergence.",
+    "vars": [
+      "architectAgent",
+      "architectDoc",
+      "developerAgent",
+      "developerDoc",
+      "reviewerAgent",
+      "reviewerDoc",
+      "qaArchitectAgent",
+      "qaArchitectDoc",
+      "qaDeveloperAgent",
+      "qaDeveloperDoc",
+      "qaOrchestratorAgent",
+      "qaOrchestratorDoc"
+    ]
+  }
+}

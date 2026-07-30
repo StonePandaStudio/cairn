@@ -1,0 +1,17 @@
+{
+  "name": "ai-kit",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Drift report for the shared ai/ + .claude/ workflow scaffolding across repos.",
+  "bin": {
+    "ai-kit-doctor": "doctor.js"
+  },
+  "scripts": {
+    "doctor": "node doctor.js",
+    "doctor:json": "node doctor.js --json",
+    "doctor:strict": "node doctor.js --strict"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
