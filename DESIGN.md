@@ -342,10 +342,90 @@ Sources: [BMAD-METHOD](https://github.com/bmad-code-org/BMAD-METHOD) ·
 [Spec Kit docs](https://github.github.com/spec-kit/) ·
 [GitHub blog: spec-driven development](https://github.blog/ai-and-ml/generative-ai/spec-driven-development-with-ai-get-started-with-a-new-open-source-toolkit/)
 
+## A possible v3: cross-repo orchestration
+
+Surveyed 2026-07-31. A different and larger idea than v1 or v2: not keeping five
+copies of a workflow in sync, but modelling the links, plans, docs and contexts
+that span the repos. Recorded as a direction, not a plan — this is a third
+product, not an extension.
+
+### The landscape is fragmented
+
+The four parts of the idea land in four different prior-art buckets, and nothing
+covers all four:
+
+| Layer | What exists | Maturity |
+|---|---|---|
+| Repo graph, code-derived | Riftmap (parsers across 12 ecosystems, `/impact` API), Sourcegraph MCP, GitLab Orbit (property graph of symbols + SDLC objects over MCP), `repo-graph`, `mcp-context-graph`, `codebase-memory-mcp` | crowded, solved |
+| Declared entity relations | Backstage catalog — `catalog-info.yaml` per repo, typed relations (`dependsOn`, `providesApi`, `consumesApi`, `partOf`), TechDocs for cross-repo docs. Port / Roadie / Cortex commercially | mature, heavyweight |
+| Monorepo graph for agents | Nx project graph + Nx MCP — best in class, monorepo only | mature, wrong shape |
+| Repo fan-out / manifest | Google `repo` + `manifest.xml`, `meta`, `garden`, `mu-repo`, `gita`, `myrepos` | old, dumb, durable |
+| Cross-repo contract | OpenAPI + generators, Buf Schema Registry, Pact, GraphQL federation | mature |
+| Cross-repo plans | **Jira already does this** — parent issue, subtasks in different repos | already in place |
+| Cross-repo *authored* docs and contexts | — | **nothing** |
+
+### The gap is narrower than it first looks
+
+Three of the four parts have prior art worth consuming rather than rebuilding:
+
+- **Links (code)** — Riftmap or Sourcegraph. Derived data: cheap to buy, expensive
+  to maintain.
+- **Plans** — the tracker. `PROOF` is already shared across snap backend and
+  frontend, `GLO` across api, cli and frontend; `ai/WORKFLOW.md` documents this
+  explicitly. The cross-repo join key already exists, and cairn already abstracts it.
+- **Contracts** — OpenAPI between `glossr-api` and `glossr-frontend`.
+
+What is genuinely unserved is the **authored** layer.
+`ai/contexts/entities/invoice.md` exists in `glossr-api` *and* in
+`glossr-frontend`, describing the same entity from two sides. No parser can derive
+that. Backstage does not model prose. Riftmap models imports, not intent. Spec Kit
+and BMAD are single-repo.
+
+### Why this is not a random pivot
+
+Riftmap's own writeup names the failure mode: Mabl hand-maintains an 850-line
+"Repo Coordination Graph" across 79 repos, and the stated gap is that *manual
+registries decay without dedicated maintenance*.
+
+That is precisely what happened to our `ai/` folders. Any declared cross-repo link
+layer will drift the same way — and drift detection on declared-versus-actual is
+the one thing cairn already does. Same machinery, new artifact:
+
+```
+cairn today   does ai/AGENTS.md still agree across five repos?
+cairn next    does glossr-api's invoice.md still agree with glossr-frontend's?
+              does the entity a backend context describes still exist in the API contract?
+```
+
+### If it gets built
+
+- **Do not build a code graph.** Point at Sourcegraph or Riftmap over MCP.
+- **Do model declared doc-level relations.** Steal Backstage's typed-relation idea
+  but at document granularity rather than service granularity: `counterpartOf`,
+  `describedBy`, `consumedBy`. Small vocabulary, declared in `cairn.config.json` or
+  in per-doc frontmatter.
+- **Use the tracker as the spine.** A `PROOF-217` spanning two repos is the natural
+  join. Nothing in the landscape connects an issue tracker to prose contexts across
+  repos.
+- **Serve it over MCP, not as generated files.** Where the field converged in 2026,
+  and it sidesteps the "generated files fight the agent" risk listed above.
+
+Sequencing: nothing here should start before v1 has run across the five repos.
+
+Sources: [Riftmap on cross-repo context](https://riftmap.dev/blog/ai-coding-agents-need-cross-repo-context/) ·
+[Sourcegraph MCP](https://sourcegraph.com/mcp) ·
+[Backstage well-known relations](https://backstage.io/docs/features/software-catalog/well-known-relations/) ·
+[Nx: enhance your AI coding agent](https://nx.dev/docs/features/enhance-ai) ·
+[mcp-context-graph](https://github.com/padobrik/mcp-context-graph) ·
+[codebase-memory-mcp](https://github.com/DeusData/codebase-memory-mcp)
+
 ## Open questions
 
 - **Build the v2 renderer, or wrap BMAD / Spec Kit?** See the prior-art section.
   Deferred until v1 has run across the five repos for a sprint.
+- **Is v3 the same product?** Cross-repo orchestration shares cairn's drift
+  machinery but almost nothing else — different scope, different surface (MCP, not
+  files), plausibly a different package. Decide before writing code, not after.
 - Rename the working directory `D:/projects/ai-kit` → `cairn`? Git remote and
   `.idea/` implications; not done.
 - Run `cairn init` against the five real repos — deletes 237 lines from each and
