@@ -170,7 +170,8 @@ Three v1 details that exist purely to keep the blast radius small:
 ## The v2 idea: workflow as config
 
 The largest remaining win, and the actual answer to "I don't want to sync manually
-anymore."
+anymore." Read the prior-art section below before building it — BMAD already ships
+something very close, and whether to build or wrap is an open question.
 
 The pipeline currently exists **three times** — in `.claude/commands/*.md`, in
 `ai/WORKFLOW.md`, and in each agent doc. Three copies is why it drifts. Declare it
@@ -251,8 +252,100 @@ Each step independently valuable; stop anywhere.
   repo #7 or via churn rate, not on day one. Migrating incrementally is what makes
   that acceptable.
 
+## Prior art: BMAD-METHOD and GitHub Spec Kit
+
+Surveyed 2026-07-31. Both are mature, widely used, and solve a *different* problem —
+which is the useful finding, because it says what cairn should and should not build.
+
+(Checked because "Speccy" is ambiguous: `wework/speccy` is an unrelated OpenAPI
+linter. The relevant tool is `github/spec-kit`.)
+
+| | BMAD-METHOD | Spec Kit | cairn |
+|---|---|---|---|
+| Unit of concern | one project | one feature in one project | **N repos** |
+| Stance | prescriptive method | prescriptive method (SDD) | descriptive — your method, kept in sync |
+| Install | `npx bmad-method install` | `specify init` (Python/uv) | `npx cairn init` |
+| Ships content | 12+ personas, 34+ workflows, 5 modules | templates, checklists, constitution | **zero** |
+| Artifacts | `_bmad-output/`, `SPEC.md`, `stories.yaml`, `sprint-status.yaml` | `.specify/`, spec→plan→tasks | `_cairn/` + the existing `ai/` |
+| Agent coupling | own personas | agent-agnostic, 35 integrations | the repos' existing agent docs |
+| Tracker sync | none found | `/speckit.taskstoissues` → GitHub Issues | Jira Server, behind a provider interface |
+| Post-install drift | not addressed | not addressed¹ | the entire point |
+| Multi-repo | no | no | yes — cohorts, aliases, normalized diff |
+| Brownfield | greenfield-oriented | greenfield-oriented | brownfield-only by construction |
+
+¹ `specify self upgrade` upgrades the CLI, not templates already written into a project.
+
+Both answer *"what process should I run?"* Cairn answers *"how do five repos stop
+disagreeing about the process they already run?"* Neither has the second thing.
+
+### What they have that cairn does not
+
+- **BMAD**: a real content library — 12+ personas, 34+ YAML workflow blueprints,
+  expansion packs (Test Architect, game dev). One maintained persona set against
+  our five hand-written ones sitting at 33–92% similarity.
+- **Spec Kit**: `.specify/templates/overrides/` — a layered override directory,
+  which is the "slots, not file overrides" idea above, already shipped and
+  validated by GitHub. Read it before designing ours. Also `/speckit.analyze` for
+  cross-artifact consistency, and `constitution.md` for project principles.
+
+### What cairn has that neither does
+
+- **Cross-repo drift measurement.** Genuinely absent from both. Neither has a
+  concept of "these two copies disagree by 72 lines."
+- **Hand-edit detection.** Spec Kit sidesteps it via the overrides directory
+  (nothing to hand-edit); BMAD, nothing found. No equivalent of `MODIFIED`.
+- **Jira Server 8.5.1 Basic auth.** Spec Kit does GitHub Issues; our board is
+  on-prem and predates PATs.
+- **Not owning the method.** `code-guidelines.md` at 43% divergence encodes real
+  per-codebase truth. Adopting either framework means discarding it.
+
+### Convergences worth stealing
+
+1. **BMAD's workflows are YAML blueprints** — prior art for the workflow-as-config
+   sketch above. Read their schema before inventing one.
+2. **`constitution.md` / `project-context.md`** — both frameworks treat project
+   principles as explicitly non-generated. Independent confirmation of tier 3.
+3. **`sprint-status.yaml` / `stories.yaml`** — BMAD keeps progress machine-readable.
+   Our `ai/progress/*.md` + `PROGRESS.md` rollup is hand-maintained markdown tables.
+   Migration step 5 gets much easier if that state moves to YAML first.
+4. **`/speckit.taskstoissues`** is our `create-subtask` sync point under another name.
+5. Spec→Plan→Tasks→Implement vs our brief→description→plan→execute→review→QA.
+   Near-identical. Two independent teams landing on the same pipeline is decent
+   evidence the pipeline is right.
+
+### The uncomfortable conclusion
+
+**v2 as sketched rebuilds what BMAD already ships.** Rendering command stubs and
+agent contracts from a workflow declaration is squarely BMAD's territory, with far
+more iteration behind it. v1 — tracker abstraction plus multi-repo drift — is the
+part neither framework touches.
+
+So the v2 fork is not "which template syntax":
+
+- **cairn as engine** — render our own templates. Full control, keeps five repos'
+  accumulated conventions, but means maintaining a template library forever.
+- **cairn as sync layer over BMAD or Spec Kit** — let them own method and content;
+  cairn keeps their output consistent across five repos and bridges Jira Server.
+  Much smaller surface, and it plays to the gap actually found.
+
+The doctor's own numbers argue for the second: the files cheapest to unify (command
+stubs, 3 COSMETIC) are exactly the ones BMAD would supply, while the ones that must
+be kept (`code-guidelines.md`, `INITIAL_PROMPT.md`) are ones neither framework wants
+to own anyway.
+
+Not decided. The tracker migration does not depend on it either way, so the sane
+order is to run v1 across the five repos and live with it for a sprint first.
+
+Sources: [BMAD-METHOD](https://github.com/bmad-code-org/BMAD-METHOD) ·
+[BMAD workflow map](https://docs.bmad-method.org/reference/workflow-map/) ·
+[github/spec-kit](https://github.com/github/spec-kit) ·
+[Spec Kit docs](https://github.github.com/spec-kit/) ·
+[GitHub blog: spec-driven development](https://github.blog/ai-and-ml/generative-ai/spec-driven-development-with-ai-get-started-with-a-new-open-source-toolkit/)
+
 ## Open questions
 
+- **Build the v2 renderer, or wrap BMAD / Spec Kit?** See the prior-art section.
+  Deferred until v1 has run across the five repos for a sprint.
 - Rename the working directory `D:/projects/ai-kit` → `cairn`? Git remote and
   `.idea/` implications; not done.
 - Run `cairn init` against the five real repos — deletes 237 lines from each and
