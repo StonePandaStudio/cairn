@@ -1,5 +1,5 @@
 {
-  "$comment": "Repos that share the ai/ + .claude/ workflow scaffolding, and the rules for which files are supposed to be shared. Edit paths/vars when you add a repo.",
+  "$comment": "Workspace for `cairn doctor`. Repos listed here are compared against each other. Per-repo settings (tracker, stack, agent names) belong in each repo's own cairn.config.json — the inline `vars` blocks below are a fallback used only until a repo has been through `cairn init`.",
 
   "repos": [
     {
@@ -79,6 +79,31 @@
         "reviewerAgent": "AngularReviewerAgent",
         "reviewerDoc": "ai/agents/angular-reviewer.md"
       }
+    },
+    {
+      "$comment": "No issue tracker and no ai/scripts/. It is in the workspace as the stack-agnostic test case: rules that require a tracker skip it, and its renamed command stubs are folded onto the canonical names via pathAliases rather than reported as gaps.",
+      "name": "glossr-cli",
+      "path": "D:/projects/glossr/glossr-cli",
+      "stack": "cli",
+      "pathAliases": {
+        ".claude/commands/execute-tests.md": ".claude/commands/execute-test-plan.md",
+        ".claude/commands/review-code.md": ".claude/commands/code-review.md"
+      },
+      "vars": {
+        "jiraKey": "GLO",
+        "storyType": "Story",
+        "subtaskType": "Sub-task",
+        "architectAgent": "CliArchitectAgent",
+        "architectDoc": "ai/agents/cli-architect.md",
+        "developerAgent": "CliDeveloperAgent",
+        "developerDoc": "ai/agents/cli-developer.md",
+        "reviewerAgent": "CliReviewerAgent",
+        "reviewerDoc": "ai/agents/cli-node-reviewer.md",
+        "qaArchitectAgent": "CliQAArchitectAgent",
+        "qaArchitectDoc": "ai/agents/cli-qa-architect.md",
+        "qaDeveloperAgent": "CliQADeveloperAgent",
+        "qaDeveloperDoc": "ai/agents/cli-qa-developer.md"
+      }
     }
   ],
 
@@ -86,12 +111,13 @@
     {
       "glob": ".claude/commands/*.md",
       "cohort": "all",
-      "note": "Command stubs — should be byte-identical modulo the task-ID example."
+      "note": "Command stubs — should be identical modulo vars. Rendered from workflow config in v2."
     },
     {
       "glob": "ai/scripts/*.js",
       "cohort": "all",
-      "note": "Jira client and friends — prime extraction candidate."
+      "requires": { "tracker": true },
+      "note": "Replaced by the vendored cairn shim — this rule now guards against a copy creeping back."
     },
     {
       "glob": "ai/*.md",
@@ -100,9 +126,11 @@
         "ai/PROGRESS.md",
         "ai/PROJECT_SUMMARY.md",
         "ai/STATS.md",
-        "ai/DISTRIBUTED_SETUP.md"
+        "ai/DISTRIBUTED_SETUP.md",
+        "ai/INITIAL_PROMPT.md",
+        "ai/PRE_INITIAL_APP_DESIGN.md"
       ],
-      "note": "AGENTS.md / INITIAL_PROMPT.md / JIRA_MARKUP.md / WORKFLOW.md — template + vars."
+      "note": "AGENTS.md / JIRA_MARKUP.md / WORKFLOW.md. INITIAL_PROMPT.md is excluded on purpose: four variants, 0% shared — it is a per-project document, not a drifted template."
     },
     {
       "glob": "ai/agents/*.md",
@@ -111,11 +139,13 @@
     },
     {
       "glob": "ai/infrastructure/code-guidelines.md",
-      "cohort": "stack"
+      "cohort": "stack",
+      "note": "Project-owned. Compared for visibility only — cairn will never generate this."
     },
     {
       "glob": "ai/infrastructure/project-structure.md",
-      "cohort": "stack"
+      "cohort": "stack",
+      "note": "Project-owned, same as code-guidelines.md."
     }
   ],
 

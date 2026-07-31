@@ -1,17 +1,34 @@
 {
-  "name": "ai-kit",
-  "version": "0.1.0",
-  "private": true,
-  "description": "Drift report for the shared ai/ + .claude/ workflow scaffolding across repos.",
+  "name": "@stonepanda/cairn",
+  "version": "0.2.0",
+  "description": "Shared AI workflow scaffolding for Stone Panda repos — issue tracker client and drift doctor.",
+  "license": "UNLICENSED",
   "bin": {
-    "ai-kit-doctor": "doctor.js"
+    "cairn": "bin/cairn.js"
   },
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./tracker": "./lib/tracker/index.js",
+    "./tracker/cli": "./lib/tracker/cli.js"
+  },
+  "files": [
+    "bin/",
+    "lib/",
+    "templates/",
+    "schema.json",
+    "README.md"
+  ],
   "scripts": {
-    "doctor": "node doctor.js",
-    "doctor:json": "node doctor.js --json",
-    "doctor:strict": "node doctor.js --strict"
+    "doctor": "node bin/cairn.js doctor",
+    "doctor:json": "node bin/cairn.js doctor --json",
+    "doctor:strict": "node bin/cairn.js doctor --strict",
+    "test": "node test/run.js"
   },
   "engines": {
     "node": ">=18"
+  },
+  "publishConfig": {
+    "access": "restricted"
   }
 }

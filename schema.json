@@ -1,0 +1,71 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stonepandastudio.com/schema/cairn.config.json",
+  "title": "cairn.config.json",
+  "description": "Per-repo cairn configuration. Hand-edited. Lives at the repo root, never inside _cairn/.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "cairn": {
+      "type": "string",
+      "description": "Version of @stonepanda/cairn this repo is pinned to."
+    },
+    "stack": {
+      "type": "string",
+      "description": "Comparison cohort for the doctor and, from v2, the preset to render from.",
+      "examples": ["backend", "frontend", "cli"]
+    },
+    "tracker": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "provider": {
+          "type": "string",
+          "enum": ["jira-server", "none"],
+          "default": "none"
+        },
+        "projectKey": {
+          "type": "string",
+          "description": "Required unless provider is \"none\".",
+          "examples": ["PROOF", "GLO"]
+        },
+        "issueTypes": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "story": { "type": "string", "default": "Story" },
+            "subtask": { "type": "string", "default": "Sub-task" }
+          }
+        },
+        "statuses": {
+          "type": "object",
+          "description": "Board status names the workflow transitions to. Verify with `cairn tracker list-statuses`.",
+          "additionalProperties": { "type": "string" }
+        },
+        "env": {
+          "type": "string",
+          "default": ".env",
+          "description": "Path, relative to the repo root, of the file holding tracker credentials."
+        }
+      }
+    },
+    "agents": {
+      "type": "object",
+      "description": "Role -> agent mapping. Read by the doctor's normalizer today; rendered into command stubs in v2.",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": { "type": "string" },
+          "doc": { "type": "string" }
+        }
+      }
+    },
+    "vars": {
+      "type": "object",
+      "description": "Free-form template variables.",
+      "additionalProperties": { "type": "string" }
+    }
+  }
+}
