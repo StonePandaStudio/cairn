@@ -211,15 +211,18 @@ a signal that a slot is missing, not as routine.
 Layered like eslint `extends`:
 
 ```
-core (role contracts, workflow, tracker)
+core (role contracts, tracker)
   └─ preset-node / preset-angular / preset-cli   (persona bodies, guideline seeds)
-       └─ project config (vars, overrides, slots)
+       └─ project (workflow, tracker config, repo set)
+            └─ repo config (vars, slot fills, overrides)
 ```
 
 Evidence it works: reviewer contracts 85–92% same across stacks. Evidence of the
 limit: qa-developer 33% same — that one is preset-level, not core.
 
-Published later as `@stonepanda/cairn-preset-node` etc. The scope makes that free.
+The project layer between preset and repo was added after the fact; see the
+multi-repo roadmap below for why it is not optional. Presets stay an in-repo
+`presets/` folder — internal only — until a third organisation needs them.
 
 ## Migration order
 
@@ -342,17 +345,151 @@ Sources: [BMAD-METHOD](https://github.com/bmad-code-org/BMAD-METHOD) ·
 [Spec Kit docs](https://github.github.com/spec-kit/) ·
 [GitHub blog: spec-driven development](https://github.blog/ai-and-ml/generative-ai/spec-driven-development-with-ai-get-started-with-a-new-open-source-toolkit/)
 
-## A possible v3: cross-repo orchestration
+## Multi-repo projects: the roadmap after v1
 
-Surveyed 2026-07-31. A different and larger idea than v1 or v2: not keeping five
-copies of a workflow in sync, but modelling the links, plans, docs and contexts
-that span the repos. Recorded as a direction, not a plan — this is a third
-product, not an extension.
+The workspace is flat today — five repos, cohorts by stack. Reality has a level in
+between: a **project** is a set of repos.
+
+```
+glossr      GLO    glossr-api        GLO-5, 11, 17, 30, 33, 35, 42
+                   glossr-cli        GLO-1, 2, 3
+                   glossr-frontend   GLO-33, 37, 39, 44
+snap-proof  PROOF  snap-backend      PROOF-217
+                   snap-frontend     PROOF-207, 209, 210, 212, 215
+```
+
+Three things in that data are already load-bearing and already unmodelled:
+
+- **`GLO-33` has a task folder in both `glossr-api` and `glossr-frontend`.** A
+  cross-repo task exists in the working data right now. `ai/WORKFLOW.md` handles it
+  with prose — *"always confirm via `get [key]` before assuming"* — because there is
+  nowhere to declare it.
+- **Thirteen `ai/progress/*.md` filenames are identical** across glossr-api and
+  glossr-frontend: `auth`, `export`, `gdpr`, `import`, `invoices`, `projects`,
+  `subscriptions`, `translations`, `users`, `waitlist` and three more. One feature
+  list, maintained twice. `PROGRESS.md` already carries Backend/Frontend columns, so
+  the rollup is trying to be project-level while living separately in each repo.
+- **Contexts pair up by naming convention only.**
+  `features/users/registration.md` exists on both sides with the same path;
+  `waitlist-signup.md` (api) pairs with `waitlist-frontend.md` (frontend) with no
+  shared name at all.
+
+### The resolution chain
+
+Everything below is detail on this order:
+
+```
+@stonepanda/cairn                     engine
+  presets/node | angular | cli        content — an in-repo folder, package-shaped
+      ↓ extends
+  workspace projects[]                glossr, snap-proof — workflow + tracker live here
+      ↓ extends
+  repo cairn.config.json              vars, slot fills, overrides
+      ↓ renders
+  .claude/commands/, ai/agents/       generated + manifested
+  ai/contexts, ai/progress, ai/tasks  never touched
+```
+
+### Inheritance and distribution are different products
+
+The four requirements split cleanly, and conflating them is the main risk:
+
+| | Inheritance | Distribution |
+|---|---|---|
+| Requirement | same workflow per project; shared agent presets | import/export guidelines; portable workflows across project groups |
+| Question | which layer wins for this file? | where did this content come from, at what version? |
+| Inputs | all local, deterministic | remote, versioned, someone else's |
+| Engineering | layered config resolution at sync time | versioning, provenance, conflict resolution, a registry |
+| Cairn has | the manifest, the doctor, the tiers | nothing |
+
+Inheritance is the part worth building — nobody does it multi-repo. Distribution is
+solved: when content needs to travel, **ship it as npm packages under
+`@stonepanda`**. Versioning, install and semver come free; `cairn export
+--as-package` writes the tarball, `npm i` plus one line in the extends chain is the
+import. No registry code, ever.
+
+**Decision: internal only for now.** Presets live in a `presets/` folder in this
+repo. No packaging, no semver, no support obligations. Keep the folder layout
+package-shaped so that promotion is adding a `package.json`, not a refactor.
+
+### Agent presets need three extension mechanisms, not one
+
+Extension is a hard requirement, and the measurements say it is not merely
+convenient — it is the only way sharing is possible at all:
+
+```
+node-reviewer.md        92% same   → share the body, fill two slots
+architect-lead.md       73% same   → share the spine, replace a section
+node-qa-developer.md    33% same   → share the contract only, body is local
+```
+
+No single mechanism spans 92% → 33%. Three, declared explicitly in config rather
+than emerging by accident:
+
+- **slot fill** — template declares `{{> stack.testing }}`; the repo supplies a
+  string or a partial
+- **section replace** — the repo swaps one named `##` block and keeps the rest
+- **full override** — escape hatch; the repo owns the file and cairn stops managing it
+
+Then **the doctor reports override usage per repo**. Heavy override on a file means
+the preset is wrong, not that the repo is deviant. That feedback loop is what keeps
+presets honest, and it is precisely what BMAD lacks — BMAD assumes its personas are
+correct.
+
+### Guidelines import: fork or link, decided per artifact
+
+"Import guidelines" is two incompatible operations:
+
+- **fork** — copy once, it becomes the repo's, cairn never touches it again
+- **link** — stays synced, cairn rewrites it on upgrade
+
+The answer is per-artifact, not global, and the numbers already say which:
+
+```
+code-guidelines.md   43% same   → fork. The divergence is correct (snap has no Zod).
+role contracts       92% same   → link. Divergence there is rot.
+```
+
+So it belongs in config as `"mode": "fork" | "linked"` per import, with guidelines
+defaulting to `fork`. Defaulting them to `linked` would report every legitimate
+project difference as `MODIFIED` forever, everyone would stop reading the report,
+and the tool would be dead. That is the single most likely way this fails.
+
+### Sequencing
+
+1. **Projects layer.** `projects[]` in the workspace, tracker config inherited
+   instead of repeated per repo, `cohort: "project"` as a third comparison axis
+   alongside `all` and `stack`. Both axes earn their keep: role contracts want
+   stack, shared entities and conventions want project. Adds three doctor checks —
+   task span (which repos hold a folder for `GLO-33`), orphaned local tasks, and
+   project-level progress rollup. About a week, useful immediately.
+2. **Agent presets + the three extension mechanisms.** The real work.
+3. **Guidelines import/export** with fork/link modes. Not before 2 has survived a
+   sprint.
+4. **Portable workflows between project groups.** A quarter, and only once 2 and 3
+   are stable.
+
+Nothing starts before v1 has run across the five repos.
+
+### The standing risk
+
+**Requirements 2 and 4 together are BMAD.** Shared agent presets plus portable
+workflows is exactly their product, with far more iteration behind it. What keeps
+this differentiated is requirements 1 and 3 — project-level inheritance across
+repos, and guidelines with fork semantics. Neither exists in BMAD or Spec Kit. If
+the build drifts toward "our own persona library", it has picked the fight it
+cannot win.
+
+## Deferred: the cross-repo context graph
+
+Surveyed 2026-07-31, before the projects layer was identified as the near-term
+shape. Kept because the research stands and this is what the projects layer grows
+into if it starts to strain.
 
 ### The landscape is fragmented
 
-The four parts of the idea land in four different prior-art buckets, and nothing
-covers all four:
+Modelling the links, plans, docs and contexts spanning repos lands in six different
+prior-art buckets, and nothing covers all six:
 
 | Layer | What exists | Maturity |
 |---|---|---|
@@ -370,9 +507,8 @@ Three of the four parts have prior art worth consuming rather than rebuilding:
 
 - **Links (code)** — Riftmap or Sourcegraph. Derived data: cheap to buy, expensive
   to maintain.
-- **Plans** — the tracker. `PROOF` is already shared across snap backend and
-  frontend, `GLO` across api, cli and frontend; `ai/WORKFLOW.md` documents this
-  explicitly. The cross-repo join key already exists, and cairn already abstracts it.
+- **Plans** — the tracker, once the projects layer exists. The cross-repo join key
+  already exists and cairn already abstracts it.
 - **Contracts** — OpenAPI between `glossr-api` and `glossr-frontend`.
 
 What is genuinely unserved is the **authored** layer.
@@ -410,7 +546,9 @@ cairn next    does glossr-api's invoice.md still agree with glossr-frontend's?
 - **Serve it over MCP, not as generated files.** Where the field converged in 2026,
   and it sidesteps the "generated files fight the agent" risk listed above.
 
-Sequencing: nothing here should start before v1 has run across the five repos.
+Sequencing: this is downstream of the entire roadmap above, not an alternative to
+it. The projects layer answers most of what it would answer, with a config array
+instead of a graph database.
 
 Sources: [Riftmap on cross-repo context](https://riftmap.dev/blog/ai-coding-agents-need-cross-repo-context/) ·
 [Sourcegraph MCP](https://sourcegraph.com/mcp) ·
@@ -423,9 +561,12 @@ Sources: [Riftmap on cross-repo context](https://riftmap.dev/blog/ai-coding-agen
 
 - **Build the v2 renderer, or wrap BMAD / Spec Kit?** See the prior-art section.
   Deferred until v1 has run across the five repos for a sprint.
-- **Is v3 the same product?** Cross-repo orchestration shares cairn's drift
-  machinery but almost nothing else — different scope, different surface (MCP, not
-  files), plausibly a different package. Decide before writing code, not after.
+- **Does `cohort: "project"` replace `cohort: "stack"` or join it?** Provisionally
+  join — role contracts want stack, shared entities want project — but that is
+  asserted, not measured. Measure it once `projects[]` exists.
+- **When do presets leave this repo?** Internal `presets/` folder for now. The
+  trigger for packaging them is a third organisation needing them, not a third
+  project.
 - Rename the working directory `D:/projects/ai-kit` → `cairn`? Git remote and
   `.idea/` implications; not done.
 - Run `cairn init` against the five real repos — deletes 237 lines from each and
