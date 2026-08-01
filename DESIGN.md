@@ -463,7 +463,10 @@ and the tool would be dead. That is the single most likely way this fails.
    stack, shared entities and conventions want project. Adds three doctor checks —
    task span (which repos hold a folder for `GLO-33`), orphaned local tasks, and
    project-level progress rollup. About a week, useful immediately.
-2. **Agent presets + the three extension mechanisms.** The real work.
+2. **Agent presets + the three extension mechanisms**, and the upgrade path in the
+   same step — see the merge section below. Presets that cannot be updated without
+   destroying local edits are worse than no presets, so `_cairn/base/` and the 2×2
+   ship together with the first preset, not after it. The real work.
 3. **Guidelines import/export** with fork/link modes. Not before 2 has survived a
    sprint.
 4. **Portable workflows between project groups.** A quarter, and only once 2 and 3
@@ -479,6 +482,125 @@ this differentiated is requirements 1 and 3 — project-level inheritance across
 repos, and guidelines with fork semantics. Neither exists in BMAD or Spec Kit. If
 the build drifts toward "our own persona library", it has picked the fight it
 cannot win.
+
+## Upgrades: merging incoming template changes with local edits
+
+The question that decides whether any of the above survives contact with the five
+repos. A preset's Node.js developer template gets updated; each repo has its own
+edits; something has to reconcile them without destroying either side.
+
+### The manifest is already the merge base
+
+Three-way merge needs base, ours, theirs. The manifest records what cairn *wrote*,
+which is precisely the base:
+
+```
+base    what cairn wrote last time       (manifest)
+ours    what is on disk now              (the repo's edits)
+theirs  what the updated template renders
+```
+
+One gap: the manifest stores the hash, not the content, and merging needs bytes. So
+store them, in `_cairn/base/`. These are kilobytes of markdown and it is the only
+option that survives a fresh clone — recovering base from git history works right up
+until someone squashes.
+
+### The upgrade algorithm is a 2×2
+
+| | template unchanged | template changed |
+|---|---|---|
+| **local unchanged** | no-op | **fast-forward** — write the new render |
+| **local changed** | keep local, report `MODIFIED` | **conflict** — merge |
+
+Three of the four cells are automatic. That is the whole answer to "I don't want to
+sync manually anymore": only the bottom-right cell needs a human. The existing
+`MANAGED` / `MODIFIED` / `OUTDATED` states are this matrix with the fourth cell
+missing; `CONFLICT` becomes the fifth doctor state.
+
+### Most updates must never reach the merge
+
+How often the conflict cell is hit is determined by the extension mechanism, which
+is the real reason those three exist:
+
+| Mechanism | On template update |
+|---|---|
+| slot fill | no merge, ever — template changes, slots re-fill, deterministic |
+| section replace | merge only if the template touched *that named section* |
+| full override | no merge; the repo owns it, report `OUTDATED`, human decides |
+| hand-edit of a `linked` file | the only true conflict |
+
+The merge machinery therefore exists to handle the case the doctor already flags as
+the thing that should not be happening. Design accordingly: make it correct rather
+than fast, and treat frequent conflicts on a file as evidence that a slot is
+missing from the template, not that the repo is misbehaving.
+
+This is also why `fork` versus `link` matters: forked files never merge at all.
+
+### Merge at section level, not line level
+
+The agent docs are structured markdown — `## When to stop and ask`, `## Reference`.
+Treat a document as an ordered map of sections rather than a line sequence:
+
+- upstream changed a section, local did not → take upstream
+- local changed it, upstream did not → keep local
+- both changed → conflict, **scoped to that section alone**
+- upstream added a section → insert, positioned relative to its neighbours
+- upstream deleted a section the repo had modified → conflict, ask
+
+Line-level `diff3` on a 400-line agent doc yields conflicts spanning unrelated
+prose. Section-level conflicts are readable and usually resolvable in seconds.
+
+The sophisticated version is per-section provenance: record in the manifest which
+sections came from the template and which the repo authored, the way Kubernetes
+server-side apply tracks field managers. Most merges then reduce to a lookup.
+
+### Do not write the merge algorithm
+
+For the conflict cell, shell out:
+
+```
+git merge-file --diff3 -L ours -L base -L theirs \
+  ai/agents/node-developer.md \
+  _cairn/base/ai/agents/node-developer.md \
+  <rendered-new>
+```
+
+Standard conflict markers — a format every developer and every agent already reads.
+Exit non-zero, mark the file, stop.
+
+**Never silently overwrite.** That is the failure that makes people permanently
+distrust generated files, and it cannot be walked back once it has happened once.
+
+For the interactive case, Debian's conffile handling has the proven UX: keep /
+replace / show diff / drop to a shell. Thirty years of production says those four
+options suffice.
+
+### Prior art to read first
+
+- **[copier](https://copier.readthedocs.io/)** — the closest existing tool. Project
+  templates with real update support, a `.copier-answers.yml` recording what was
+  rendered, three-way merges on upgrade. It has already made most of these
+  decisions; read it before designing ours.
+- **[cruft](https://cruft.github.io/cruft/)** — cookiecutter plus update. Same
+  problem, simpler model.
+- **React Native's `rn-diff-purge`** — publishes version-to-version diffs so
+  consumers apply a patch rather than re-rendering. Relevant if presets are ever
+  versioned.
+- **Kubernetes server-side apply** — field ownership as a first-class concept; the
+  model behind per-section provenance.
+
+### What to build
+
+1. Store base content in `_cairn/base/`. Small change, unlocks everything else.
+2. Implement the 2×2 in `cairn sync`. Three cells automatic, one stops.
+3. Conflicts via `git merge-file`, markers left in place, non-zero exit, `CONFLICT`
+   as a fifth doctor state.
+4. Section-aware merge **only if** line-level proves too noisy in practice. Do not
+   build it speculatively.
+
+The measurable goal: after a preset update, how many of the five repos need human
+attention? Routinely more than one means the preset is wrong. That number is worth
+reporting explicitly — it is the health metric for the whole idea.
 
 ## Deferred: the cross-repo context graph
 
