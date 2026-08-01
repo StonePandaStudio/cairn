@@ -374,6 +374,30 @@ Three things in that data are already load-bearing and already unmodelled:
   `waitlist-signup.md` (api) pairs with `waitlist-frontend.md` (frontend) with no
   shared name at all.
 
+### Two projects, three stacks, one hole
+
+|  | backend | frontend | cli |
+|---|---|---|---|
+| **snap-proof** | snap-backend | snap-frontend | — |
+| **glossr** | glossr-api | glossr-frontend | glossr-cli |
+
+The two comparison axes are genuinely orthogonal and both have data:
+
+- `cohort: "stack"` → a backend pair, a frontend pair, and **cli alone**
+- `cohort: "project"` → snap-proof with 2 repos, glossr with 3
+
+The empty cell has a consequence worth stating plainly, because it limits what the
+doctor can promise. `glossr-cli` is a stack of one, so it never forms a stack
+cohort — the analyzer skips groups with fewer than two members, which is why no
+`stack:cli` section appears in the output. Its only cross-repo comparison is
+project-level, against a backend and a frontend, where agent-doc similarity is
+meaningless.
+
+**So `preset-cli` has no peer and cannot be validated by comparison.** `preset-node`
+and `preset-angular` each get checked against a second repo; the cli preset will
+only ever be validated by hand, or by a second CLI repo appearing. Any claim that
+"the doctor validates the presets" is true for two of three.
+
 ### The resolution chain
 
 Everything below is detail on this order:
@@ -435,6 +459,11 @@ Then **the doctor reports override usage per repo**. Heavy override on a file me
 the preset is wrong, not that the repo is deviant. That feedback loop is what keeps
 presets honest, and it is precisely what BMAD lacks — BMAD assumes its personas are
 correct.
+
+The loop only closes where a preset has more than one consumer, so it covers node
+and angular but not cli (see the stack table above). For `preset-cli`, override
+volume is a single repo's opinion rather than a signal — read it as a prompt to
+look, not as evidence.
 
 ### Guidelines import: fork or link, decided per artifact
 
