@@ -458,6 +458,52 @@ atest('init: --dry-run writes nothing', async () => {
   assert.ok(!fs.existsSync(path.join(dir, '_cairn')));
 });
 
+// ----------------------------------------------------------------- presets
+
+// Nothing renders these yet, so a slot with no variant supplying it would sit
+// undetected until the renderer lands and silently produced a document with a
+// hole in it. Cheap to check now.
+test('presets: every declared slot is supplied by every variant', () => {
+  const root = path.join(__dirname, '..', 'presets');
+  const problems = [];
+
+  for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue;
+    const dir = path.join(root, entry.name);
+    const main = path.join(dir, 'code-guidelines.md');
+    if (!fs.existsSync(main)) continue;
+
+    const declared = [
+      ...fs.readFileSync(main, 'utf8').matchAll(/\{\{>\s*slot:\s*([\w-]+)\s*\}\}/g),
+    ].map((m) => m[1]);
+    if (!declared.length) continue;
+
+    const variantDir = path.join(dir, 'variants');
+    if (!fs.existsSync(variantDir)) {
+      problems.push(`${entry.name}: declares slots but has no variants/`);
+      continue;
+    }
+    const variants = fs.readdirSync(variantDir);
+    assert.ok(variants.length >= 2, `${entry.name}: a slot with one variant is not a slot`);
+
+    for (const v of variants) {
+      const supplied = [
+        ...fs
+          .readFileSync(path.join(variantDir, v), 'utf8')
+          .matchAll(/^##\s*slot:\s*([\w-]+)\s*$/gm),
+      ].map((m) => m[1]);
+      for (const slot of declared) {
+        if (!supplied.includes(slot)) problems.push(`${entry.name}/${v}: missing slot "${slot}"`);
+      }
+      for (const slot of supplied) {
+        if (!declared.includes(slot)) problems.push(`${entry.name}/${v}: unknown slot "${slot}"`);
+      }
+    }
+  }
+
+  assert.deepStrictEqual(problems, []);
+});
+
 // ------------------------------------------------------------------- runner
 
 (async () => {
