@@ -3,6 +3,14 @@
   "version": "0.2.0",
   "description": "Shared AI workflow scaffolding for Stone Panda repos — issue tracker client and drift doctor.",
   "license": "UNLICENSED",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/StonePandaStudio/cairn.git"
+  },
+  "bugs": {
+    "url": "https://github.com/StonePandaStudio/cairn/issues"
+  },
+  "homepage": "https://github.com/StonePandaStudio/cairn#readme",
   "bin": {
     "cairn": "bin/cairn.js"
   },
@@ -23,12 +31,13 @@
     "doctor": "node bin/cairn.js doctor",
     "doctor:json": "node bin/cairn.js doctor --json",
     "doctor:strict": "node bin/cairn.js doctor --strict",
-    "test": "node test/run.js"
+    "test": "node test/run.js",
+    "prepublishOnly": "npm test"
   },
   "engines": {
     "node": ">=18"
   },
   "publishConfig": {
-    "access": "restricted"
+    "access": "public"
   }
 }
