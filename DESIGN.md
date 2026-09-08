@@ -213,15 +213,16 @@ Layered like eslint `extends`:
 ```
 core (role contracts, tracker)
   └─ preset-node / preset-angular / preset-cli   (persona bodies, guideline seeds)
-       └─ project (workflow, tracker config, repo set)
+       └─ workspace.json  (one project — workflow, tracker config, repo set)
             └─ repo config (vars, slot fills, overrides)
 ```
 
 Evidence it works: reviewer contracts 85–92% same across stacks. Evidence of the
 limit: qa-developer 33% same — that one is preset-level, not core.
 
-The project layer between preset and repo was added after the fact; see the
-multi-repo roadmap below for why it is not optional. Presets stay an in-repo
+The workspace layer between preset and repo was added after the fact; see the
+multi-repo roadmap below for why it is not optional, and "Layout" for where each
+file sits. Presets stay an in-repo
 `presets/` folder — internal only — until a third organisation needs them.
 
 ## Migration order
@@ -347,8 +348,33 @@ Sources: [BMAD-METHOD](https://github.com/bmad-code-org/BMAD-METHOD) ·
 
 ## Multi-repo projects: the roadmap after v1
 
-The workspace is flat today — five repos, cohorts by stack. Reality has a level in
-between: a **project** is a set of repos.
+Revised 2026-09-08: workspace-per-project plus an opt-in hub replaces the earlier
+single-workspace `projects[]` sketch. The reasoning is below; the file trees are
+under "Layout".
+
+The workspace is flat today — one `repos.json` listing all five repos, cohorts by
+stack. Reality has a level in between: a **project** is a set of repos, and the two
+projects here (`glossr`, `snap-proof`) have separate teams, lifecycles, and Jira
+keys. They should not share one config file.
+
+**Decision: one workspace per project, plus an opt-in hub.**
+
+- `cairn.config.json` — per repo. Unchanged.
+- `workspace.json` — one per project. Its repos, stacks, tracker defaults, and
+  intra-project `shared[]` rules. Lives in a dedicated coordination repo
+  (`glossr/cairn/`) for multi-repo, or at the git root for a monorepo. A project
+  "lives its own life" — it can change its guidelines or even swap to BMAD without
+  touching anything else.
+- hub `projects.json` — one per org, optional. References each project's
+  `workspace.json` by path and holds sync metadata (version pins, fork/link policy,
+  a sync log). Picked up only when you want cross-project drift analysis, put down
+  after. It is cairn's actual differentiator — cross-repo drift — isolated into one
+  tool.
+
+The hub is an **analysis lens, not a config layer**: it never injects config
+downward. Inheritance stays `preset → workspace → repo`. Live drift is recomputed
+from the referenced repos every run, never cached authoritatively; only pins,
+policy, and the log are hub-owned state.
 
 ```
 glossr      GLO    glossr-api        GLO-5, 11, 17, 30, 33, 35, 42
@@ -383,13 +409,20 @@ Three things in that data are already load-bearing and already unmodelled:
 
 The two comparison axes are genuinely orthogonal and both have data:
 
-- `cohort: "stack"` → a backend pair, a frontend pair, and **cli alone**
-- `cohort: "project"` → snap-proof with 2 repos, glossr with 3
+- `cohort: "project"` → the workspace itself. snap-proof with 2 repos, glossr with 3.
+  Runs from a project's own `workspace.json`, in that project's CI.
+- `cohort: "stack"` → a backend pair, a frontend pair, and **cli alone**. The pairs
+  are cross-project, so this axis lives in the **hub**, not in any one workspace.
+
+Splitting the axes this way is what lets `cairn doctor --strict` run in a single
+project's CI — the intra-project checks need only that project checked out. The
+cross-project (`stack`) checks need every project on disk and run from the hub, on a
+maintainer's machine.
 
 The empty cell has a consequence worth stating plainly, because it limits what the
 doctor can promise. `glossr-cli` is a stack of one, so it never forms a stack
 cohort — the analyzer skips groups with fewer than two members, which is why no
-`stack:cli` section appears in the output. Its only cross-repo comparison is
+`stack:cli` section appears in the hub output. Its only cross-repo comparison is
 project-level, against a backend and a frontend, where agent-doc similarity is
 meaningless.
 
@@ -403,16 +436,162 @@ only ever be validated by hand, or by a second CLI repo appearing. Any claim tha
 Everything below is detail on this order:
 
 ```
+  hub projects.json                   org — references projects, holds sync metadata
+      │                                (pins, fork/link policy, sync log). opt-in.
+      ↓ references — no config flows down
 @stonepanda/cairn                     engine
   presets/node | angular | cli        content — an in-repo folder, package-shaped
       ↓ extends
-  workspace projects[]                glossr, snap-proof — workflow + tracker live here
+  workspace.json                      ONE project — key, repos[], tracker defaults,
+      │                                intra-project shared[]. glossr/cairn/workspace.json
       ↓ extends
   repo cairn.config.json              vars, slot fills, overrides
       ↓ renders
   .claude/commands/, ai/agents/       generated + manifested
   ai/contexts, ai/progress, ai/tasks  never touched
 ```
+
+### Layout: where every file lives
+
+Three topologies, one `workspace.json` schema. A `layout` field selects path
+resolution; nothing else in the schema changes.
+
+#### Monorepo — `layout: "monorepo"`
+
+One `.git`, one `.claude/commands/`, one `ai/`. Packages are code only, so nothing
+can drift internally. `cairn init` at the root is the whole setup; no
+`workspace.json` unless the monorepo joins a hub.
+
+```
+glossr/
+├── .git/
+├── cairn.config.json              HAND-EDITED · layout:"monorepo", stacks, tracker, vars
+├── _cairn/                        GENERATED · safe to delete + rebuild
+│   ├── manifest.json              what cairn wrote + sha
+│   ├── base/                      merge bases — three-way merge on upgrade
+│   │   ├── .claude/commands/create-brief.md
+│   │   └── ai/agents/node-developer.md
+│   └── scripts/jira.js            vendored tracker shim
+├── .claude/commands/             GENERATED (v2), committed
+│   ├── create-brief.md
+│   ├── plan-task.md
+│   ├── execute-plan.md
+│   └── code-review.md
+├── ai/                           PROJECT-OWNED · seeded once at init
+│   ├── AGENTS.md
+│   ├── WORKFLOW.md                GENERATED (v2)
+│   ├── JIRA_MARKUP.md             GENERATED (v2)
+│   ├── INITIAL_PROMPT.md          per-project, never compared
+│   ├── PROJECT_SUMMARY.md
+│   ├── agents/                    GENERATED (v2): core contract + preset persona
+│   │   ├── node-architect.md
+│   │   ├── node-developer.md
+│   │   ├── node-reviewer.md
+│   │   ├── angular-developer.md
+│   │   └── angular-reviewer.md
+│   ├── infrastructure/
+│   │   ├── code-guidelines.md     project-owned, fork mode, never generated
+│   │   └── project-structure.md
+│   ├── contexts/                  never touched
+│   ├── progress/                  never touched (v1) → cairn progress (v2)
+│   └── tasks/GLO-42/              never touched
+├── backend/                      code · optional backend/ai/code-guidelines.md
+├── frontend/                     code
+└── infra/                        code
+```
+
+A standalone single repo is this tree minus the package dirs, `layout: "single"`.
+
+#### Multi-repo — `layout: "multi-repo"`
+
+`PROJECT_FOLDER` is a plain dir. A dedicated `cairn/` repo holds coordination state;
+each code repo keeps its own manifest.
+
+```
+glossr/                            PROJECT_FOLDER — plain dir, not a repo
+│
+├── cairn/                         dedicated coordination repo
+│   ├── .git/
+│   ├── workspace.json             HAND-EDITED · layout:"multi-repo", project key,
+│   │                              repos[] (path + stack), tracker defaults,
+│   │                              intra-project shared[], normalize
+│   ├── _cairn/
+│   │   ├── base/                  merge bases for every managed file, per repo
+│   │   │   ├── glossr-api/.claude/commands/create-brief.md
+│   │   │   └── glossr-frontend/ai/agents/angular-developer.md
+│   │   └── doctor-cache.json      optional · last computed drift snapshot
+│   └── presets/                   project-local presets until promoted
+│
+├── glossr-api/                    code repo — own git
+│   ├── .git/
+│   ├── cairn.config.json          stack:"backend", tracker, vars,
+│   │                              workspace:"../cairn/workspace.json"
+│   ├── _cairn/
+│   │   ├── manifest.json          what cairn wrote INTO this repo + sha
+│   │   └── scripts/jira.js        vendored shim
+│   ├── .claude/commands/          GENERATED, committed here
+│   ├── ai/
+│   │   ├── agents/node-*.md
+│   │   ├── infrastructure/code-guidelines.md
+│   │   ├── contexts/  progress/
+│   │   └── tasks/GLO-33/          same issue folder also in frontend = cross-repo task
+│   └── src/
+│
+├── glossr-frontend/              code repo — own git
+│   ├── cairn.config.json          stack:"frontend"
+│   ├── _cairn/{manifest.json, scripts/jira.js}
+│   ├── .claude/commands/
+│   ├── ai/{agents/angular-*.md, infrastructure/, contexts/, tasks/GLO-33/}
+│   └── src/
+│
+└── glossr-cli/                   code repo — own git
+    ├── cairn.config.json          stack:"cli", tracker:{provider:"none"}
+    ├── _cairn/manifest.json       no jira.js — no tracker
+    ├── .claude/commands/          renamed stubs, folded via pathAliases
+    └── ai/
+```
+
+Two `_cairn/` directories with distinct jobs: `cairn/_cairn/base/` holds merge bases
+for all repos; each `<repo>/_cairn/manifest.json` is the ground truth for what is on
+disk in that repo and survives a fresh clone.
+
+#### Hub — `projects.json`
+
+Org-level, opt-in. `PROJECT_N/` dirs are references plus sync metadata, never copies
+of project content.
+
+```
+stonepanda-hub/                    org coordination repo
+├── .git/
+├── projects.json                  HAND-EDITED · project list + reference paths
+├── _cairn/manifest.json           hub's own generated state
+├── normalize.json                 cross-project · jiraKey folding union, aliases
+│
+├── glossr/                        per-project hub metadata — NOT project content
+│   ├── link.json                  reference · ../glossr/cairn/workspace.json, layout
+│   ├── pins.json                  glossr tracks reviewer-contract v3, workflow v2
+│   ├── policy.json                fork/link mode per artifact for glossr
+│   └── sync-state.json            WRITTEN by `cairn workspace sync` · when, what
+│                                  merged, conflicts. git history = audit trail
+├── snap-proof/
+│   └── {link.json, pins.json, policy.json, sync-state.json}
+│
+└── shared/                        OPTIONAL / future · versioned cross-project standards
+    ├── agents/reviewer.contract.md    the 85–92%-same core contract
+    └── commands/*.md
+```
+
+`shared/` is held for now: cross-project drift is computed by comparing the
+referenced projects directly, or against `presets/` in the cairn package. It earns
+its place only when the org wants standards versioned separately from the package.
+
+#### Commands
+
+| command | writes | run from |
+|---|---|---|
+| `cairn init` | `cairn.config.json`, `_cairn/`, seeds `ai/` | a repo — monorepo root, or each code repo |
+| `cairn workspace init` | `cairn/workspace.json`, `cairn/_cairn/` | `PROJECT_FOLDER` — scans siblings for `.git` |
+| `cairn workspace init --meta` | hub `projects.json`, per-project dirs | org dir — scans for `workspace.json` |
 
 ### Inheritance and distribution are different products
 
@@ -435,6 +614,14 @@ import. No registry code, ever.
 **Decision: internal only for now.** Presets live in a `presets/` folder in this
 repo. No packaging, no semver, no support obligations. Keep the folder layout
 package-shaped so that promotion is adding a `package.json`, not a refactor.
+
+The hub adds a third point between "nothing" and "npm packages": **distribution via
+local file reference**. `projects.json` records which standard version each project
+is pinned to and a per-artifact fork/link policy, giving provenance and an audit
+trail without a publish step. Keep it to reference + pin + policy + log — no
+dependency resolution, no semver ranges. If pins start needing ranges and conflict
+trees, that is the signal to actually publish `@stonepanda` packages, not to build a
+package manager inside the hub.
 
 ### Agent presets need three extension mechanisms, not one
 
@@ -486,12 +673,17 @@ and the tool would be dead. That is the single most likely way this fails.
 
 ### Sequencing
 
-1. **Projects layer.** `projects[]` in the workspace, tracker config inherited
-   instead of repeated per repo, `cohort: "project"` as a third comparison axis
-   alongside `all` and `stack`. Both axes earn their keep: role contracts want
-   stack, shared entities and conventions want project. Adds three doctor checks —
-   task span (which repos hold a folder for `GLO-33`), orphaned local tasks, and
-   project-level progress rollup. About a week, useful immediately.
+1. **Workspace layer.** Per-project `workspace.json` — schema, a `layout` field, and
+   `preset → workspace → repo` inheritance so tracker/vars stop being repeated per
+   repo — plus `cairn workspace init` and `cohort: "project"` meaning the workspace
+   itself. Adds three doctor checks: task span (which repos hold a folder for
+   `GLO-33`), orphaned local tasks, and project-level progress rollup. Cross-project
+   (`stack`) comparison stays on the current flat `repos.json` until 1b. About a
+   week, useful immediately.
+1b. **Hub.** `projects.json` referencing the workspaces, `cairn workspace init
+   --meta`, `cohort: "stack"` computed across referenced projects, and the sync
+   metadata files (pins, policy, log) as advisory-only state. Retires the flat
+   `repos.json`.
 2. **Agent presets + the three extension mechanisms**, and the upgrade path in the
    same step — see the merge section below. Presets that cannot be updated without
    destroying local edits are worse than no presets, so `_cairn/base/` and the 2×2
@@ -712,9 +904,17 @@ Sources: [Riftmap on cross-repo context](https://riftmap.dev/blog/ai-coding-agen
 
 - **Build the v2 renderer, or wrap BMAD / Spec Kit?** See the prior-art section.
   Deferred until v1 has run across the five repos for a sprint.
-- **Does `cohort: "project"` replace `cohort: "stack"` or join it?** Provisionally
-  join — role contracts want stack, shared entities want project — but that is
-  asserted, not measured. Measure it once `projects[]` exists.
+- ~~**Does `cohort: "project"` replace `cohort: "stack"` or join it?**~~ Resolved by
+  the workspace/hub split: `cohort: "project"` *is* the per-project `workspace.json`
+  and runs in that project's CI; `cohort: "stack"` is cross-project and runs from the
+  hub. Different tiers, not competing axes.
+- **Where does `workspace.json` physically live, and how portable are its paths?**
+  A dedicated `glossr/cairn/` repo for multi-repo, git root for monorepo — but the
+  `repos[]` paths still assume a sibling-directory checkout layout. Needs a
+  configurable path map with sibling as the default; not designed yet.
+- **Are the hub's `PROJECT_N/` dirs reference-only, or do they cache?** Reference
+  for now — the hub needs every project on disk to do anything. A `cairn workspace
+  sync` that vendors normalized snapshots for offline analysis is possible later.
 - **When do presets leave this repo?** Internal `presets/` folder for now. The
   trigger for packaging them is a third organisation needing them, not a third
   project.
