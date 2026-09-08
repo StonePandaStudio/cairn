@@ -9,7 +9,7 @@
     "$schema": { "type": "string" },
     "cairn": {
       "type": "string",
-      "description": "Version of @stonepanda/cairn this repo is pinned to."
+      "description": "Version of @stonepandastudio/cairn this repo is pinned to."
     },
     "stack": {
       "type": "string",

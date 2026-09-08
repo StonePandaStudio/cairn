@@ -420,7 +420,7 @@ atest('init: replaces a legacy ai/scripts/jira.js but never invents one', async 
   console.log = () => {};
   main(['--repo', withLegacy, '--no-color']);
   console.log = log;
-  assert.match(fs.readFileSync(path.join(withLegacy, 'ai/scripts/jira.js'), 'utf8'), /@stonepanda\/cairn/);
+  assert.match(fs.readFileSync(path.join(withLegacy, 'ai/scripts/jira.js'), 'utf8'), /@stonepandastudio\/cairn/);
 
   const without = tmpRepo();
   console.log = () => {};

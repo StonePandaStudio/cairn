@@ -1,7 +1,7 @@
 # Presets
 
 Extracted guideline content shared across the repos. Internal only — an in-repo
-folder, deliberately package-shaped so promotion to `@stonepanda/cairn-preset-*` is
+folder, deliberately package-shaped so promotion to `@stonepandastudio/cairn-preset-*` is
 adding a `package.json` rather than a refactor.
 
 Nothing here is wired into a renderer yet. These are the *inputs* the renderer will

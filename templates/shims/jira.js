@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 'use strict';
 
-// Shim. The Jira client itself lives in @stonepanda/cairn — this file exists so
+// Shim. The Jira client itself lives in @stonepandastudio/cairn — this file exists so
 // that the ~40 references to `node ai/scripts/jira.js <command>` scattered across
 // agent docs, command stubs and WORKFLOW.md keep working unchanged.
 //
@@ -9,4 +9,4 @@
 // When those documents are regenerated (v2), they will point at `cairn tracker`
 // directly and this shim goes away.
 
-require('@stonepanda/cairn/tracker/cli')(process.argv.slice(2));
+require('@stonepandastudio/cairn/tracker/cli')(process.argv.slice(2));

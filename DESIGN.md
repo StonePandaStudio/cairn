@@ -77,7 +77,7 @@ Most framework-extraction attempts die by dragging tier 3 into tier 2. The 520-l
 
 Every bare candidate was checked against the npm registry — `cairn`, `quarry`,
 `chisel`, `flint`, `cobble`, `plinth`, `keystone`, `slate`, `geode`, `grove`,
-`masonry`, `bedrock`, `lodestone` — **all taken**. The `@stonepanda` scope is
+`masonry`, `bedrock`, `lodestone` — **all taken**. The `@stonepandastudio` scope is
 unused. Since scoping is required regardless, the name could be picked for meaning.
 
 `cairn`: a stack of stones marking a trail for whoever follows. The tool leaves
@@ -439,7 +439,7 @@ Everything below is detail on this order:
   hub projects.json                   org — references projects, holds sync metadata
       │                                (pins, fork/link policy, sync log). opt-in.
       ↓ references — no config flows down
-@stonepanda/cairn                     engine
+@stonepandastudio/cairn               engine
   presets/node | angular | cli        content — an in-repo folder, package-shaped
       ↓ extends
   workspace.json                      ONE project — key, repos[], tracker defaults,
@@ -607,7 +607,7 @@ The four requirements split cleanly, and conflating them is the main risk:
 
 Inheritance is the part worth building — nobody does it multi-repo. Distribution is
 solved: when content needs to travel, **ship it as npm packages under
-`@stonepanda`**. Versioning, install and semver come free; `cairn export
+`@stonepandastudio`**. Versioning, install and semver come free; `cairn export
 --as-package` writes the tarball, `npm i` plus one line in the extends chain is the
 import. No registry code, ever.
 
@@ -620,7 +620,7 @@ local file reference**. `projects.json` records which standard version each proj
 is pinned to and a per-artifact fork/link policy, giving provenance and an audit
 trail without a publish step. Keep it to reference + pin + policy + log — no
 dependency resolution, no semver ranges. If pins start needing ranges and conflict
-trees, that is the signal to actually publish `@stonepanda` packages, not to build a
+trees, that is the signal to actually publish `@stonepandastudio` packages, not to build a
 package manager inside the hub.
 
 ### Agent presets need three extension mechanisms, not one
@@ -923,8 +923,7 @@ Sources: [Riftmap on cross-repo context](https://riftmap.dev/blog/ai-coding-agen
 - Run `cairn init` against the five real repos — deletes 237 lines from each and
   rewrites `ai/scripts/jira.js`. Not done without explicit go-ahead. `--dry-run`
   first.
-- Claim the `@stonepanda` npm org. Registry search shows zero published packages
-  under it, but that proves nothing is published there, not that the scope is
-  unclaimed. Verify with `npm org create` while logged in.
+- Claim the `@stonepandastudio` npm org (matches the GitHub org `StonePandaStudio`).
+  Verify with `npm org ls stonepandastudio` while logged in; `npm org create` if absent.
 - `.claude/agents/` native subagents vs `ai/agents/*.md` docs — currently the docs;
   worth revisiting when presets land.

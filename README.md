@@ -1,4 +1,4 @@
-# @stonepanda/cairn
+# @stonepandastudio/cairn
 
 Shared AI workflow scaffolding for Stone Panda repos.
 
@@ -12,7 +12,7 @@ markers — a manifest of what it generated, and a report of where the copies st
 agreeing.
 
 ```bash
-npm i -D @stonepanda/cairn
+npm i -D @stonepandastudio/cairn
 npx cairn init --stack backend --tracker jira-server --project-key PROOF --story-type Task
 ```
 
