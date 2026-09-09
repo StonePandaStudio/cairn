@@ -45,11 +45,29 @@ Before `cairn init` on snap-proof. See DESIGN "### Sequencing" step 0.
   `> quote`→`bq.`, and Markdown pipe tables → `||header||` / `|body|` with the
   separator row dropped. Not done (deliberate): literal `{` escaping (risky to
   auto-apply), `{noformat}` vs `{code}` choice (a judgment call).
-- [x] `package.json` → `0.3.0`. 13 new tests → 46 total.
-- [ ] Commit + `npm publish` `0.3.0`.
+- [x] `package.json` → `0.3.0`. Published.
+- [x] `cairn init` now replaces every legacy client the repo carries
+  (`jira.js` + `youtrack.js` + `task-tracker.js`), not just `jira.js` — needed
+  because `task-tracker.js` is the entry point the snap-proof docs reference.
+  `0.3.1`, 47 tests.
+- [ ] Commit + `npm publish` `0.3.1`.
 
-Then `cairn init` snap-proof (`--tracker youtrack --project-key PROOF`) swaps
-`task-tracker.js` + `jira.js` + `youtrack.js` → one `cairn tracker`.
+## Adopt in snap-proof (the gate)
+
+Both repos use **yarn**. Per repo (`backend`, `frontend`):
+
+1. `yarn add -D @stonepandastudio/cairn`
+2. `.env` already has `YOUTRACK_URL` / `YOUTRACK_TOKEN` / `YOUTRACK_PROJECT` — nothing to add.
+3. `npx cairn init --dry-run --stack <backend|frontend> --tracker youtrack --project-key PROOF`
+4. review, then run without `--dry-run`
+5. `npx cairn tracker get PROOF-1` — smoke test against real YouTrack
+6. commit `cairn.config.json`, `_cairn/`, the swapped `ai/scripts/*.js`
+7. `TASK_TRACKER` env var and `ai/scripts/{jira.js,youtrack.js}` are now dead —
+   remove `TASK_TRACKER` from `.env`, leave the shimmed files (docs still name them)
+8. use the workflow for a sprint; watch the YouTrack sync
+
+Then update the cairn workspace (`repos.json`) so `cairn doctor` sees the youtrack
+provider, and read both `ai/contexts/` trees for the context-convention design.
 
 `local` provider is **not** here — the `LOCAL-*` folders are pre-tracker archive, and
 `local`'s real driver is the `partOf` join key. It lands with the context layer

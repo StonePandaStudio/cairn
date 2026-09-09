@@ -167,4 +167,4 @@ schema.json            JSON Schema for cairn.config.json
 test/run.js            dependency-free test runner
 ```
 
-No runtime dependencies. Node >= 18. `npm test` runs 46 tests.
+No runtime dependencies. Node >= 18. `npm test` runs 47 tests.

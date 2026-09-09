@@ -494,6 +494,25 @@ atest('init: replaces a legacy ai/scripts/jira.js but never invents one', async 
   assert.ok(!fs.existsSync(path.join(without, 'ai/scripts/jira.js')), 'should not create an unreferenced path');
 });
 
+atest('init: replaces every legacy client the repo carries', async () => {
+  const { main } = require('../lib/init');
+  const log = console.log;
+  const dir = tmpRepo();
+  fs.mkdirSync(path.join(dir, 'ai/scripts'), { recursive: true });
+  for (const n of ['jira.js', 'youtrack.js', 'task-tracker.js']) {
+    fs.writeFileSync(path.join(dir, 'ai/scripts', n), '// copied client\n');
+  }
+  console.log = () => {};
+  main(['--repo', dir, '--tracker', 'youtrack', '--project-key', 'PROOF', '--no-color']);
+  console.log = log;
+
+  const m = manifest.readManifest(dir);
+  for (const n of ['jira.js', 'youtrack.js', 'task-tracker.js']) {
+    assert.match(fs.readFileSync(path.join(dir, 'ai/scripts', n), 'utf8'), /@stonepandastudio\/cairn/);
+    assert.ok(m.files[`ai/scripts/${n}`], `${n} should be manifested`);
+  }
+});
+
 atest('init: refuses to clobber an existing config without --force', async () => {
   const { main } = require('../lib/init');
   const dir = tmpRepo();
