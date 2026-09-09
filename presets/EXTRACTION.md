@@ -131,6 +131,60 @@ rule tables and reference lists, which are exactly slot-shaped.
 | `ai/WORKFLOW.md` | → `core/WORKFLOW.md`, rendered from `workflow.steps[].tracker` + `tracker.*` | same document both sides; only the provider block, stage names, and sync-point actions differ — all config |
 | `ai/AGENTS.md` | → `core/AGENTS.md` skeleton | same structure; rendering it removes live drift (frontend's still says "Jira" while its `.env` and commands are on YouTrack) |
 
+### `react` + `drizzle` seeded from charityiq-app — 2026-09-09
+
+`charityiq-app` is a separate product (single founder, UK charity SaaS), Next.js 16
+App Router + Drizzle + Supabase + Inngest, at Sprint 0 — a scaffold with documented
+intent (`CLAUDE.md` hard rules, `docs/adr/0001-stack.md`) and almost no code
+(everything under `lib/` is a `TODO(Sprint N)` stub).
+
+So the seed is **conventions and structure, not code patterns** — and there is no
+second repo to diff against, so what is "React-generic" vs "charityiq-specific" is
+hand-judged, not measured. Same limit as `preset-cli`.
+
+- `presets/react/` — components (folder-by-role: `ui`/`feature`/`brand`), no
+  `localStorage`, Tailwind v4 `@theme` tokens (no `tailwind.config.ts`), Vitest +
+  Testing Library + MSW + Playwright, Biome (tabs, double quotes). **Not** in it:
+  RSC, Server Actions, route handlers, the App Router — those are Next.js-specific
+  and belong in a future `presets/nextjs` that composes on top.
+- `presets/drizzle/` — one schema module (`lib/db/schema.ts`), `drizzle-kit
+  generate` for mechanical migrations, hand-SQL only in `supabase/migrations/`, RLS
+  policies in the migration not the schema, server client never imported from a
+  `"use client"` module. Parallel to `presets/typeorm`.
+- `presets/nextjs/` — the App-Router framework layer, added on top of `react`
+  (`--stack nextjs,react,…`, nextjs first so its fullstack plan ordering wins). Owns
+  the server/client boundary (`"use client"` discipline, no server-only imports
+  across it), Server Actions (`'use server'`, validate args, revalidate after a
+  write), Route Handlers (webhooks, verify caller), the App-Router file conventions,
+  `next/font` / `next/image` / `Metadata`, and a "the framework moves fast, read the
+  installed docs" note. **Not** in it: `requireTier()` + `audit.log()` on every
+  mutation — that is charityiq's business rule, tier-3 fork, not Next.js-generic.
+- `presets/tailwind/` — styling is a third composable axis, orthogonal to the
+  framework (proof: Angular repos use SCSS `theme.$variable`, charityiq uses
+  Tailwind `@theme`, either could use either). The generic rules: tokens in a
+  `@theme` block not a `tailwind.config.ts`, no raw hex in markup, dark mode by
+  re-mapping semantic tokens. The React preset was made styling-agnostic to match.
+  Angular's SCSS theming stays inline in `presets/angular` for now — one system
+  across its two repos, not worth its own preset until a second SCSS-theming repo
+  appears (then: `presets/scss-theme`).
+
+Stays charityiq-owned (tier 3, `fork`): the hard business rules — `requireTier()` +
+`audit.log()` on every mutation, RAG-grounded AI through `lib/ai/client.ts`, the
+audit row in the same transaction as the state change — plus `docs/adr/`, the build
+guide, and the versioned-prompt registry (`docs/prompts/<name>/<version>.md`). Those
+are the project's constitution, not shareable scaffolding.
+
+### The nestjs slots were split nestjs / typeorm — 2026-09-09
+
+The first cut of `presets/nestjs/slots/*` (review-checklist, implementation-reference,
+key-patterns, architect-mandatory-docs, architect-discussion-topics) mixed framework
+rules with TypeORM rules. Split: the framework half stays in `nestjs/slots/`, the ORM
+half moved to `presets/typeorm/slots/` under the same filenames. The renderer appends
+one from each `stack[]` entry, so `--stack nestjs,typeorm` reconstitutes the original
+and `--stack nestjs,drizzle` would pair the framework rules with a Drizzle slot set
+instead. `plan-step-ordering` and `architect-references` are primary-stack-only (not
+concatenated) — noted in their headers.
+
 ### QA agents — preset-level, not extracted
 
 Backend runs three (`qa-architect` / `qa-developer` / `qa-orchestrator`, ~630 ln

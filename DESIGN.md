@@ -731,11 +731,18 @@ and the tool would be dead. That is the single most likely way this fails.
    pass; `cairn context build` / `check` / `counterparts`; the `local` tracker
    provider and its index over `ai/tasks/`. This is the target — see its section.
 3. **`cairn context serve`.** The MCP server over the resolver — graph + content.
-4. **Agent presets + the three extension mechanisms**, and the upgrade path in the
-   same step — see the merge section below. Presets that cannot be updated without
-   destroying local edits are worse than no presets, so `_cairn/base/` and the 2×2
-   ship together with the first preset, not after it. Shares the `cairn sync`
-   machinery with the context layer but not its critical path — can run in parallel.
+3b. **`cairn render`** — done ahead of order (0.5.0), because `charityiq-app` is a
+   greenfield repo that needs the scaffolding now and a greenfield render has no
+   merge to do. A ~200-line template engine (`lib/render/engine.js`) + a driver that
+   turns `presets/` + the repo's `stack` / `tracker` / `workflow.json` into `ai/` +
+   `.claude/commands/`. Greenfield-guarded: writes absent files, manifests them,
+   keeps anything on disk. `presets/` now ships in the tarball. The three-way merge
+   (`cairn sync`) is still step 4.
+4. **Agent presets — the three extension mechanisms and the upgrade path.** The
+   render half exists (3b); this is `cairn sync`: `_cairn/base/`, the 2×2, section
+   merge. Presets that cannot be updated without destroying local edits are worse
+   than no presets, so this ships before the presets are pointed at the mature
+   repos. Shares the machinery with the context layer but not its critical path.
 5. **Guidelines import/export** with fork/link modes. Not before 4 has survived a
    sprint.
 6. **Portable workflows between project groups.** A quarter, and only once 4 and 5

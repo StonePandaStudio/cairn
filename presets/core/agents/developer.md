@@ -85,7 +85,7 @@ the user — do not proceed to E.5.
 
 End with a concise list of files created or modified, one line each. Nothing else —
 the user will read the diffs.
-{{#if step.tracker}}
+{{#if tracker.remote}}
 
 **No tracker sync.** `execute_plan` never touches the tracker — see `ai/WORKFLOW.md` § Sync points.
 {{/if}}

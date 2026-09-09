@@ -1,8 +1,6 @@
 <!-- cairn preset: angular — fills {{> stack/review-checklist }} in the core reviewer.
      Verbatim from snap-proof/frontend/ai/agents/angular-reviewer.md § Dimension 2. -->
 
-| Rule | Where to look |
-|---|---|
 | New template syntax (`@if`, `@for`, `@switch`) — no `*ngIf`/`*ngFor` | `.html` files |
 | `@for` always includes a `track` expression — missing `track` is a compile error in Angular 17+ | `.html` files |
 | Standalone components — no `NgModule` declarations block | Component `.ts` files |

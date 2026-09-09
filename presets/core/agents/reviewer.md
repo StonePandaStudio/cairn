@@ -78,6 +78,8 @@ Work through all four dimensions in order. For each finding, record:
 Check every changed file against `code-guidelines.md`, `project-structure.md`, and
 `mappers.md`. High-priority rules to verify:
 
+| Rule | Where to look |
+|---|---|
 {{> stack/review-checklist }}
 
 #### Dimension 3 — Context doc coverage
@@ -160,6 +162,6 @@ Stop and ask the user before producing the review if:
 - Does not re-run the developer agent.
 - Does not evaluate test coverage (out of scope for this project's current workflow).
 - Does not review files outside the diff (pre-existing issues in unchanged code are invisible to this agent).
-{{#if step.tracker}}
+{{#if tracker.remote}}
 - **Does not sync to the tracker**, even on a clean review — moving to a done state is manual. See `ai/WORKFLOW.md` § Sync points.
 {{/if}}

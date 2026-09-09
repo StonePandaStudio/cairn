@@ -22,11 +22,12 @@ npx cairn init --stack nestjs,typeorm --tracker jira-server --project-key MYPROJ
 | `cairn tracker <cmd>` | Issue tracker client (`jira-server` / `youtrack` / `none`). Replaces the copied `ai/scripts/*.js` clients |
 | `cairn doctor` | Cross-repo drift report, plus per-repo generated-file state |
 | `cairn init` | Makes a repo cairn-managed: writes `cairn.config.json`, `_cairn/`, and the shim |
+| `cairn render` | Scaffolds `ai/` + `.claude/commands/` from the bundled presets, from the repo's stack + workflow |
 
-Template rendering — generating the command stubs, `WORKFLOW.md` and the agent role
-contracts from one workflow declaration — is v2, and deliberately not in this release.
-v1 swaps the tracker client under the consuming repos; bundling prompt changes into
-the same release would make any regression impossible to attribute.
+`cairn render` is **greenfield only**: it writes files that do not exist, records them
+in the manifest, and leaves anything already on disk alone (reporting it). The
+three-way merge that would re-render over local edits — `cairn sync` — is not built
+yet; for a fresh repo there is nothing to merge.
 
 ## The two folders
 
@@ -36,8 +37,9 @@ repo/
   _cairn/                cairn writes this. nobody hand-edits it.
     manifest.json        what was generated, from which template, at which hash
     scripts/jira.js      vendored shim
-  ai/                    project-owned. cairn never touches it.
-    contexts/  progress/  tasks/  infrastructure/
+  ai/                    cairn render seeds agents/ + WORKFLOW.md + the command
+    agents/  WORKFLOW.md  stubs once; contexts/ tasks/ and your edits are yours,
+    contexts/  tasks/     never re-written without `cairn sync`
 ```
 
 The boundary is the whole design. Hand-edited config living inside a generated
@@ -164,10 +166,12 @@ lib/manifest.js        generated-file hashing and state
 lib/paint.js           ANSI + table rendering
 lib/tracker/           index (registry), cli, jira-server, youtrack, none
 lib/doctor/            index (analysis + report), scan, normalize, diff
+lib/render/            engine (a small template engine), index (driver), cli
 lib/init.js            cairn init
 templates/shims/       vendored shim source
+presets/               core/ + framework/ORM/styling presets rendered by `cairn render`
 schema.json            JSON Schema for cairn.config.json
 test/run.js            dependency-free test runner
 ```
 
-No runtime dependencies. Node >= 18. `npm test` runs 56 tests.
+No runtime dependencies. Node >= 18. `npm test` runs 61 tests.

@@ -19,6 +19,7 @@ Usage: cairn <command> [options]
   tracker <cmd> [...]   issue tracker client   (cairn tracker --help)
   doctor [options]      cross-repo drift report (cairn doctor --help)
   init [options]        make a repo cairn-managed (cairn init --help)
+  render [options]      scaffold ai/ from the bundled presets (cairn render --help)
   version               print version
 
 Run \`cairn <command> --help\` for command options.
@@ -38,6 +39,10 @@ function main() {
 
     case 'init':
       process.exitCode = require('../lib/init').main(rest);
+      return;
+
+    case 'render':
+      process.exitCode = require('../lib/render/cli').main(rest);
       return;
 
     case 'version':

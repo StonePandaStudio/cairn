@@ -715,6 +715,81 @@ test('presets: every declared slot is supplied by every variant', () => {
   assert.deepStrictEqual(problems, []);
 });
 
+// -------------------------------------------------------------------- render
+
+const engine = require('../lib/render/engine');
+
+test('render/engine: var, dotted path, and missing var', () => {
+  assert.strictEqual(engine.render('Hi {{ name }}', { name: 'Al' }), 'Hi Al');
+  assert.strictEqual(engine.render('{{ a.b.c }}', { a: { b: { c: 3 } } }), '3');
+  assert.strictEqual(engine.render('[{{ nope }}]', {}), '[]');
+});
+
+test('render/engine: if / else', () => {
+  assert.strictEqual(engine.render('{{#if x}}Y{{else}}N{{/if}}', { x: 1 }), 'Y');
+  assert.strictEqual(engine.render('{{#if x}}Y{{else}}N{{/if}}', { x: [] }), 'N');
+});
+
+test('render/engine: each with @index_1 and this, standalone tags trimmed', () => {
+  const out = engine.render('start\n{{#each xs}}\n{{@index_1}}. {{this.n}}\n{{/each}}\nend', {
+    xs: [{ n: 'a' }, { n: 'b' }],
+  });
+  assert.strictEqual(out, 'start\n1. a\n2. b\nend');
+});
+
+test('render/engine: cairn comments are stripped, partials resolved and re-rendered', () => {
+  const out = engine.render(
+    '# T\n\n<!-- cairn preset: x -->\n{{! also gone }}\nreal {{> stack/y }}',
+    { k: 'K' },
+    (n) => (n === 'stack/y' ? '<!-- cairn: hdr -->\n[[{{ k }}]]' : null),
+  );
+  assert.strictEqual(out, '# T\n\nreal [[K]]');
+});
+
+atest('render: scaffolds ai/ from presets, greenfield-guarded', async () => {
+  const { main: init } = require('../lib/init');
+  const renderCli = require('../lib/render/cli');
+  const dir = tmpRepo();
+  const log = console.log;
+  console.log = () => {};
+  try {
+    init(['--repo', dir, '--stack', 'nextjs,react,tailwind,drizzle', '--tracker', 'none', '--render', '--no-color']);
+
+    const review = path.join(dir, 'ai/agents/reviewer.md');
+    assert.ok(fs.existsSync(review), 'reviewer.md rendered');
+    assert.ok(fs.existsSync(path.join(dir, '.claude/commands/plan-task.md')));
+    assert.ok(fs.existsSync(path.join(dir, 'ai/WORKFLOW.md')));
+
+    const body = fs.readFileSync(review, 'utf8');
+    assert.doesNotMatch(body, /\{\{/, 'no unrendered handlebars');
+    assert.doesNotMatch(body, /cairn preset:/, 'no preset header comment');
+    assert.match(body, /NextjsReviewerAgent/, 'agent name substituted');
+    assert.match(body, /'use server'/, 'nextjs review-checklist slot concatenated in');
+    assert.match(body, /Drizzle query builder/, 'drizzle review-checklist slot concatenated in');
+
+    const m = manifest.readManifest(dir);
+    assert.ok(m.files['ai/agents/reviewer.md'] && m.files['ai/WORKFLOW.md']);
+
+    const before = fs.readFileSync(review, 'utf8');
+    renderCli.renderInto(dir, { paint: require('../lib/paint').makePaint(false) });
+    assert.strictEqual(fs.readFileSync(review, 'utf8'), before, 're-render is a no-op');
+
+    fs.writeFileSync(review, before + '\n<!-- mine -->\n');
+    const { kept } = require('../lib/render').planRender({
+      config: loadRepoConfig(dir, { required: true }),
+      presetsDir: renderCli.PRESETS_DIR,
+      manifest: m,
+      repoPath: dir,
+    });
+    assert.ok(
+      kept.some((k) => k.rel === 'ai/agents/reviewer.md' && /hand-edited/.test(k.reason)),
+      'a hand edit is kept, not clobbered',
+    );
+  } finally {
+    console.log = log;
+  }
+});
+
 // ------------------------------------------------------------------- runner
 
 (async () => {

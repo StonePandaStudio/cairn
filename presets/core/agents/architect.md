@@ -107,8 +107,8 @@ Once alignment is reached, write the discussion outcome to
 complete enough that `plan_task` can run from it alone.
 
 **End state of Mode A:** `description-step-[step].md` written, `brief-step-[step].md`
-untouched, **no plan file**. Then the tracker sync for this step (see
-`ai/WORKFLOW.md` § Sync points), skipped for out-of-scope `LOCAL-*` tasks.
+untouched, **no plan file**.{{#if tracker.remote}} Then the tracker sync for this step
+(see `ai/WORKFLOW.md` § Sync points), skipped for `LOCAL-*` tasks.{{/if}}
 
 The user may invoke `plan_task` immediately or return later.
 
@@ -140,11 +140,13 @@ possible.
 - **Create** a new context file when the task adds an area that doesn't yet have one. Follow the shape of existing docs.
 - **Note in the plan** any context files that can only be finalized after implementation, so the developer picks them up during `execute_plan`.
 
+{{#if tracker.remote}}
 #### B.5 — Sync to the tracker
 
 The tracker sync for this step (see `ai/WORKFLOW.md` § Sync points). Skip for
-out-of-scope `LOCAL-*` tasks.
+`LOCAL-*` tasks.
 
+{{/if}}
 #### B.6 — Remind the user to switch models and clear context
 
 Before returning, explicitly prompt the user to:
@@ -154,8 +156,8 @@ Before returning, explicitly prompt the user to:
 
 Do not omit this reminder.
 
-**End state of Mode B:** plan file + updated/new context docs + tracker moved on (if
-in sync scope) + explicit Haiku-switch prompt delivered.
+**End state of Mode B:** plan file + updated/new context docs{{#if tracker.remote}} +
+tracker moved on (if in sync scope){{/if}} + explicit Haiku-switch prompt delivered.
 
 ---
 
@@ -237,7 +239,7 @@ When in doubt, ask. The cost of a clarifying question is tiny; the cost of a wro
 ## Tools / capabilities
 
 - `analyze(message)` — surface findings, questions, or tradeoffs back to the user. Used throughout Mode A.
-- `create_brief(task, step)` — **Step 0**. If `task` is omitted, create the tracker parent first (see `ai/WORKFLOW.md`) and use the returned key. Create `ai/tasks/[task]/` if absent, then `brief-step-[step].md` with the scaffold below — refuse if it already exists. Create the tracker child issue for this step and write its key into the file as a frontmatter comment on the first line. `LOCAL-*` tasks stay local-only — no tracker issue, no frontmatter. Check `ai/tasks/[returned-key]/` doesn't already exist before writing.
+- `create_brief(task, step)` — **Step 0**. Create `ai/tasks/[task]/` if absent, then `brief-step-[step].md` with the scaffold below — refuse if it already exists; check `ai/tasks/[task]/` isn't already taken.{{#if tracker.remote}} If `task` is omitted, create the tracker parent first (see `ai/WORKFLOW.md`) and use the returned key; create the tracker child issue for this step and write its key into the file as a frontmatter comment on the first line. `LOCAL-*` tasks stay local-only — no tracker issue, no frontmatter.{{/if}}
 
   ```markdown
   # [task] — Step [step] Brief

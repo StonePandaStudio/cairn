@@ -1,0 +1,45 @@
+{
+  "$comment": "cairn preset: core. The default workflow the renderer uses when a repo's cairn.config.json has no `workflow` block. Each step names its slash command, the underlying fn the agent docs refer to, and the role that runs it. `oneLine` is the AGENTS.md summary; `trackerAction` (optional) is the WORKFLOW.md sync-points cell for a remote tracker.",
+  "steps": [
+    {
+      "id": "brief",
+      "fn": "create_brief",
+      "command": "create-brief",
+      "role": "architect",
+      "oneLine": "creates the task brief scaffold for you to fill in",
+      "trackerAction": "create the parent issue if new; always create the child issue for this step; write its key into the brief frontmatter"
+    },
+    {
+      "id": "describe",
+      "fn": "enrich_description",
+      "command": "enrich-description",
+      "role": "architect",
+      "oneLine": "iterative discussion, then writes the enriched description",
+      "trackerAction": "child issue description ← the enriched description; a 1–2 sentence summary appended to the parent"
+    },
+    {
+      "id": "plan",
+      "fn": "plan_task",
+      "command": "plan-task",
+      "role": "architect",
+      "oneLine": "produces the implementation plan and any context-doc updates",
+      "trackerAction": "parent and child issue → in-progress stage"
+    },
+    {
+      "id": "execute",
+      "fn": "execute_plan",
+      "command": "execute-plan",
+      "role": "developer",
+      "oneLine": "implements the plan (switch to Haiku first)",
+      "trackerAction": "no sync"
+    },
+    {
+      "id": "review",
+      "fn": "code_review",
+      "command": "code-review",
+      "role": "reviewer",
+      "oneLine": "checks the result against the plan and the guidelines",
+      "trackerAction": "no sync — later stage moves are manual"
+    }
+  ]
+}

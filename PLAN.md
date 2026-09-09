@@ -6,7 +6,23 @@ where we are in it.
 
 Last updated 2026-09-09.
 
-## Where we are
+## Where we are (0.5.0)
+
+- **Published through 0.4.2.** `youtrack` provider, list-`stack`, safe shim swap,
+  `tracker.envPrefix`, per-provider env hints — all live. **snap-proof adopted**
+  (backend + frontend on YouTrack, smoke-tested, branch `install-cairn`).
+- **`cairn render` built** (0.5.0, awaiting publish) — a small template engine
+  (`lib/render/engine.js`) + driver + `presets/core/workflow.json`. Turns the
+  bundled presets into a repo's `ai/` + `.claude/commands/`. **Greenfield only** —
+  writes absent files, manifests them, keeps anything on disk; `cairn sync` (the
+  three-way merge) is still deferred. `presets/` now ships in the tarball.
+- **Preset library** — `core` + framework (`nestjs`, `react`, `nextjs`) + ORM
+  (`typeorm`, `drizzle`) + styling (`tailwind`) + `angular`. Slots split
+  framework/ORM, concatenate per `stack[]` entry. See `presets/EXTRACTION.md`.
+- **Deferred still:** workspace layer, hub, context layer, `cairn sync`, `local`
+  provider.
+
+## Where we were
 
 - **v1 published** — `@stonepandastudio/cairn@0.2.1`, npm public. `tracker` +
   `doctor` + `init`. 35 tests.
@@ -87,16 +103,28 @@ provider, and read both `ai/contexts/` trees for the context-convention design.
 `local`'s real driver is the `partOf` join key. It lands with the context layer
 (step 2). `jira-server` stays a provider — other projects (e.g. glossr) may still use it.
 
-## Agent-preset seeds — done 2026-09-09 (step 4 prep)
+## charityiq-app — on cairn's workflow (Phase 2, after 0.5.0 publish)
 
-Extracted from `snap-proof/{backend,frontend}` into `presets/core/` +
-`presets/{nestjs,angular}/slots/`. See `presets/EXTRACTION.md` § "Agents, workflow,
-commands". Seeds only — no renderer. `presets/core/`: `agents/{architect,developer,
-reviewer}.md` (contracts, 85–92% shared), `commands/_stub.md`, `WORKFLOW.md`,
-`AGENTS.md`. Stack slots fill `{{> stack/… }}` points. QA agents left out — one
-project's test setup, not shareable; extract when a 2nd repo on a stack appears.
-Rot the eventual render fixes: stale model-check, frontend AGENTS.md still on Jira,
-`code_review` vs `review_plan`, `PROOF-` hard-coded task paths.
+Separate product, Next.js 16 + Drizzle + Supabase, Sprint 0, own governance
+(`CLAUDE.md` hard rules, `docs/adr/`, versioned prompts). Single repo — cairn's
+cross-repo value doesn't apply yet, but the founder wants the brief→plan→execute
+workflow. Nothing in charityiq is touched until 0.5.0 is on npm.
+
+1. `git push` + `npm publish` `0.5.0`
+2. In charityiq: `pnpm add -D @stonepandastudio/cairn`
+3. `npx cairn init --stack nextjs,react,tailwind,drizzle --tracker none --render`
+   → creates `cairn.config.json`, `_cairn/`, `.claude/commands/*.md`, `ai/agents/*`,
+   `ai/AGENTS.md`, `ai/WORKFLOW.md`, `ai/infrastructure/code-guidelines.md` (seed —
+   fork it). Nothing pre-existing is overwritten.
+4. Reconcile `CLAUDE.md` — one line: `@ai/AGENTS.md` (or leave the workflow opt-in)
+5. Fork `ai/infrastructure/code-guidelines.md` — fold in the charityiq hard rules
+   (`requireTier`+`audit.log`, RAG-grounding) which stay tier-3
+6. Drive development through `/create-brief` → `/enrich-description` → `/plan-task` →
+   `/execute-plan` → `/code-review`
+
+Known rough edges in the render (iterate as charityiq uses it): the "read mandatory
+guidelines" lists in the agent docs still name `mappers.md` (snap-specific, no-ops
+for a repo without it); `INITIAL_PROMPT.md` is not rendered (per-project).
 
 ## Order after 0: A → C → B
 
