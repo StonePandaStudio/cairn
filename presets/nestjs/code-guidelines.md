@@ -1,6 +1,6 @@
 # Code Guidelines
 
-<!-- cairn preset: node. Composes with presets/typeorm for TypeORM-backed services. -->
+<!-- cairn preset: nestjs. Composes with presets/typeorm for TypeORM-backed services. -->
 
 ## General TypeScript Guidelines
 

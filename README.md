@@ -12,7 +12,7 @@ agreeing.
 
 ```bash
 npm i -D @stonepandastudio/cairn
-npx cairn init --stack backend --tracker jira-server --project-key MYPROJ --story-type Task
+npx cairn init --stack nestjs,typeorm --tracker jira-server --project-key MYPROJ --story-type Task
 ```
 
 ## What v1 does
@@ -134,16 +134,17 @@ overwriting a hand edit is the destructive outcome.
 
 ### Workspace config (`repos.json`)
 
-- `repos[]` — name, path, stack. Per-repo settings live in each repo's own
-  `cairn.config.json`; the inline `vars` blocks are a fallback used only until a repo
-  has been through `cairn init`, so migration can happen one repo at a time.
+- `repos[]` — name, path, stack (`"angular"` or a list `["nestjs", "typeorm"]` —
+  framework first). Per-repo settings live in each repo's own `cairn.config.json`;
+  the inline `vars` blocks are a fallback used only until a repo has been through
+  `cairn init`, so migration can happen one repo at a time.
 - `pathAliases` — local → canonical. When one repo names a stub `execute-tests.md`
   where the others use `execute-test-plan.md`, aliasing folds them onto the cohort's
   names instead of reporting one `MISSING` and one `STRANDED` for the same file.
 - `shared[]` — glob rules. `cohort: "all"` compares every repo; `cohort: "stack"`
-  compares backend-with-backend. `requires: { tracker: true }` skips repos with no
-  tracker. A repo with no config has an *unknown* tracker, not an absent one, and is
-  never skipped on that basis.
+  groups by the first stack entry (all `nestjs` repos together, whatever the ORM).
+  `requires: { tracker: true }` skips repos with no tracker. A repo with no config
+  has an *unknown* tracker, not an absent one, and is never skipped on that basis.
 - Anything not matched by a rule — `ai/contexts/`, `ai/progress/`, `ai/tasks/`,
   `DATABASE_SCHEMA.md` — is per-project by design and never inspected.
   `ai/INITIAL_PROMPT.md` is explicitly excluded: variants at ~0% shared content make
@@ -167,4 +168,4 @@ schema.json            JSON Schema for cairn.config.json
 test/run.js            dependency-free test runner
 ```
 
-No runtime dependencies. Node >= 18. `npm test` runs 47 tests.
+No runtime dependencies. Node >= 18. `npm test` runs 51 tests.

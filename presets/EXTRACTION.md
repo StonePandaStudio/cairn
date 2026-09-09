@@ -12,27 +12,27 @@ to be the wrong resolution. Per section the picture is much sharper.
 
 | Section | Same | Disposition |
 |---|---|---|
-| General TypeScript Guidelines | 100% | → `node` |
-| NestJS Module Structure | 100% | → `node` |
-| Services | 100% | → `node` |
-| Error Handling | 100% | → `node` |
-| Security | 100% | → `node` |
-| Constants | 100% | → `node` |
-| Enums | 100% | → `node` |
-| Code Quality | 100% | → `node` |
-| File Organization | 93% | → `node` (union; glossr's `interfaces/` kept) |
-| File Naming Conventions | 80% | → `node`, DTO lines to `dto-naming` slot |
+| General TypeScript Guidelines | 100% | → `nestjs` |
+| NestJS Module Structure | 100% | → `nestjs` |
+| Services | 100% | → `nestjs` |
+| Error Handling | 100% | → `nestjs` |
+| Security | 100% | → `nestjs` |
+| Constants | 100% | → `nestjs` |
+| Enums | 100% | → `nestjs` |
+| Code Quality | 100% | → `nestjs` |
+| File Organization | 93% | → `nestjs` (union; glossr's `interfaces/` kept) |
+| File Naming Conventions | 80% | → `nestjs`, DTO lines to `dto-naming` slot |
 | TypeORM Entities | 100% | → `typeorm` |
 | Database Query Decomposition Pattern | 100% | → `typeorm` |
 | Mappers | 100% | → `typeorm` — **but see finding 1** |
 | Database Operations | 85% | → `typeorm` (glossr's stronger wording) |
 | Query Configuration | 75% | → `typeorm` (glossr is a strict superset) |
-| Validation | 43% | spine → `node`, rest → `validation-stack` slot |
-| DTOs | 28% | spine → `node`, rest → `dto-definition` slot |
-| Controllers | 16% | spine → `node`, rest → `controller-response` slot |
+| Validation | 43% | spine → `nestjs`, rest → `validation-stack` slot |
+| DTOs | 28% | spine → `nestjs`, rest → `dto-definition` slot |
+| Controllers | 16% | spine → `nestjs`, rest → `controller-response` slot |
 | Response Transformation | disjoint | entirely `response-transformation` slot |
 | **Testing** | **7%** | **stays project-owned** |
-| Interfaces, Error Codes, No Magic Strings, Pagination | glossr only | → `node` (promoted, generic) |
+| Interfaces, Error Codes, No Magic Strings, Pagination | glossr only | → `nestjs` (promoted, generic) |
 | QueryBuilder Field Selection, Migrations | glossr only | → `typeorm` (promoted, generic) |
 | Redis Key Naming | glossr only | **stays project-owned** — names a specific app prefix |
 

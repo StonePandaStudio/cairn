@@ -47,18 +47,22 @@ Before `cairn init` on snap-proof. See DESIGN "### Sequencing" step 0.
   auto-apply), `{noformat}` vs `{code}` choice (a judgment call).
 - [x] `package.json` → `0.3.0`. Published.
 - [x] `cairn init` now replaces every legacy client the repo carries
-  (`jira.js` + `youtrack.js` + `task-tracker.js`), not just `jira.js` — needed
-  because `task-tracker.js` is the entry point the snap-proof docs reference.
-  `0.3.1`, 47 tests.
-- [ ] Commit + `npm publish` `0.3.1`.
+  (`jira.js` + `youtrack.js` + `task-tracker.js`), not just `jira.js` — `0.3.1`.
+- [x] **`stack` is a list now** (`0.4.0`). `presets/node` → `presets/nestjs`.
+  `--stack nestjs,typeorm` writes `"stack": ["nestjs", "typeorm"]`. Doctor
+  `cohort: "stack"` groups by `stack[0]`. `presets/typeorm` composes on top; a
+  Prisma backend would be `["nestjs", "prisma"]`. Downstream `ai/agents/node-*.md`
+  rename deferred to the v2 regen. 51 tests.
+- [ ] Commit + `npm publish` `0.4.0`.
 
 ## Adopt in snap-proof (the gate)
 
-Both repos use **yarn**. Per repo (`backend`, `frontend`):
+Both repos use **yarn**. Per repo:
 
 1. `yarn add -D @stonepandastudio/cairn`
 2. `.env` already has `YOUTRACK_URL` / `YOUTRACK_TOKEN` / `YOUTRACK_PROJECT` — nothing to add.
-3. `npx cairn init --dry-run --stack <backend|frontend> --tracker youtrack --project-key PROOF`
+3. **backend:** `npx cairn init --dry-run --stack nestjs,typeorm --tracker youtrack --project-key PROOF`
+   **frontend:** `npx cairn init --dry-run --stack angular --tracker youtrack --project-key PROOF`
 4. review, then run without `--dry-run`
 5. `npx cairn tracker get PROOF-1` — smoke test against real YouTrack
 6. commit `cairn.config.json`, `_cairn/`, the swapped `ai/scripts/*.js`

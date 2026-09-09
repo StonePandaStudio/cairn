@@ -5,7 +5,7 @@
     {
       "name": "glossr-api",
       "path": "D:/projects/glossr/glossr-api",
-      "stack": "backend",
+      "stack": ["nestjs", "typeorm"],
       "vars": {
         "jiraKey": "GLO",
         "storyType": "Story",
@@ -27,7 +27,7 @@
     {
       "name": "snap-backend",
       "path": "D:/projects/snap-proof/backend",
-      "stack": "backend",
+      "stack": ["nestjs", "typeorm"],
       "vars": {
         "jiraKey": "PROOF",
         "storyType": "Task",
@@ -49,7 +49,7 @@
     {
       "name": "snap-frontend",
       "path": "D:/projects/snap-proof/frontend",
-      "stack": "frontend",
+      "stack": "angular",
       "vars": {
         "jiraKey": "PROOF",
         "storyType": "Task",
@@ -67,7 +67,7 @@
     {
       "name": "glossr-frontend",
       "path": "D:/projects/glossr/glossr-frontend",
-      "stack": "frontend",
+      "stack": "angular",
       "vars": {
         "jiraKey": "GLO",
         "storyType": "Story",

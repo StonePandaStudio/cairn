@@ -218,13 +218,25 @@ Layered like eslint `extends`:
 
 ```
 core (role contracts, tracker)
-  └─ preset-node / preset-angular / preset-cli   (persona bodies, guideline seeds)
+  └─ preset-nestjs / preset-angular / preset-typeorm / preset-cli   (persona bodies, guideline seeds)
        └─ workspace.json  (one project — workflow, tracker config, repo set)
             └─ repo config (vars, slot fills, overrides)
 ```
 
+`stack` is a **list**, framework first: `["nestjs", "typeorm"]`, declared as
+`--stack nestjs,typeorm`. The renderer layers one preset per entry, in order, so a
+backend on Prisma takes `["nestjs", "prisma"]` and never touches `preset-typeorm`.
+`presets/nestjs` and `presets/typeorm` are already split on this basis
+(`presets/EXTRACTION.md`). The doctor's `cohort: "stack"` groups by the first entry —
+comparison is at framework granularity, where the shared contracts live; ORM and
+add-on differences are resolved by composing presets, not by the cohort.
+
 Evidence it works: reviewer contracts 85–92% same across stacks. Evidence of the
 limit: qa-developer 33% same — that one is preset-level, not core.
+
+The downstream agent docs are still named `node-*.md` (the preset became `nestjs`
+2026-09-09, the docs follow in the v2 regeneration pass — the same pass that renames
+the legacy tracker command names).
 
 The workspace layer between preset and repo was added after the fact; see the
 multi-repo roadmap below for why it is not optional, and "Layout" for where each
@@ -417,8 +429,9 @@ The two comparison axes are genuinely orthogonal and both have data:
 
 - `cohort: "project"` → the workspace itself. snap-proof with 2 repos, glossr with 3.
   Runs from a project's own `workspace.json`, in that project's CI.
-- `cohort: "stack"` → a backend pair, a frontend pair, and **cli alone**. The pairs
-  are cross-project, so this axis lives in the **hub**, not in any one workspace.
+- `cohort: "stack"` → grouped by `stack[0]`: a `nestjs` pair, an `angular` pair, and
+  **`cli` alone**. The pairs are cross-project, so this axis lives in the **hub**, not
+  in any one workspace.
 
 Splitting the axes this way is what lets `cairn doctor --strict` run in a single
 project's CI — the intra-project checks need only that project checked out. The
@@ -429,10 +442,10 @@ The empty cell has a consequence worth stating plainly, because it limits what t
 doctor can promise. `glossr-cli` is a stack of one, so it never forms a stack
 cohort — the analyzer skips groups with fewer than two members, which is why no
 `stack:cli` section appears in the hub output. Its only cross-repo comparison is
-project-level, against a backend and a frontend, where agent-doc similarity is
-meaningless.
+project-level, against a `nestjs` and an `angular` repo, where agent-doc similarity
+is meaningless.
 
-**So `preset-cli` has no peer and cannot be validated by comparison.** `preset-node`
+**So `preset-cli` has no peer and cannot be validated by comparison.** `preset-nestjs`
 and `preset-angular` each get checked against a second repo; the cli preset will
 only ever be validated by hand, or by a second CLI repo appearing. Any claim that
 "the doctor validates the presets" is true for two of three.
@@ -446,7 +459,7 @@ Everything below is detail on this order:
       │                                (pins, fork/link policy, sync log). opt-in.
       ↓ references — no config flows down
 @stonepandastudio/cairn               engine
-  presets/node | angular | cli        content — an in-repo folder, package-shaped
+  presets/nestjs | angular | typeorm | cli   content — an in-repo folder, package-shaped
       ↓ extends
   workspace.json                      ONE project — key, repos[], tracker defaults,
       │                                intra-project shared[]. glossr/cairn/workspace.json
@@ -476,7 +489,7 @@ glossr/
 │   ├── manifest.json              what cairn wrote + sha
 │   ├── base/                      merge bases — three-way merge on upgrade
 │   │   ├── .claude/commands/create-brief.md
-│   │   └── ai/agents/node-developer.md
+│   │   └── ai/agents/nestjs-developer.md
 │   └── scripts/jira.js            vendored tracker shim
 ├── .claude/commands/             GENERATED (v2), committed
 │   ├── create-brief.md
@@ -490,9 +503,9 @@ glossr/
 │   ├── INITIAL_PROMPT.md          per-project, never compared
 │   ├── PROJECT_SUMMARY.md
 │   ├── agents/                    GENERATED (v2): core contract + preset persona
-│   │   ├── node-architect.md
-│   │   ├── node-developer.md
-│   │   ├── node-reviewer.md
+│   │   ├── nestjs-architect.md
+│   │   ├── nestjs-developer.md
+│   │   ├── nestjs-reviewer.md
 │   │   ├── angular-developer.md
 │   │   └── angular-reviewer.md
 │   ├── infrastructure/
@@ -532,21 +545,21 @@ glossr/                            PROJECT_FOLDER — plain dir, not a repo
 │
 ├── glossr-api/                    code repo — own git
 │   ├── .git/
-│   ├── cairn.config.json          stack:"backend", tracker, vars,
+│   ├── cairn.config.json          stack:["nestjs","typeorm"], tracker, vars,
 │   │                              workspace:"../cairn/workspace.json"
 │   ├── _cairn/
 │   │   ├── manifest.json          what cairn wrote INTO this repo + sha
 │   │   └── scripts/jira.js        vendored shim
 │   ├── .claude/commands/          GENERATED, committed here
 │   ├── ai/
-│   │   ├── agents/node-*.md
+│   │   ├── agents/nestjs-*.md
 │   │   ├── infrastructure/code-guidelines.md
 │   │   ├── contexts/  progress/
 │   │   └── tasks/GLO-33/          same issue folder also in frontend = cross-repo task
 │   └── src/
 │
 ├── glossr-frontend/              code repo — own git
-│   ├── cairn.config.json          stack:"frontend"
+│   ├── cairn.config.json          stack:"angular"
 │   ├── _cairn/{manifest.json, scripts/jira.js}
 │   ├── .claude/commands/
 │   ├── ai/{agents/angular-*.md, infrastructure/, contexts/, tasks/GLO-33/}
@@ -763,7 +776,7 @@ v1 gives visibility, not propagation. This is deliberate — see "v1 scope".
 **v2 — `cairn sync` propagates.** Once the renderer, `_cairn/base/` and `cairn sync`
 exist:
 
-1. Edit the source — `presets/node/agents/developer.md`, or a project-local
+1. Edit the source — `presets/nestjs/agents/developer.md`, or a project-local
    `cairn/presets/` copy.
 2. Commit. The consuming repos do not move yet: each pins a version, and the pin is
    bumped explicitly. Nothing re-renders on `npm update`, so a prompt change never

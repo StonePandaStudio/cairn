@@ -12,9 +12,12 @@
       "description": "Version of @stonepandastudio/cairn this repo is pinned to."
     },
     "stack": {
-      "type": "string",
-      "description": "Comparison cohort for the doctor and, from v2, the preset to render from.",
-      "examples": ["backend", "frontend", "cli"]
+      "description": "Framework first, then composable add-ons. `cohort: \"stack\"` in the doctor groups by the first entry; the v2 renderer layers one preset per entry, in order. A bare or comma-separated string is also accepted.",
+      "anyOf": [
+        { "type": "string" },
+        { "type": "array", "items": { "type": "string" }, "minItems": 1 }
+      ],
+      "examples": ["angular", ["nestjs", "typeorm"], "cli"]
     },
     "tracker": {
       "type": "object",

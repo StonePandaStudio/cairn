@@ -18,7 +18,7 @@ const { createNone } = require('../lib/tracker/none');
 const { createTracker } = require('../lib/tracker');
 const cli = require('../lib/tracker/cli');
 const manifest = require('../lib/manifest');
-const { parseEnv, loadRepoConfig } = require('../lib/config');
+const { parseEnv, loadRepoConfig, normalizeStack } = require('../lib/config');
 
 let passed = 0;
 let failed = 0;
@@ -122,6 +122,20 @@ test('markup: horizontal rule', () => {
 test('config: parseEnv strips quotes and comments', () => {
   const env = parseEnv('# comment\nA=1\nB="two"\nC=\'three\'\n\nD=has=equals');
   assert.deepStrictEqual(env, { A: '1', B: 'two', C: 'three', D: 'has=equals' });
+});
+
+test('config: normalizeStack turns anything into a non-empty list', () => {
+  assert.deepStrictEqual(normalizeStack('angular'), ['angular']);
+  assert.deepStrictEqual(normalizeStack('nestjs, typeorm'), ['nestjs', 'typeorm']);
+  assert.deepStrictEqual(normalizeStack(['nestjs', 'typeorm']), ['nestjs', 'typeorm']);
+  assert.deepStrictEqual(normalizeStack(undefined), ['unknown']);
+  assert.deepStrictEqual(normalizeStack(''), ['unknown']);
+});
+
+test('config: a config stack string is loaded as a list', () => {
+  const dir = tmpRepo();
+  fs.writeFileSync(path.join(dir, 'cairn.config.json'), JSON.stringify({ stack: 'nestjs,typeorm' }));
+  assert.deepStrictEqual(loadRepoConfig(dir).stack, ['nestjs', 'typeorm']);
 });
 
 test('config: missing cairn.config.json yields an unmanaged repo', () => {
@@ -354,6 +368,26 @@ atest('cli: no cairn.config.json anywhere exits 2 with guidance', async () => {
 
 // ------------------------------------------------------------------ doctor
 
+test('doctor: cohort "stack" groups by the framework, not the add-ons', () => {
+  const { resolveRepos, cohortGroups } = require('../lib/doctor');
+  const root = tmpRepo();
+  const workspace = {
+    repos: [
+      { name: 'a', path: path.join(root, 'a'), stack: ['nestjs', 'typeorm'] },
+      { name: 'b', path: path.join(root, 'b'), stack: ['nestjs', 'prisma'] },
+      { name: 'c', path: path.join(root, 'c'), stack: 'angular' },
+    ],
+  };
+  for (const r of workspace.repos) fs.mkdirSync(path.join(root, r.name), { recursive: true });
+  const repos = resolveRepos(workspace, root);
+  assert.deepStrictEqual(repos[0].stack, ['nestjs', 'typeorm']);
+
+  const groups = cohortGroups({ cohort: 'stack' }, repos);
+  const nest = groups.find((g) => g.name === 'nestjs');
+  assert.strictEqual(nest.repos.length, 2, 'both nestjs repos land in one cohort despite different ORMs');
+  assert.ok(groups.find((g) => g.name === 'angular'));
+});
+
 test('doctor: aliased paths fold onto the canonical name', () => {
   const { resolveRepos, analyze } = require('../lib/doctor');
   const root = tmpRepo();
@@ -473,6 +507,17 @@ atest('init: youtrack config omits the Jira-only issueTypes block', async () => 
   assert.strictEqual(cfg.tracker.provider, 'youtrack');
   assert.strictEqual(cfg.tracker.projectKey, 'PROOF');
   assert.strictEqual(cfg.tracker.issueTypes, undefined);
+});
+
+atest('init: --stack is written as a list, comma-separated input split', async () => {
+  const { main } = require('../lib/init');
+  const dir = tmpRepo();
+  const log = console.log;
+  console.log = () => {};
+  main(['--repo', dir, '--stack', 'nestjs,typeorm', '--tracker', 'youtrack', '--project-key', 'PROOF', '--no-color']);
+  console.log = log;
+  const cfg = JSON.parse(fs.readFileSync(path.join(dir, 'cairn.config.json'), 'utf8'));
+  assert.deepStrictEqual(cfg.stack, ['nestjs', 'typeorm']);
 });
 
 atest('init: replaces a legacy ai/scripts/jira.js but never invents one', async () => {

@@ -1,7 +1,7 @@
 # TypeORM Guidelines
 
-<!-- cairn preset: typeorm. Composes onto presets/node. A backend on a different
-     ORM takes presets/node without this file. -->
+<!-- cairn preset: typeorm. Composes onto presets/nestjs. A backend on a different
+     ORM takes presets/nestjs without this file. -->
 
 ## TypeORM Entities
 
@@ -323,7 +323,7 @@ For hand-written migrations: create the file manually, but get the timestamp fro
 
 **When NOT to use mappers**:
 * Simple field selection — the response layer already does this
-* Basic entity-to-DTO conversion — see **Response Transformation** in the node preset
+* Basic entity-to-DTO conversion — see **Response Transformation** in the nestjs preset
 * Picking a subset of fields
 
 Place mapping functions in `mappers/` folder only when truly needed for complex transformations beyond what the response layer provides.

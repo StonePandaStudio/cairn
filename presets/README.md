@@ -14,7 +14,7 @@ copies.
 
 ```
 presets/
-  node/       NestJS + TypeScript spine, validation-stack agnostic
+  nestjs/     NestJS + TypeScript spine, validation-stack agnostic
     variants/ validation-zod.md, validation-class-validator.md
   typeorm/    ORM guidance — entities, queries, migrations, decomposition
   angular/    Angular + SCSS theming + i18n spine
@@ -22,9 +22,10 @@ presets/
   EXTRACTION.md   what was extracted from where, and what deliberately was not
 ```
 
-`node` and `typeorm` are separate on purpose. Every backend repo composes both
-today, but the split is what proves the composition model works — and a future
-backend on Prisma or Drizzle would take `node` without `typeorm`.
+`nestjs` and `typeorm` are separate on purpose. Every backend repo composes both
+today, but the split is what proves the composition model works — a future backend
+on Prisma or Drizzle takes `nestjs` without `typeorm`, and a repo declares the
+composition as `--stack nestjs,typeorm`.
 
 ## Slots
 
