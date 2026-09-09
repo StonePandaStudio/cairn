@@ -260,6 +260,46 @@ test('tracker: youtrack passes markdown through untouched', () => {
   assert.strictEqual(createYouTrack({ projectKey: 'X' }).toMarkup('# Title\n**b**'), '# Title\n**b**');
 });
 
+test('tracker: providerEnv names the .env vars per provider', () => {
+  const { providerEnv } = require('../lib/tracker');
+  assert.deepStrictEqual(providerEnv('jira-server'), ['JIRA_BASE_URL', 'JIRA_USER', 'JIRA_PASSWORD']);
+  assert.deepStrictEqual(providerEnv('youtrack'), ['YOUTRACK_URL', 'YOUTRACK_TOKEN', 'YOUTRACK_PROJECT']);
+  assert.deepStrictEqual(providerEnv('none'), []);
+  assert.deepStrictEqual(providerEnv('youtrack', 'CAIRN_'), ['CAIRN_YOUTRACK_URL', 'CAIRN_YOUTRACK_TOKEN', 'CAIRN_YOUTRACK_PROJECT']);
+});
+
+atest('tracker: envPrefix moves which .env vars a provider reads', async () => {
+  // Unprefixed vars are present but the provider is told to look for CAIRN_* —
+  // so it must report the prefixed names as missing, not the bare ones.
+  const prefixed = createYouTrack(
+    { projectKey: 'P', envPrefix: 'CAIRN_' },
+    { YOUTRACK_URL: 'u', YOUTRACK_TOKEN: 't' },
+  );
+  await assert.rejects(
+    () => prefixed.listStatuses(),
+    /Missing YouTrack credentials: CAIRN_YOUTRACK_URL, CAIRN_YOUTRACK_TOKEN/,
+  );
+
+  // With the matching prefixed vars set, assertConfig passes (any later failure
+  // is a network error, not a credentials error).
+  const ok = createYouTrack(
+    { projectKey: 'P', envPrefix: 'CAIRN_' },
+    { CAIRN_YOUTRACK_URL: 'http://x', CAIRN_YOUTRACK_TOKEN: 't' },
+  );
+  await assert.rejects(() => ok.listStatuses(), (e) => !/Missing YouTrack credentials/.test(e.message));
+});
+
+atest('init: --env-prefix is written into the tracker config', async () => {
+  const { main } = require('../lib/init');
+  const dir = tmpRepo();
+  const log = console.log;
+  console.log = () => {};
+  main(['--repo', dir, '--stack', 'nestjs', '--tracker', 'youtrack', '--project-key', 'PROOF', '--env-prefix', 'CAIRN_', '--no-color']);
+  console.log = log;
+  const cfg = JSON.parse(fs.readFileSync(path.join(dir, 'cairn.config.json'), 'utf8'));
+  assert.strictEqual(cfg.tracker.envPrefix, 'CAIRN_');
+});
+
 atest('tracker: jira-server reports missing credentials rather than exiting', async () => {
   const t = createJiraServer({ projectKey: 'X' }, {});
   await assert.rejects(() => t.listProjects(), /Missing Jira credentials/);

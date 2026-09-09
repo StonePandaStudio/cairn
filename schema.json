@@ -51,6 +51,12 @@
           "type": "string",
           "default": ".env",
           "description": "Path, relative to the repo root, of the file holding tracker credentials."
+        },
+        "envPrefix": {
+          "type": "string",
+          "default": "",
+          "description": "Prepended to every credential var the provider reads (e.g. \"CAIRN_\" → CAIRN_YOUTRACK_TOKEN). Set it only when the repo's own app reads JIRA_*/YOUTRACK_* and the names would collide.",
+          "examples": ["CAIRN_"]
         }
       }
     },

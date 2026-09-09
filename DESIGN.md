@@ -1113,6 +1113,14 @@ these repos the shim replaces all three clients — `task-tracker.js`, `jira.js`
 `youtrack.js` — and the `.claude/commands/` `youtrack-*` / `jira` / `task-*` split
 collapses into one provider-agnostic stub set.
 
+Credentials are read unprefixed (`JIRA_*`, `YOUTRACK_*`) — the tracker's own names,
+which is what the replaced scripts and every other Jira/YouTrack tool use, so no
+repo edits its `.env`. `tracker.envPrefix` (`cairn init --env-prefix CAIRN_`) is the
+opt-in for the one repo whose *app* also reads those names and would collide;
+`tracker.env` pointing at a separate file is the other escape. Neither is the
+default — cairn owns no env vars of its own (provider and project are in
+`cairn.config.json`, not the environment).
+
 #### The `local` provider
 
 A real store, not a no-op. **Its driver is not the `LOCAL-*` folders** in the

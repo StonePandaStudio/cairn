@@ -48,6 +48,12 @@ Before `cairn init` on snap-proof. See DESIGN "### Sequencing" step 0.
 - [x] `package.json` → `0.3.0`. Published.
 - [x] `cairn init` now replaces every legacy client the repo carries
   (`jira.js` + `youtrack.js` + `task-tracker.js`), not just `jira.js` — `0.3.1`.
+- [x] `cairn init`'s "Next: ensure .env has …" line was hard-coded to `JIRA_*`
+  regardless of provider — now per-provider via `tracker.providerEnv()`.
+- [x] `tracker.envPrefix` — opt-in (`cairn init --env-prefix CAIRN_`) so a repo whose
+  app also reads `JIRA_*`/`YOUTRACK_*` can isolate cairn's credential var names.
+  Unprefixed stays the default.
+- [x] Both fixes → `0.4.1` (0.4.0 was already published). 54 tests. Awaiting publish.
 - [x] **`stack` is a list now** (`0.4.0`). `presets/node` → `presets/nestjs`.
   `--stack nestjs,typeorm` writes `"stack": ["nestjs", "typeorm"]`. Doctor
   `cohort: "stack"` groups by `stack[0]`. `presets/typeorm` composes on top; a

@@ -79,7 +79,9 @@ Credentials come from the repo's `.env` — `JIRA_BASE_URL` / `JIRA_USER` /
 `JIRA_PASSWORD` for `jira-server` (Basic auth: Jira Server 8.5.1 predates PATs), or
 `YOUTRACK_URL` / `YOUTRACK_TOKEN` / `YOUTRACK_PROJECT` for `youtrack` (Bearer token,
 admin-read scope for the project and stage-bundle lookups). Anything already in the
-environment wins over the file.
+environment wins over the file. If the repo's own app reads those same names, set
+`tracker.envPrefix` (`cairn init --env-prefix CAIRN_`) so cairn reads
+`CAIRN_YOUTRACK_TOKEN` instead — or point `tracker.env` at a separate file.
 
 ### Legacy command names
 
@@ -168,4 +170,4 @@ schema.json            JSON Schema for cairn.config.json
 test/run.js            dependency-free test runner
 ```
 
-No runtime dependencies. Node >= 18. `npm test` runs 51 tests.
+No runtime dependencies. Node >= 18. `npm test` runs 54 tests.
