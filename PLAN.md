@@ -4,7 +4,12 @@ Execution order for what comes after v1. The *why* is in `DESIGN.md`
 ("The cross-repo context layer", "### Sequencing"); this is the running order and
 where we are in it.
 
-Last updated 2026-09-09.
+Last updated 2026-09-09 (evening — `cairn render` + preset library committed + pushed,
+`0.5.0`, 61 tests).
+
+**Resume here:** verify `npm view @stonepandastudio/cairn version`, `npm publish 0.5.0`
+if needed → charityiq Phase 2 (below). Then back to the roadmap: snap-proof gate
+sprint → context-resolver prototype → workspace layer → `cairn sync`.
 
 ## Where we are (0.5.0)
 
