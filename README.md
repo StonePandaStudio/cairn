@@ -3,8 +3,9 @@
 Shared AI workflow scaffolding, kept in sync across several repos.
 
 Each repo carries an `ai/` folder and a `.claude/commands/` folder holding the same
-workflow — brief → description → plan → execute → review → QA, with the steps
-mirrored into an issue tracker. Copied between repos by hand, they drift.
+workflow — brief → description → plan → execute → review, with the steps optionally
+mirrored into an issue tracker. Hand-copied between repos, they drift. cairn renders
+them from one set of presets and reports where existing copies disagree.
 
 A cairn is a stack of stones left to mark a trail. That is what this does: it leaves
 markers — a manifest of what it generated, and a report of where the copies stopped
@@ -15,7 +16,7 @@ npm i -D @stonepandastudio/cairn
 npx cairn init --stack nestjs,typeorm --tracker jira-server --project-key MYPROJ --story-type Task
 ```
 
-## What v1 does
+## What it does
 
 | Command | |
 |---|---|
@@ -33,17 +34,22 @@ yet; for a fresh repo there is nothing to merge.
 
 ```
 repo/
-  cairn.config.json      you edit this. cairn only ever reads it.
-  _cairn/                cairn writes this. nobody hand-edits it.
-    manifest.json        what was generated, from which template, at which hash
-    scripts/jira.js      vendored shim
-  ai/                    cairn render seeds agents/ + WORKFLOW.md + the command
-    agents/  WORKFLOW.md  stubs once; contexts/ tasks/ and your edits are yours,
-    contexts/  tasks/     never re-written without `cairn sync`
+  cairn.config.json     you edit this. cairn only ever reads it.
+  _cairn/               cairn writes this. nobody hand-edits it.
+    manifest.json       what was generated, from which template, at which hash
+    scripts/jira.js     vendored tracker shim
+  .claude/commands/     rendered from the workflow — one stub per step
+  ai/
+    agents/             rendered from presets/core + your stack's slots
+    AGENTS.md  WORKFLOW.md   rendered
+    infrastructure/code-guidelines.md   rendered once as a seed — then it is yours
+    contexts/  tasks/   yours, never written by cairn
 ```
 
-The boundary is the whole design. Hand-edited config living inside a generated
-directory is how generated directories acquire state nobody dares regenerate.
+`cairn render` seeds the rendered files once and records them in the manifest; it
+never rewrites a file you have edited (that is `cairn sync`, not built yet). The
+boundary is the whole design: hand-edited config living inside a generated directory
+is how generated directories acquire state nobody dares regenerate.
 
 Generated files are **committed**, not gitignored. Claude Code discovers
 `.claude/commands/` and agent docs from disk, and a prompt change should show up in
@@ -90,7 +96,7 @@ environment wins over the file. If the repo's own app reads those same names, se
 `create-task`, `create-story`, `close-story` and friends are all still accepted, and
 output formats are byte-for-byte what the old scripts printed. Existing prose
 references name these strings and the agents parse the output, so they are kept
-until the v2 pass regenerates those documents.
+until a render pass regenerates those documents from the presets.
 
 ## Doctor
 
@@ -126,11 +132,12 @@ match what is on disk?
 |---|---|
 | `MANAGED` | on-disk hash matches what cairn wrote |
 | `MODIFIED` | someone hand-edited a generated file |
-| `OUTDATED` | cairn has newer content for it — needs template hashes, wired in v2 |
+| `OUTDATED` | cairn has newer content for it — needs template hashes; comes with `cairn sync` |
 | `DELETED` | it is gone; a future `cairn sync` will restore it |
 
-v1 reports `MANAGED`, `MODIFIED` and `DELETED`. `OUTDATED` and the `sync` that acts
-on these states arrive with the v2 renderer.
+Today the doctor reports `MANAGED`, `MODIFIED` and `DELETED`. `OUTDATED` (needs the
+template hashes threaded through) and `cairn sync` (the three-way merge that acts on
+these states) are still to come — `cairn render` is greenfield-only for now.
 
 A file can be perfectly in sync across repos while being hand-edited away from its
 template, and vice versa. `MODIFIED` outranks `OUTDATED` in the report because
@@ -154,8 +161,8 @@ overwriting a hand edit is the destructive outcome.
   `ai/INITIAL_PROMPT.md` is explicitly excluded: variants at ~0% shared content make
   it a per-project document, not a drifted template.
 
-v2 splits this flat file into a per-project `workspace.json` plus an opt-in hub that
-references the projects for cross-project comparison. See `DESIGN.md`.
+A later release splits this flat file into a per-project `workspace.json` plus an
+opt-in hub that references the projects for cross-project comparison. See `DESIGN.md`.
 
 ## Layout
 
