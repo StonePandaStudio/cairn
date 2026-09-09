@@ -598,6 +598,48 @@ atest('init: replaces every legacy client the repo carries', async () => {
   }
 });
 
+atest('init: re-run leaves an already-shimmed client alone', async () => {
+  const { main } = require('../lib/init');
+  const log = console.log;
+  const dir = tmpRepo();
+  fs.mkdirSync(path.join(dir, 'ai/scripts'), { recursive: true });
+  fs.writeFileSync(path.join(dir, 'ai/scripts/jira.js'), '// copied client\n');
+  console.log = () => {};
+  main(['--repo', dir, '--tracker', 'youtrack', '--project-key', 'PROOF', '--no-color']);
+  const shimmed = fs.readFileSync(path.join(dir, 'ai/scripts/jira.js'), 'utf8');
+
+  main(['--repo', dir, '--force', '--tracker', 'youtrack', '--project-key', 'PROOF', '--no-color']);
+  console.log = log;
+  assert.strictEqual(fs.readFileSync(path.join(dir, 'ai/scripts/jira.js'), 'utf8'), shimmed);
+});
+
+atest('init: a hand-edited shim is kept unless --force-shims', async () => {
+  const { main } = require('../lib/init');
+  const log = console.log;
+  const err = console.error;
+  const dir = tmpRepo();
+  fs.mkdirSync(path.join(dir, 'ai/scripts'), { recursive: true });
+  fs.writeFileSync(path.join(dir, 'ai/scripts/jira.js'), '// copied client\n');
+  console.log = () => {};
+  console.error = () => {};
+  main(['--repo', dir, '--tracker', 'youtrack', '--project-key', 'PROOF', '--no-color']);
+
+  const p = path.join(dir, 'ai/scripts/jira.js');
+  fs.writeFileSync(p, fs.readFileSync(p, 'utf8') + '\n// local tweak\n');
+
+  // --force (config only) — the edited shim is left alone
+  main(['--repo', dir, '--force', '--tracker', 'youtrack', '--project-key', 'PROOF', '--no-color']);
+  assert.match(fs.readFileSync(p, 'utf8'), /local tweak/);
+
+  // --force-shims — now it is replaced with the clean shim
+  main(['--repo', dir, '--force-shims', '--tracker', 'youtrack', '--project-key', 'PROOF', '--no-color']);
+  console.log = log;
+  console.error = err;
+  const after = fs.readFileSync(p, 'utf8');
+  assert.doesNotMatch(after, /local tweak/);
+  assert.match(after, /@stonepandastudio\/cairn/);
+});
+
 atest('init: refuses to clobber an existing config without --force', async () => {
   const { main } = require('../lib/init');
   const dir = tmpRepo();

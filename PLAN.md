@@ -53,7 +53,11 @@ Before `cairn init` on snap-proof. See DESIGN "### Sequencing" step 0.
 - [x] `tracker.envPrefix` — opt-in (`cairn init --env-prefix CAIRN_`) so a repo whose
   app also reads `JIRA_*`/`YOUTRACK_*` can isolate cairn's credential var names.
   Unprefixed stays the default.
-- [x] Both fixes → `0.4.1` (0.4.0 was already published). 54 tests. Awaiting publish.
+- [x] Both fixes → `0.4.1` (published).
+- [x] `cairn init` shim swap is no longer a blind overwrite: a file already holding
+  the shim is skipped silently, a hand-edited shim is **kept + reported** unless
+  `--force-shims`, and a first-time swap prints the line count being replaced.
+  → `0.4.2`, 56 tests. Awaiting publish.
 - [x] **`stack` is a list now** (`0.4.0`). `presets/node` → `presets/nestjs`.
   `--stack nestjs,typeorm` writes `"stack": ["nestjs", "typeorm"]`. Doctor
   `cohort: "stack"` groups by `stack[0]`. `presets/typeorm` composes on top; a
