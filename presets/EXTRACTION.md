@@ -115,9 +115,42 @@ Also fixed in passing, present identically in both frontend repos: the typos
 `cosntants` and `inrastructure`. Identical typos across two repos are the clearest
 possible proof of copy-paste, and are a decent cheap signal for finding more.
 
+## Agents, workflow, commands — 2026-09-09
+
+Second pass, `snap-proof/{backend,frontend}` again. The 2026-07-31 survey scored the
+reviewer contract at 85–92% and treated that as a ceiling. Reading them in full, the
+**structure** is closer to identical — the divergence is confined to stack-specific
+rule tables and reference lists, which are exactly slot-shaped.
+
+| artefact | disposition | measurement |
+|---|---|---|
+| `.claude/commands/*.md` | → `core/commands/_stub.md` | every stub byte-identical modulo `{{ step.agentName }}` + `{{ step.agentDoc }}` (frontend copies carry a stray BOM) |
+| `ai/agents/{node,angular}-reviewer.md` | contract → `core/agents/reviewer.md`; Dimension-2 table → `{nestjs,angular}/slots/review-checklist.md` | `diff` shows ~15 changed lines out of 160, all in the rule table, the model-check string, and agent names |
+| `ai/agents/{node,angular}-developer.md` | spine → `core/agents/developer.md`; "Implementation reference" → `{nestjs,angular}/slots/implementation-reference.md` | E.1–E.5 identical; frontend carried 3 safety notes the backend lacked (folded into core) |
+| `ai/agents/{node-architect,architect-lead}.md` | Mode A/B + file-roles + Plan format → `core/agents/architect.md`; the rest → 5 small `{nestjs,angular}/slots/architect-*.md` | whole scaffold shared; slots are the mandatory-doc list, discussion topics, plan-step ordering, A.1 references |
+| `ai/WORKFLOW.md` | → `core/WORKFLOW.md`, rendered from `workflow.steps[].tracker` + `tracker.*` | same document both sides; only the provider block, stage names, and sync-point actions differ — all config |
+| `ai/AGENTS.md` | → `core/AGENTS.md` skeleton | same structure; rendering it removes live drift (frontend's still says "Jira" while its `.env` and commands are on YouTrack) |
+
+### QA agents — preset-level, not extracted
+
+Backend runs three (`qa-architect` / `qa-developer` / `qa-orchestrator`, ~630 ln
+of Jest + factories + `src/feature/` layout + `yarn test:db` scripts); frontend runs
+one (`angular-qa`, Playwright + `data-testid` + page objects). 33% similar at best,
+confirming the 2026-07-31 read. The bodies are one project's test setup, not
+shareable content — vendoring them as a "preset" would over-claim. They belong under
+`{nestjs,angular}/agents/` once a second repo on the same stack shows what is
+actually shared, the same "no peer" limit `preset-cli` has.
+
+### Rot the renderer removes
+
+- backend `node-reviewer.md` still requires `claude-sonnet-4-6` — frontend already says `claude-sonnet-5`
+- frontend `AGENTS.md` + `WORKFLOW.md` are entirely Jira; the repo is on YouTrack (`.env`, `.claude/commands/youtrack-*`)
+- same review step is `code_review` in backend, `review_plan` in frontend — one verb, rendered from `workflow.steps[].command`
+- backend reviewer/developer hard-code an `ai/tasks/PROOF-[task]/` path — breaks on `LOCAL-` folders; the core versions use `ai/tasks/[task]/`
+
 ## Not wired up yet
 
-There is no renderer. Nothing consumes `{{> slot: … }}`, and no repo is reading
-these files. They are the input for roadmap step 2 (`DESIGN.md`, "Multi-repo
-projects"), and are already useful in the meantime as the canonical version of
-guidance that currently exists in two drifting copies.
+There is no renderer. Nothing consumes `{{> slot: … }}` or `{{> stack/… }}`, and no
+repo reads these files. They are the input for the agent-preset roadmap step
+(`DESIGN.md`, "### Sequencing" step 4), and are already useful as the canonical
+version of scaffolding that currently exists as two drifting copies.

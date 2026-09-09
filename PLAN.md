@@ -77,6 +77,17 @@ provider, and read both `ai/contexts/` trees for the context-convention design.
 `local`'s real driver is the `partOf` join key. It lands with the context layer
 (step 2). `jira-server` stays a provider — other projects (e.g. glossr) may still use it.
 
+## Agent-preset seeds — done 2026-09-09 (step 4 prep)
+
+Extracted from `snap-proof/{backend,frontend}` into `presets/core/` +
+`presets/{nestjs,angular}/slots/`. See `presets/EXTRACTION.md` § "Agents, workflow,
+commands". Seeds only — no renderer. `presets/core/`: `agents/{architect,developer,
+reviewer}.md` (contracts, 85–92% shared), `commands/_stub.md`, `WORKFLOW.md`,
+`AGENTS.md`. Stack slots fill `{{> stack/… }}` points. QA agents left out — one
+project's test setup, not shareable; extract when a 2nd repo on a stack appears.
+Rot the eventual render fixes: stale model-check, frontend AGENTS.md still on Jira,
+`code_review` vs `review_plan`, `PROOF-` hard-coded task paths.
+
 ## Order after 0: A → C → B
 
 ### A. Run the gate — adopt v1 in the real repos

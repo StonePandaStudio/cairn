@@ -459,7 +459,7 @@ Everything below is detail on this order:
       │                                (pins, fork/link policy, sync log). opt-in.
       ↓ references — no config flows down
 @stonepandastudio/cairn               engine
-  presets/nestjs | angular | typeorm | cli   content — an in-repo folder, package-shaped
+  presets/core | nestjs | angular | typeorm | cli   content — an in-repo folder, package-shaped
       ↓ extends
   workspace.json                      ONE project — key, repos[], tracker defaults,
       │                                intra-project shared[]. glossr/cairn/workspace.json
@@ -661,6 +661,11 @@ architect-lead.md       73% same   → share the spine, replace a section
 node-qa-developer.md    33% same   → share the contract only, body is local
 ```
 
+The 2026-09-09 re-read (`presets/EXTRACTION.md`) found the reviewer and architect
+contracts are structurally closer to identical than those file-level scores — the
+divergence is all in stack-specific rule tables, which are slot-shaped. `presets/core/`
+now holds the extracted contracts as seeds, with the tables in `{nestjs,angular}/slots/`.
+
 No single mechanism spans 92% → 33%. Three, declared explicitly in config rather
 than emerging by accident:
 
@@ -776,7 +781,8 @@ v1 gives visibility, not propagation. This is deliberate — see "v1 scope".
 **v2 — `cairn sync` propagates.** Once the renderer, `_cairn/base/` and `cairn sync`
 exist:
 
-1. Edit the source — `presets/nestjs/agents/developer.md`, or a project-local
+1. Edit the source — `presets/core/agents/developer.md` (or the stack slot it pulls
+   in, `presets/nestjs/slots/implementation-reference.md`), or a project-local
    `cairn/presets/` copy.
 2. Commit. The consuming repos do not move yet: each pins a version, and the pin is
    bumped explicitly. Nothing re-renders on `npm update`, so a prompt change never

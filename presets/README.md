@@ -14,11 +14,16 @@ copies.
 
 ```
 presets/
+  core/       stack-agnostic — agent role contracts, command stub, WORKFLOW/AGENTS skeletons
+    agents/   architect.md, developer.md, reviewer.md   (85–92% identical across stacks)
+    commands/ _stub.md                                  (renders one file per workflow step)
   nestjs/     NestJS + TypeScript spine, validation-stack agnostic
     variants/ validation-zod.md, validation-class-validator.md
+    slots/    fills the {{> stack/… }} points the core agents declare
   typeorm/    ORM guidance — entities, queries, migrations, decomposition
   angular/    Angular + SCSS theming + i18n spine
     variants/ i18n-glossr.md, i18n-external-service.md
+    slots/    the Angular side of the same {{> stack/… }} points
   EXTRACTION.md   what was extracted from where, and what deliberately was not
 ```
 
@@ -29,16 +34,19 @@ composition as `--stack nestjs,typeorm`.
 
 ## Slots
 
-A slot marks a point where the preset knows a decision exists but not which way a
-repo went:
+A slot marks a point where a shared template knows a decision exists but not which
+way a repo (or a stack) went. Two flavours:
 
-```
-{{> slot: validation-stack }}
-```
+- **`{{> slot: validation-stack }}`** in a `code-guidelines.md` — the repo picks a
+  file from `variants/` by name. Where a repo needs something no variant covers, it
+  supplies its own partial — the signal that a third variant may be warranted.
+- **`{{> stack/review-checklist }}`** in a `core/` agent contract — the stack preset
+  supplies it from its `slots/` folder. `nestjs` fills it with the TypeORM rule
+  table, `angular` with the control-flow rule table.
 
-Slot content lives in `variants/`. A repo picks one by name; the renderer
-substitutes it. Where a repo needs something no variant covers, it supplies its own
-partial — that is the signal that a third variant may be warranted.
+Slots exist to keep the merge cheap. A template update that does not touch a slot
+never conflicts with a repo's choice, which is the whole reason the extension
+mechanisms are three rather than one.
 
 Slots exist to keep the merge cheap. A template update that does not touch a slot
 never conflicts with a repo's choice, which is the whole reason the extension
