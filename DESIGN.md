@@ -3,7 +3,9 @@
 Why cairn is shaped the way it is, what was measured to decide it, and what is
 deliberately left undone. The README says what the tool does; this says why.
 
-Written 2026-07-31, at the v0.2.0 rename.
+Written 2026-07-31, at the v0.2.0 rename. The near-term target was reframed
+2026-09-09 — see "The cross-repo context layer". The tracker and the drift doctor
+are substrate for it, not the point.
 
 ---
 
@@ -130,6 +132,9 @@ needing an "if this repo has Jira" branch written in prose.
 
 It also forced the abstraction to be honest: a null tracker that threw would just
 push the branching back into the callers.
+
+The same interface later takes a `local` provider — a real file-backed store for
+when Jira is unavailable, not a no-op. See "The cross-repo context layer".
 
 ### Path aliases over renaming
 
@@ -519,6 +524,8 @@ glossr/                            PROJECT_FOLDER — plain dir, not a repo
 │   │   ├── base/                  merge bases for every managed file, per repo
 │   │   │   ├── glossr-api/.claude/commands/create-brief.md
 │   │   │   └── glossr-frontend/ai/agents/angular-developer.md
+│   │   ├── tracker/              local issue store · <KEY>-33.md, one file per issue
+│   │   ├── context-graph.json    intra-project context graph (backend↔frontend edges)
 │   │   └── doctor-cache.json      optional · last computed drift snapshot
 │   └── presets/                   project-local presets until promoted
 │
@@ -551,9 +558,10 @@ glossr/                            PROJECT_FOLDER — plain dir, not a repo
     └── ai/
 ```
 
-Two `_cairn/` directories with distinct jobs: `cairn/_cairn/base/` holds merge bases
-for all repos; each `<repo>/_cairn/manifest.json` is the ground truth for what is on
-disk in that repo and survives a fresh clone.
+Two `_cairn/` directories with distinct jobs: `cairn/_cairn/` holds workspace-level
+state (merge bases, the local issue store, the intra-project context graph); each
+`<repo>/_cairn/manifest.json` is the ground truth for what is on disk in that repo
+and survives a fresh clone.
 
 #### Hub — `projects.json`
 
@@ -564,7 +572,9 @@ of project content.
 stonepanda-hub/                    org coordination repo
 ├── .git/
 ├── projects.json                  HAND-EDITED · project list + reference paths
-├── _cairn/manifest.json           hub's own generated state
+├── _cairn/
+│   ├── manifest.json              hub's own generated state
+│   └── context-graph.json         full cross-project context graph · `cairn context build`
 ├── normalize.json                 cross-project · jiraKey folding union, aliases
 │
 ├── glossr/                        per-project hub metadata — NOT project content
@@ -589,9 +599,12 @@ its place only when the org wants standards versioned separately from the packag
 
 | command | writes | run from |
 |---|---|---|
-| `cairn init` | `cairn.config.json`, `_cairn/`, seeds `ai/` | a repo — monorepo root, or each code repo |
+| `cairn init` | `cairn.config.json`, `_cairn/`, the shim | a repo — monorepo root, or each code repo |
 | `cairn workspace init` | `cairn/workspace.json`, `cairn/_cairn/` | `PROJECT_FOLDER` — scans siblings for `.git` |
 | `cairn workspace init --meta` | hub `projects.json`, per-project dirs | org dir — scans for `workspace.json` |
+| `cairn context adopt` | frontmatter links, file moves, an adopt record | a repo — one-time brownfield pass |
+| `cairn context build` | `_cairn/context-graph.json` | the hub (or a `PROJECT_FOLDER` for the intra-project graph) |
+| `cairn context serve` | nothing — MCP server over the graph | the hub |
 
 ### Inheritance and distribution are different products
 
@@ -684,31 +697,89 @@ and the tool would be dead. That is the single most likely way this fails.
    --meta`, `cohort: "stack"` computed across referenced projects, and the sync
    metadata files (pins, policy, log) as advisory-only state. Retires the flat
    `repos.json`.
-2. **Agent presets + the three extension mechanisms**, and the upgrade path in the
+2. **The context layer.** The convention (layout + frontmatter + relation
+   vocabulary) as a distributable preset; `cairn context adopt` for the brownfield
+   pass; `cairn context build` / `check` / `counterparts`; the `local` tracker
+   provider and its index over `ai/tasks/`. This is the target — see its section.
+3. **`cairn context serve`.** The MCP server over the resolver — graph + content.
+4. **Agent presets + the three extension mechanisms**, and the upgrade path in the
    same step — see the merge section below. Presets that cannot be updated without
    destroying local edits are worse than no presets, so `_cairn/base/` and the 2×2
-   ship together with the first preset, not after it. The real work.
-3. **Guidelines import/export** with fork/link modes. Not before 2 has survived a
+   ship together with the first preset, not after it. Shares the `cairn sync`
+   machinery with the context layer but not its critical path — can run in parallel.
+5. **Guidelines import/export** with fork/link modes. Not before 4 has survived a
    sprint.
-4. **Portable workflows between project groups.** A quarter, and only once 2 and 3
+6. **Portable workflows between project groups.** A quarter, and only once 4 and 5
    are stable.
 
-Nothing starts before v1 has run across the five repos.
+Nothing starts before v1 has run across the repos.
 
 ### The standing risk
 
 **Requirements 2 and 4 together are BMAD.** Shared agent presets plus portable
 workflows is exactly their product, with far more iteration behind it. What keeps
-this differentiated is requirements 1 and 3 — project-level inheritance across
-repos, and guidelines with fork semantics. Neither exists in BMAD or Spec Kit. If
-the build drifts toward "our own persona library", it has picked the fight it
-cannot win.
+this differentiated is, first, the cross-repo context layer — nobody builds it — and
+then requirements 1 and 3: project-level inheritance across repos, and guidelines
+with fork semantics. None exists in BMAD or Spec Kit. If the build drifts toward
+"our own persona library", it has picked the fight it cannot win.
 
 ## Upgrades: merging incoming template changes with local edits
 
 The question that decides whether any of the above survives contact with the five
 repos. A preset's Node.js developer template gets updated; each repo has its own
 edits; something has to reconcile them without destroying either side.
+
+### The authoring loop
+
+The mechanism below is what runs; this is the loop a maintainer actually performs.
+The trigger is almost always the same: mid-project, an agent behaves wrong or a
+guideline needs a line changed, and the fix is made *in the repo that surfaced it*.
+
+**v1 — cairn reports, `git` propagates.** There is no renderer. Agent docs, command
+stubs and `WORKFLOW.md` are hand-maintained copies. The loop:
+
+1. Edit the file in the repo you are in.
+2. Decide repo-specific or shared (see the routing table). Repo-specific: done —
+   it is tier 3, cairn never looks at it.
+3. Shared: copy the change to the other repos by hand.
+4. `cairn doctor` from the workspace → `DRIFT` / `COSMETIC` / `STRANDED` shows what
+   is now out of sync; `cairn doctor --diff <path>` shows the hunks.
+5. Park the canonical version in `presets/` so there is one reference copy, even
+   though nothing renders from it yet.
+
+v1 gives visibility, not propagation. This is deliberate — see "v1 scope".
+
+**v2 — `cairn sync` propagates.** Once the renderer, `_cairn/base/` and `cairn sync`
+exist:
+
+1. Edit the source — `presets/node/agents/developer.md`, or a project-local
+   `cairn/presets/` copy.
+2. Commit. The consuming repos do not move yet: each pins a version, and the pin is
+   bumped explicitly. Nothing re-renders on `npm update`, so a prompt change never
+   lands mid-sprint by surprise.
+3. Bump the pin, then `cairn sync` in each repo — or `cairn workspace sync` from the
+   hub to walk all of them.
+4. `cairn sync` runs the 2×2 per file (below). Three cells are automatic; only a
+   hand-edited `linked` file whose template also moved stops for a human.
+5. Commit the re-rendered files. They are committed, not gitignored, so the prompt
+   change shows up in `git diff` like any other.
+6. `cairn doctor` → everything `MANAGED`, no `CONFLICT`.
+
+### Routing: where an edit goes
+
+The actual skill. Getting this wrong is what produces tier-3 leakage, so it is a
+decision made per edit, not per file:
+
+| the change is true for… | it goes in |
+|---|---|
+| every repo on this stack | preset body |
+| the stack, but one decision varies | preset **slot** + a variant in `variants/` |
+| one project's repos | `workspace.json` override, or a section-replace |
+| one repo only | repo `cairn.config.json` slot fill, or **fork** the file |
+
+`cairn doctor` reports override usage per repo (v2). Heavy override on a file means
+the preset is wrong, not that the repo is deviant — that is the feedback loop that
+keeps presets honest, and the routing table is only a first guess against it.
 
 ### The manifest is already the merge base
 
@@ -823,11 +894,13 @@ The measurable goal: after a preset update, how many of the five repos need huma
 attention? Routinely more than one means the preset is wrong. That number is worth
 reporting explicitly — it is the health metric for the whole idea.
 
-## Deferred: the cross-repo context graph
+## The cross-repo context layer
 
-Surveyed 2026-07-31, before the projects layer was identified as the near-term
-shape. Kept because the research stands and this is what the projects layer grows
-into if it starts to strain.
+Reframed 2026-09-09. This was filed as a deferred v3 idea. It is the actual target —
+the one thing in the space with no prior art. Everything shipped so far is substrate:
+the tracker is the spine cross-repo links hang on, the doctor's normalize/diff engine
+is the "declared vs actual" machinery, the workspace layer is the container. None of
+those was the point.
 
 ### The landscape is fragmented
 
@@ -844,54 +917,165 @@ prior-art buckets, and nothing covers all six:
 | Cross-repo plans | **Jira already does this** — parent issue, subtasks in different repos | already in place |
 | Cross-repo *authored* docs and contexts | — | **nothing** |
 
-### The gap is narrower than it first looks
+Every row but the last has mature prior art. `ai/contexts/entities/invoice.md` exists
+in the backend repo *and* the frontend repo, describing the same entity from two
+sides. No parser derives that. Backstage does not model prose. Riftmap models
+imports, not intent. Spec Kit and BMAD are single-repo. **That last row is the
+target.**
 
-Three of the four parts have prior art worth consuming rather than rebuilding:
+### Why it will drift, and why cairn is the tool for it
 
-- **Links (code)** — Riftmap or Sourcegraph. Derived data: cheap to buy, expensive
-  to maintain.
-- **Plans** — the tracker, once the projects layer exists. The cross-repo join key
-  already exists and cairn already abstracts it.
-- **Contracts** — OpenAPI between `glossr-api` and `glossr-frontend`.
-
-What is genuinely unserved is the **authored** layer.
-`ai/contexts/entities/invoice.md` exists in `glossr-api` *and* in
-`glossr-frontend`, describing the same entity from two sides. No parser can derive
-that. Backstage does not model prose. Riftmap models imports, not intent. Spec Kit
-and BMAD are single-repo.
-
-### Why this is not a random pivot
-
-Riftmap's own writeup names the failure mode: Mabl hand-maintains an 850-line
-"Repo Coordination Graph" across 79 repos, and the stated gap is that *manual
-registries decay without dedicated maintenance*.
-
-That is precisely what happened to our `ai/` folders. Any declared cross-repo link
-layer will drift the same way — and drift detection on declared-versus-actual is
-the one thing cairn already does. Same machinery, new artifact:
+Riftmap's own writeup names the failure mode: Mabl hand-maintains an 850-line "Repo
+Coordination Graph" across 79 repos, and *manual registries decay without dedicated
+maintenance*. That is exactly what happened to the `ai/` folders. Any declared
+cross-repo link layer drifts the same way — and drift detection on
+declared-versus-actual is the one thing cairn already does.
 
 ```
-cairn today   does ai/AGENTS.md still agree across five repos?
-cairn next    does glossr-api's invoice.md still agree with glossr-frontend's?
-              does the entity a backend context describes still exist in the API contract?
+cairn today   does ai/AGENTS.md still agree across repos?
+cairn next    does the backend's invoice.md still point at a real frontend counterpart?
+              does the entity a context describes still exist in the API contract?
 ```
 
-### If it gets built
+### The convention is enforced, not discovered
 
-- **Do not build a code graph.** Point at Sourcegraph or Riftmap over MCP.
-- **Do model declared doc-level relations.** Steal Backstage's typed-relation idea
-  but at document granularity rather than service granularity: `counterpartOf`,
-  `describedBy`, `consumedBy`. Small vocabulary, declared in `cairn.config.json` or
-  in per-doc frontmatter.
-- **Use the tracker as the spine.** A `PROOF-217` spanning two repos is the natural
-  join. Nothing in the landscape connects an issue tracker to prose contexts across
-  repos.
-- **Serve it over MCP, not as generated files.** Where the field converged in 2026,
-  and it sidesteps the "generated files fight the agent" risk listed above.
+cairn defines the context layout — `ai/contexts/entities/<name>.md`,
+`ai/contexts/features/<name>.md`, the required frontmatter fields, the relation
+vocabulary. This lives in a preset, is versioned, and distributes via `cairn sync`
+like any other template. Consequence: `ai/contexts/` leaves tier 3. The *content* of
+`invoice.md` stays project-owned; its *path, frontmatter schema and counterpart
+declaration* become cairn-managed — call it tier 2.5. A doc that genuinely does not
+fit is marked `unmanaged` and cairn ignores its structure.
 
-Sequencing: this is downstream of the entire roadmap above, not an alternative to
-it. The projects layer answers most of what it would answer, with a config array
-instead of a graph database.
+### Learning the links — declared, with a suggest pass (Q1)
+
+Intent cannot be derived: only a human knows the backend and frontend `invoice.md`
+are counterparts, and `waitlist-signup.md` ↔ `waitlist-frontend.md` share neither
+name nor text. So the relation is **declared**, in the frontmatter of one side;
+cairn infers the reverse edge.
+
+Pure declared decays (the Mabl case). So cairn runs a **suggest pass** — identical
+filename on the same relative path in two repos, an entity name appearing in two
+repos' contexts, a tracker issue with task folders in two repos — surfacing each as
+`CANDIDATE`: reported, never auto-linked, same shelf as `STRANDED`. A false
+candidate is silenced once with `notCounterpartOf` or an ignore entry.
+
+**`cairn context adopt`** — a one-time interactive brownfield pass per repo,
+`--dry-run` first. Per off-convention file: move / rename / mark unmanaged / skip.
+Per inferred pair: confirm / reject / not-a-counterpart. Per path collision: pick the
+winner. UX is Debian conffile — keep / rename / show diff / shell / skip. Decisions
+are recorded so a re-run does not re-ask; `--report` is the non-interactive form.
+
+### What "drift" means for prose (Q2)
+
+Not textual similarity — counterparts are *not* copies; the two `invoice.md` are
+near-0% alike and correctly so. Drift is **referential integrity** against the
+convention and the declared links:
+
+| finding | |
+|---|---|
+| `OFF_CONVENTION` | file in `ai/contexts/` not matching the layout |
+| `DANGLING` | `counterpartOf` / `describes` points at a path that is gone |
+| `MISSING_FRONTMATTER` | a required field is absent |
+| `BROKEN_ANCHOR` | `describes: entity Invoice` and no source confirms `Invoice` — `unknown` when no source is wired |
+| `CONTENT_MISMATCH` | the shape a context claims disagrees with its counterpart or the API contract |
+| `TRACKER_DESYNC` | `partOf ISSUE` where the issue is closed or its folders were removed in one repo |
+| `CANDIDATE` | a plausible counterpart with no declared link |
+
+`cairn context check` **never fails CI** — always exits 0. Prose integrity is fuzzy;
+false positives would train everyone to ignore it, the way `INITIAL_PROMPT.md` as
+permanent drift would. The pressure to fix moves off the CI gate: a broken link
+shows up as `unavailable` / `unknown` in what the MCP server hands the agent, so the
+agent visibly answers worse and the report says why. Dropped: any mtime/hash
+staleness heuristic for an "asymmetric pair" — too noisy.
+
+### Serve it — CLI first, MCP second (Q3)
+
+1. **`cairn context`** — no server. `build` resolves all frontmatter into a graph;
+   `counterparts <file>`, `check`, `adopt`, `--json`. Resolver and checks are
+   testable without a protocol and useful in the manual loop immediately.
+2. **`cairn context serve`** — an MCP server over the same resolver, part of
+   `@stonepandastudio/cairn`, not a separate package. MCP stdio is newline-delimited
+   JSON-RPC — about a hundred lines by hand, so the zero-dependency stance holds; do
+   not pull the MCP SDK.
+
+The server returns **graph + content**: asked for the counterpart of `invoice.md` it
+hands back the edge *and* the resolved counterpart doc, so the agent never opens a
+file in a repo it may not have checked out. No checkout → the edge is returned,
+content is `unavailable`. Generated context files in every repo are rejected — they
+stale between syncs, duplicate into each repo, and the agent hits the "do not edit"
+header when it wants to change one.
+
+### The index lives in the hub
+
+`cairn context build` runs from the hub and writes
+`stonepanda-hub/_cairn/context-graph.json`. Issue state is snapshotted into the graph
+at build time so the server does not call Jira per query. Without the hub,
+`cairn context` still works on the intra-project graph in `cairn/_cairn/` — the
+backend↔frontend edges inside one project do not need the hub; the full
+cross-project graph does. Counterpart content resolves live from the referenced repo
+checkouts (the hub machine holds them all); caching content into the index is a
+later option for detached use.
+
+### The boundary (Q4)
+
+**cairn owns:**
+
+- authored prose relations in `ai/contexts/`
+- the tracker spine — now literally, see the local provider below, not contingent on Jira
+- the workspace container
+- **OpenAPI schema-existence and shape checks.** A contract file is a declared
+  artifact, not a running system or an AST. cairn parses the spec and checks that a
+  named schema exists and that the fields a frontend context claims are present.
+  This is the single highest-value edge — backend produces, frontend consumes — and
+  deliberately narrow: not full contract conformance, which is Pact's job.
+
+**cairn delegates:**
+
+- code-symbol facts ("does `Invoice` still exist as a type") → an optional MCP
+  `codeSource` configured in `workspace.json`. Wired → cairn queries it; not wired →
+  the check is `unknown`, with a hint. **No code parser ships with cairn, ever** —
+  drifting toward one is the fight cairn cannot win (see "the standing risk").
+
+**cairn does not emit:**
+
+- a Backstage `catalog-info.yaml` or a service graph. Backstage models services, not
+  docs, and emitting it would pull cairn toward being a catalogue. A one-way
+  `cairn context export --format backstage` is a possible bridge later, not an output
+  now.
+
+Hard line: cairn reads `ai/`, the tracker store, and declared spec files. Running
+systems and source code are delegated or `unknown`.
+
+### The tracker gets a real local provider
+
+Jira will not always be available. `local` becomes a third provider beside
+`jira-server` and `none` — a real store, not a no-op. It implements the same
+`Tracker` interface, so every `cairn tracker` command works unchanged.
+
+- **Where:** workspace level, `cairn/_cairn/tracker/` — one ID namespace per project,
+  mirroring "one Jira project key per project".
+- **Shape:** one file per issue, `cairn/_cairn/tracker/<KEY>-33.md`, frontmatter
+  (`status` / `type` / `parent` / `spans`), body is the description. Diffable,
+  greppable, committed. Written through `cairn tracker`; hand-editing is tolerated,
+  like `commit --amend`.
+- **Relation to `ai/tasks/`:** the `ai/tasks/<ISSUE>/` folders stay project-owned.
+  The local store is an **index over them** — status, type, parent, which repos hold
+  a folder. Not a parallel store. The Jira provider keeps the same index and mirrors
+  to Jira as well.
+- **`TRACKER_DESYNC` splits by provider:** `local` — cairn owns store and folders, so
+  it keeps them consistent and a break degrades to `DANGLING`. `jira-server` — a
+  delegated check that tolerates `unknown` on API failure.
+- **Migration:** `cairn tracker export` / `import` moves open issues between providers
+  when Jira access is gained or lost. Not the first cut, but the interface allows it.
+
+### Prior art still to read
+
+- Backstage well-known relations — the typed-relation vocabulary, at service
+  granularity; cairn wants the same idea at document granularity.
+- Kubernetes server-side apply — field ownership, the model behind "which side
+  declared this edge" and behind per-section provenance.
+- copier / cruft — update semantics for the convention-distribution half.
 
 Sources: [Riftmap on cross-repo context](https://riftmap.dev/blog/ai-coding-agents-need-cross-repo-context/) ·
 [Sourcegraph MCP](https://sourcegraph.com/mcp) ·
@@ -918,6 +1102,18 @@ Sources: [Riftmap on cross-repo context](https://riftmap.dev/blog/ai-coding-agen
 - **When do presets leave this repo?** Internal `presets/` folder for now. The
   trigger for packaging them is a third organisation needing them, not a third
   project.
+- **The relation vocabulary — final set?** Start with `counterpartOf` and
+  `describes`; add `consumes` / `partOf` when a real case needs them. Resist a large
+  ontology. Not fixed.
+- **Where does the context convention live — core or its own preset?** Leaning its
+  own `presets/context/` so a project can adopt the context layer without taking a
+  stack persona set. Not decided.
+- **OpenAPI: which spec versions, and one contract per project or several?** The
+  check needs a resolver for `$ref` and a way to name "the contract for this edge".
+  Unspecified.
+- **`codeSource` MCP — a concrete first integration, or interface-only?** Ship the
+  `workspace.json` hook and leave every code anchor `unknown` until someone wires
+  Sourcegraph or Riftmap. First real integration is not scheduled.
 - Rename the working directory `D:/projects/ai-kit` → `cairn`? Git remote and
   `.idea/` implications; not done.
 - Run `cairn init` against the five real repos — deletes 237 lines from each and
