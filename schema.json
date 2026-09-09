@@ -22,16 +22,17 @@
       "properties": {
         "provider": {
           "type": "string",
-          "enum": ["jira-server", "none"],
+          "enum": ["jira-server", "youtrack", "none"],
           "default": "none"
         },
         "projectKey": {
           "type": "string",
-          "description": "Required unless provider is \"none\".",
+          "description": "Required unless provider is \"none\". For youtrack, falls back to YOUTRACK_PROJECT in .env.",
           "examples": ["PROOF", "GLO"]
         },
         "issueTypes": {
           "type": "object",
+          "description": "jira-server only. YouTrack has no Task/Sub-task type split.",
           "additionalProperties": false,
           "properties": {
             "story": { "type": "string", "default": "Story" },

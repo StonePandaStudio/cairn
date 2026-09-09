@@ -13,6 +13,7 @@ const os = require('os');
 const path = require('path');
 
 const { createJiraServer, NoTransitionError } = require('../lib/tracker/jira-server');
+const { createYouTrack } = require('../lib/tracker/youtrack');
 const { createNone } = require('../lib/tracker/none');
 const { createTracker } = require('../lib/tracker');
 const cli = require('../lib/tracker/cli');
@@ -61,6 +62,30 @@ test('markup: headings', () => {
 
 test('markup: bold and inline code', () => {
   assert.strictEqual(jira.toMarkup('**bold** and `code`'), '*bold* and {{code}}');
+});
+
+test('markup: italic maps to underscore, bold stays a star', () => {
+  assert.strictEqual(jira.toMarkup('*just italic*'), '_just italic_');
+  assert.strictEqual(jira.toMarkup('_also italic_'), '_also italic_');
+  // bold must survive the italic pass unharmed
+  assert.strictEqual(jira.toMarkup('**b** and *i*'), '*b* and _i_');
+});
+
+test('markup: strikethrough', () => {
+  assert.strictEqual(jira.toMarkup('~~gone~~'), '-gone-');
+});
+
+test('markup: blockquote', () => {
+  assert.strictEqual(jira.toMarkup('> a note'), 'bq. a note');
+});
+
+test('markup: pipe table becomes || header and | body, separator dropped', () => {
+  const md = '| A | B |\n|---|---|\n| 1 | 2 |\n| 3 | 4 |';
+  assert.strictEqual(jira.toMarkup(md), '||A||B||\n|1|2|\n|3|4|');
+});
+
+test('markup: a bullet line is not mangled by the italic rule', () => {
+  assert.strictEqual(jira.toMarkup('- **Method**: reuse `X`'), '* *Method*: reuse {{X}}');
 });
 
 test('markup: links', () => {
@@ -194,6 +219,31 @@ test('manifest: a hand edit beats an outdated template in the report', () => {
 
 test('tracker: unknown provider is rejected by name', () => {
   assert.throws(() => createTracker({ provider: 'linear' }), /Unknown tracker provider "linear"/);
+});
+
+test('tracker: youtrack is a registered provider', () => {
+  const t = createTracker({ provider: 'youtrack', projectKey: 'PROOF' }, { YOUTRACK_URL: 'x', YOUTRACK_TOKEN: 'x' });
+  assert.strictEqual(t.name, 'youtrack');
+  assert.deepStrictEqual(t.issueTypes, {});
+});
+
+atest('tracker: youtrack reports missing credentials rather than exiting', async () => {
+  const t = createYouTrack({ projectKey: 'PROOF' }, {});
+  await assert.rejects(() => t.listProjects(), /Missing YouTrack credentials/);
+});
+
+atest('tracker: youtrack without a project fails before any request', async () => {
+  const t = createYouTrack({}, { YOUTRACK_URL: 'x', YOUTRACK_TOKEN: 'p' });
+  await assert.rejects(() => t.listProjects(), /project is not set/);
+});
+
+test('tracker: youtrack falls back to YOUTRACK_PROJECT for the key', () => {
+  const t = createYouTrack({}, { YOUTRACK_URL: 'x', YOUTRACK_TOKEN: 'x', YOUTRACK_PROJECT: 'PROOF' });
+  assert.strictEqual(t.projectKey, 'PROOF');
+});
+
+test('tracker: youtrack passes markdown through untouched', () => {
+  assert.strictEqual(createYouTrack({ projectKey: 'X' }).toMarkup('# Title\n**b**'), '# Title\n**b**');
 });
 
 atest('tracker: jira-server reports missing credentials rather than exiting', async () => {
@@ -408,6 +458,21 @@ atest('init: writes config, shim and manifest', async () => {
     manifest.statusFor(dir, m).map((f) => f.state),
     ['MANAGED'],
   );
+});
+
+atest('init: youtrack config omits the Jira-only issueTypes block', async () => {
+  const { main } = require('../lib/init');
+  const dir = tmpRepo();
+  const log = console.log;
+  console.log = () => {};
+  const code = main(['--repo', dir, '--stack', 'backend', '--tracker', 'youtrack', '--project-key', 'PROOF', '--no-color']);
+  console.log = log;
+
+  assert.strictEqual(code, 0);
+  const cfg = JSON.parse(fs.readFileSync(path.join(dir, 'cairn.config.json'), 'utf8'));
+  assert.strictEqual(cfg.tracker.provider, 'youtrack');
+  assert.strictEqual(cfg.tracker.projectKey, 'PROOF');
+  assert.strictEqual(cfg.tracker.issueTypes, undefined);
 });
 
 atest('init: replaces a legacy ai/scripts/jira.js but never invents one', async () => {

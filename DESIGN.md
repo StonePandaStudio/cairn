@@ -133,8 +133,9 @@ needing an "if this repo has Jira" branch written in prose.
 It also forced the abstraction to be honest: a null tracker that threw would just
 push the branching back into the callers.
 
-The same interface later takes a `local` provider — a real file-backed store for
-when Jira is unavailable, not a no-op. See "The cross-repo context layer".
+The same interface later takes `youtrack` and `local` providers — the roster becomes
+a per-repo choice (`tracker.provider`), which is what the `snap-proof` repos
+hand-built as `task-tracker.js`. See "The tracker becomes a choice of provider".
 
 ### Path aliases over renaming
 
@@ -686,11 +687,21 @@ and the tool would be dead. That is the single most likely way this fails.
 
 ### Sequencing
 
+0. **Tracker provider — `youtrack`.** Not hypothetical: the `snap-proof` repos run a
+   `task-tracker.js` dispatcher over Jira and YouTrack. `lib/tracker/youtrack.js` is
+   done (ported from their `youtrack.js`, same interface, no `process.exit`);
+   registry / schema / init wired. The markdown→wiki-markup audit against those
+   repos' `JIRA_MARKUP.md` / `TASK_TRACKER_MARKUP.md` closed four gaps in
+   `jira-server.toMarkup()` — italic, strikethrough, blockquote, pipe tables. 0.3.0,
+   46 tests, awaiting publish. (`local` is *not* here — the `LOCAL-` folders in those
+   repos are a pre-tracker archive, not a practice; the real driver for `local` is
+   the `partOf` join key, so it lands with the context layer.)
 1. **Workspace layer.** Per-project `workspace.json` — schema, a `layout` field, and
    `preset → workspace → repo` inheritance so tracker/vars stop being repeated per
    repo — plus `cairn workspace init` and `cohort: "project"` meaning the workspace
    itself. Adds three doctor checks: task span (which repos hold a folder for
-   `GLO-33`), orphaned local tasks, and project-level progress rollup. Cross-project
+   `GLO-33`), orphaned task folders (an `ai/tasks/<ID>/` with no issue in any
+   tracker — the `LOCAL-*` cruft), and project-level progress rollup. Cross-project
    (`stack`) comparison stays on the current flat `repos.json` until 1b. About a
    week, useful immediately.
 1b. **Hub.** `projects.json` referencing the workspaces, `cairn workspace init
@@ -963,8 +974,11 @@ candidate is silenced once with `notCounterpartOf` or an ignore entry.
 **`cairn context adopt`** — a one-time interactive brownfield pass per repo,
 `--dry-run` first. Per off-convention file: move / rename / mark unmanaged / skip.
 Per inferred pair: confirm / reject / not-a-counterpart. Per path collision: pick the
-winner. UX is Debian conffile — keep / rename / show diff / shell / skip. Decisions
-are recorded so a re-run does not re-ask; `--report` is the non-interactive form.
+winner. Per orphaned task folder (an `ai/tasks/<ID>/` with no issue in any tracker —
+the `LOCAL-*` cruft): **archive** (default — move to `ai/tasks/archive/`) / adopt
+into the `local` store / relink to a real issue. UX is Debian conffile — keep /
+rename / show diff / shell / skip. Decisions are recorded so a re-run does not
+re-ask; `--report` is the non-interactive form. cairn never migrates automatically.
 
 ### What "drift" means for prose (Q2)
 
@@ -1047,11 +1061,48 @@ later option for detached use.
 Hard line: cairn reads `ai/`, the tracker store, and declared spec files. Running
 systems and source code are delegated or `unknown`.
 
-### The tracker gets a real local provider
+### The tracker becomes a choice of provider
 
-Jira will not always be available. `local` becomes a third provider beside
-`jira-server` and `none` — a real store, not a no-op. It implements the same
-`Tracker` interface, so every `cairn tracker` command works unchanged.
+The `snap-proof` repos already hand-built this: `ai/scripts/task-tracker.js` — "a
+unified client that dispatches to Jira or YouTrack based on `TASK_TRACKER`". Three
+copied clients (`jira.js`, `youtrack.js`, `task-tracker.js`) doing what cairn's
+registry already does. Those repos are migrating *off* Jira onto YouTrack —
+`jira-server` stays a provider because other projects still use it. The point is a
+per-repo choice, not one blessed tracker.
+
+So the roster grows to four peer providers, selected by `tracker.provider` in
+`cairn.config.json`, all on the same `Tracker` interface so every `cairn tracker`
+command is provider-agnostic:
+
+| provider | |
+|---|---|
+| `jira-server` | shipped in v1. Basic auth, Jira Server 8.5.1, Task/Sub-task types, wiki markup |
+| `youtrack` | port of the repos' `youtrack.js` — step 0, ships 0.3.0 |
+| `local` | file-backed store, below — lands with the context layer |
+| `none` | every command a successful no-op |
+
+**YouTrack differs from Jira in three ways the port must absorb:** no Task/Sub-task
+type hierarchy — a sub-issue is a plain issue joined by a `Subtask` link; status is a
+`Stage` bundle field, not a transition graph; and the description is markdown-native,
+so `youtrack`'s `toMarkup()` is a passthrough. cairn's `issueTypes` config becomes
+Jira-only; `statuses` still maps. The Jira wiki-markup rules stay the interesting
+half of `toMarkup()` — `ai/JIRA_MARKUP.md` and `ai/TASK_TRACKER_MARKUP.md` in those
+repos are its spec, worth diffing against the current implementation.
+
+`task-tracker.js`'s `TASK_TRACKER` env var *is* `tracker.provider`. When cairn adopts
+these repos the shim replaces all three clients — `task-tracker.js`, `jira.js`,
+`youtrack.js` — and the `.claude/commands/` `youtrack-*` / `jira` / `task-*` split
+collapses into one provider-agnostic stub set.
+
+#### The `local` provider
+
+A real store, not a no-op. **Its driver is not the `LOCAL-*` folders** in the
+`snap-proof` repos — those are a pre-tracker archive (`LOCAL-201..217`, dated
+2025/12–2026/05, mostly under `tasks/archive/YYYY/MM/`, a per-repo namespace),
+caught by the "orphaned task folders" doctor check, not a practice to preserve.
+`local` exists because `partOf <issue>` in the context layer needs *some* issue
+store when a repo has no remote tracker, and because local-only tracking is a stated
+need for some future repo. It therefore lands with the context layer, not in step 0.
 
 - **Where:** workspace level, `cairn/_cairn/tracker/` — one ID namespace per project,
   mirroring "one Jira project key per project".
@@ -1061,13 +1112,13 @@ Jira will not always be available. `local` becomes a third provider beside
   like `commit --amend`.
 - **Relation to `ai/tasks/`:** the `ai/tasks/<ISSUE>/` folders stay project-owned.
   The local store is an **index over them** — status, type, parent, which repos hold
-  a folder. Not a parallel store. The Jira provider keeps the same index and mirrors
-  to Jira as well.
+  a folder. Not a parallel store. The remote providers keep the same index and mirror
+  to Jira / YouTrack as well.
 - **`TRACKER_DESYNC` splits by provider:** `local` — cairn owns store and folders, so
-  it keeps them consistent and a break degrades to `DANGLING`. `jira-server` — a
-  delegated check that tolerates `unknown` on API failure.
+  it keeps them consistent and a break degrades to `DANGLING`. `jira-server` /
+  `youtrack` — a delegated check that tolerates `unknown` on API failure.
 - **Migration:** `cairn tracker export` / `import` moves open issues between providers
-  when Jira access is gained or lost. Not the first cut, but the interface allows it.
+  when a remote is gained or lost. Not the first cut, but the interface allows it.
 
 ### Prior art still to read
 

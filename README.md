@@ -19,7 +19,7 @@ npx cairn init --stack backend --tracker jira-server --project-key MYPROJ --stor
 
 | Command | |
 |---|---|
-| `cairn tracker <cmd>` | Issue tracker client. Replaces the copied `ai/scripts/jira.js` files |
+| `cairn tracker <cmd>` | Issue tracker client (`jira-server` / `youtrack` / `none`). Replaces the copied `ai/scripts/*.js` clients |
 | `cairn doctor` | Cross-repo drift report, plus per-repo generated-file state |
 | `cairn init` | Makes a repo cairn-managed: writes `cairn.config.json`, `_cairn/`, and the shim |
 
@@ -58,9 +58,12 @@ cairn tracker append-description MYPROJ-101 ./ai/tasks/MYPROJ-101/brief-step-1.m
 cairn tracker close-story MYPROJ-42          # cascades through subtasks first
 ```
 
-Providers are `jira-server` and `none`. `none` is a real provider, not an error
-case: a repo with no tracker makes the workflow steps no-ops rather than every
-command stub needing an "if this repo has a tracker" branch written in prose.
+Providers are `jira-server`, `youtrack` and `none`, chosen per repo via
+`tracker.provider`. `none` is a real provider, not an error case: a repo with no
+tracker makes the workflow steps no-ops rather than every command stub needing an
+"if this repo has a tracker" branch written in prose. YouTrack has no Task/Sub-task
+type split (a `Subtask` link instead), a `Stage` state field rather than a
+transition graph, and markdown-native descriptions.
 
 Three things the copied scripts did that this does not:
 
@@ -72,8 +75,10 @@ Three things the copied scripts did that this does not:
   explaining markdown → Jira wiki conversion. It is `toMarkup()` now, under test,
   reachable via `--markup`.
 
-Credentials come from the repo's `.env` (`JIRA_BASE_URL`, `JIRA_USER`, `JIRA_PASSWORD`).
-Jira Server 8.5.1 predates PAT support, so auth is Basic. Anything already in the
+Credentials come from the repo's `.env` — `JIRA_BASE_URL` / `JIRA_USER` /
+`JIRA_PASSWORD` for `jira-server` (Basic auth: Jira Server 8.5.1 predates PATs), or
+`YOUTRACK_URL` / `YOUTRACK_TOKEN` / `YOUTRACK_PROJECT` for `youtrack` (Bearer token,
+admin-read scope for the project and stage-bundle lookups). Anything already in the
 environment wins over the file.
 
 ### Legacy command names
@@ -154,7 +159,7 @@ bin/cairn.js           subcommand router
 lib/config.js          cairn.config.json + .env loading
 lib/manifest.js        generated-file hashing and state
 lib/paint.js           ANSI + table rendering
-lib/tracker/           index (registry), cli, jira-server, none
+lib/tracker/           index (registry), cli, jira-server, youtrack, none
 lib/doctor/            index (analysis + report), scan, normalize, diff
 lib/init.js            cairn init
 templates/shims/       vendored shim source
@@ -162,4 +167,4 @@ schema.json            JSON Schema for cairn.config.json
 test/run.js            dependency-free test runner
 ```
 
-No runtime dependencies. Node >= 18. `npm test` runs 35 tests.
+No runtime dependencies. Node >= 18. `npm test` runs 46 tests.
