@@ -770,6 +770,13 @@ atest('render: scaffolds ai/ from presets, greenfield-guarded', async () => {
     const m = manifest.readManifest(dir);
     assert.ok(m.files['ai/agents/reviewer.md'] && m.files['ai/WORKFLOW.md']);
 
+    // render also stores the merge base cairn sync will diff against.
+    assert.strictEqual(
+      fs.readFileSync(path.join(dir, '_cairn/base/ai/agents/reviewer.md'), 'utf8'),
+      fs.readFileSync(review, 'utf8'),
+      'base is a verbatim copy of the render',
+    );
+
     const before = fs.readFileSync(review, 'utf8');
     renderCli.renderInto(dir, { paint: require('../lib/paint').makePaint(false) });
     assert.strictEqual(fs.readFileSync(review, 'utf8'), before, 're-render is a no-op');
@@ -785,6 +792,270 @@ atest('render: scaffolds ai/ from presets, greenfield-guarded', async () => {
       kept.some((k) => k.rel === 'ai/agents/reviewer.md' && /hand-edited/.test(k.reason)),
       'a hand edit is kept, not clobbered',
     );
+  } finally {
+    console.log = log;
+  }
+});
+
+// --------------------------------------------------------------------- sync
+
+const sync = require('../lib/sync');
+
+// Build a repo with one managed file: base in _cairn/base/, `ours` on disk, and
+// a manifest entry whose hash is what cairn "wrote last" (defaults to `ours`).
+function syncFixture(rel, { base, ours, writtenHash, source = 'core/agents/x.md' }) {
+  const dir = tmpRepo();
+  const m = manifest.emptyManifest();
+  const abs = path.join(dir, rel);
+  fs.mkdirSync(path.dirname(abs), { recursive: true });
+  if (ours !== null) fs.writeFileSync(abs, ours);
+  if (base !== undefined) manifest.writeBase(dir, rel, base);
+  manifest.record(m, rel, source, ours || '');
+  if (writtenHash !== undefined) m.files[rel].hash = writtenHash;
+  manifest.writeManifest(dir, m);
+  return { dir, entry: m.files[rel], manifest: m };
+}
+
+function plan1(rel, fixtureOpts, theirs, opts = {}) {
+  const { dir, entry } = syncFixture(rel, fixtureOpts);
+  const targets = new Map([[rel, { content: theirs, source: entry.source }]]);
+  return { dir, action: sync.planFile(rel, entry, dir, targets, { adoptBase: false, ...opts }) };
+}
+
+test('sync: base == ours == theirs is a no-op', () => {
+  const { action } = plan1('ai/x.md', { base: 'a\nb\nc\n', ours: 'a\nb\nc\n' }, 'a\nb\nc\n');
+  assert.strictEqual(action.outcome, sync.OUTCOME.UNCHANGED);
+  assert.strictEqual(action.write, undefined);
+});
+
+test('sync: only the template moved -> fast-forward', () => {
+  const { action } = plan1(
+    'ai/x.md',
+    { base: 'a\nb\nc\n', ours: 'a\nb\nc\n' },
+    'a\nb\nc\nd\n',
+  );
+  assert.strictEqual(action.outcome, sync.OUTCOME.FAST_FORWARD);
+  assert.strictEqual(action.write, 'a\nb\nc\nd\n');
+  assert.strictEqual(action.base, 'a\nb\nc\nd\n');
+});
+
+test('sync: local edit, steady template -> kept as MODIFIED, not written', () => {
+  const { action } = plan1(
+    'ai/x.md',
+    { base: 'a\nb\nc\n', ours: 'a\nB\nc\n' },
+    'a\nb\nc\n',
+  );
+  assert.strictEqual(action.outcome, sync.OUTCOME.MODIFIED);
+  assert.strictEqual(action.write, undefined);
+});
+
+test('sync: non-overlapping edits three-way merge cleanly', () => {
+  // ours adds a line at the top, the template adds one at the bottom.
+  const base = 'l1\nl2\nl3\nl4\nl5\n';
+  const ours = 'top\nl1\nl2\nl3\nl4\nl5\n';
+  const theirs = 'l1\nl2\nl3\nl4\nl5\nbottom\n';
+  const { action } = plan1('ai/x.md', { base, ours }, theirs);
+  assert.strictEqual(action.outcome, sync.OUTCOME.MERGED);
+  assert.strictEqual(action.write, 'top\nl1\nl2\nl3\nl4\nl5\nbottom\n');
+  assert.strictEqual(action.base, theirs);
+  assert.ok(!action.conflict);
+});
+
+test('sync: overlapping edits leave conflict markers, exit non-zero, converge next run', () => {
+  const base = 'l1\nl2\nl3\n';
+  const ours = 'l1\nOURS\nl3\n';
+  const theirs = 'l1\nTHEIRS\nl3\n';
+  const { action } = plan1('ai/x.md', { base, ours }, theirs);
+  assert.strictEqual(action.outcome, sync.OUTCOME.CONFLICT);
+  assert.ok(action.conflict, 'flagged as a conflict');
+  assert.match(action.write, /<<<<<<< /);
+  assert.match(action.write, />>>>>>> /);
+  // base advances to theirs so a re-run treats the resolution as a plain local
+  // edit rather than merging the same template change twice.
+  assert.strictEqual(action.base, theirs);
+
+  // After the human removes the markers, the next sync is a quiet MODIFIED and
+  // the conflict flag clears.
+  const resolved = plan1(
+    'ai/x.md',
+    { base: theirs, ours: 'l1\nRESOLVED\nl3\n', source: action.source },
+    theirs,
+  );
+  // simulate the flag being set from the previous run
+  resolved.action = sync.planFile(
+    'ai/x.md',
+    { hash: manifest.hashContent('l1\nRESOLVED\nl3\n'), source: 'core/agents/x.md', conflict: true },
+    resolved.dir,
+    new Map([['ai/x.md', { content: theirs, source: 'core/agents/x.md' }]]),
+    { adoptBase: false },
+  );
+  assert.strictEqual(resolved.action.outcome, sync.OUTCOME.MODIFIED);
+  assert.ok(resolved.action.clearConflict, 'conflict flag cleared once markers are gone');
+});
+
+test('sync: a file deleted locally is restored from the current render', () => {
+  const { action } = plan1('ai/x.md', { base: 'a\n', ours: null }, 'a\nb\n');
+  assert.strictEqual(action.outcome, sync.OUTCOME.RESTORED);
+  assert.strictEqual(action.write, 'a\nb\n');
+});
+
+test('sync: a preset file the manifest lacks is CREATED, greenfield-guarded', () => {
+  const dir = tmpRepo();
+  const m = manifest.emptyManifest();
+  manifest.record(m, 'ai/kept.md', 'core/agents/x.md', 'k\n');
+  fs.mkdirSync(path.join(dir, 'ai'), { recursive: true });
+  fs.writeFileSync(path.join(dir, 'ai/kept.md'), 'k\n');
+  manifest.writeBase(dir, 'ai/kept.md', 'k\n');
+  manifest.writeManifest(dir, m);
+
+  // A second target the manifest has never seen. One is absent (create it), one
+  // already sits on disk unmanaged (leave it).
+  fs.writeFileSync(path.join(dir, 'ai/squatter.md'), 'not ours\n');
+  const { planSync } = sync;
+  const orig = require('../lib/render').renderTargets;
+  require('../lib/render').renderTargets = () => ({
+    targets: [
+      ['ai/kept.md', 'k\n', 'core/agents/x.md'],
+      ['ai/new.md', 'fresh\n', 'core/agents/y.md'],
+      ['ai/squatter.md', 'rendered\n', 'core/agents/z.md'],
+    ],
+  });
+  try {
+    const { actions } = planSync({ config: {}, presetsDir: 'x', manifest: m, repoPath: dir });
+    const byRel = Object.fromEntries(actions.map((a) => [a.rel, a.outcome]));
+    assert.strictEqual(byRel['ai/new.md'], sync.OUTCOME.CREATED);
+    assert.strictEqual(byRel['ai/squatter.md'], undefined, 'an unmanaged file on disk is left alone');
+  } finally {
+    require('../lib/render').renderTargets = orig;
+  }
+});
+
+test('sync: a path the presets no longer emit is ORPHANED, never touched', () => {
+  const { dir, entry } = syncFixture('ai/gone.md', { base: 'x\n', ours: 'x\n' });
+  const action = sync.planFile('ai/gone.md', entry, dir, new Map(), { adoptBase: false });
+  assert.strictEqual(action.outcome, sync.OUTCOME.ORPHANED);
+  assert.strictEqual(action.write, undefined);
+});
+
+test('sync: no base + hand-edited needs --adopt-base', () => {
+  const noBase = plan1('ai/x.md', { base: undefined, ours: 'edited\n', writtenHash: manifest.hashContent('orig\n') }, 'orig2\n');
+  assert.strictEqual(noBase.action.outcome, sync.OUTCOME.NO_BASE);
+
+  const adopted = plan1(
+    'ai/x.md',
+    { base: undefined, ours: 'edited\n', writtenHash: manifest.hashContent('orig\n') },
+    'orig\n',
+    { adoptBase: true },
+  );
+  // ours becomes the base; template == old written hash != ours, so it merges.
+  assert.notStrictEqual(adopted.action.outcome, sync.OUTCOME.NO_BASE);
+});
+
+test('sync: no base but untouched since render seeds the base and fast-forwards', () => {
+  const { action } = plan1(
+    'ai/x.md',
+    { base: undefined, ours: 'v1\n', writtenHash: manifest.hashContent('v1\n') },
+    'v2\n',
+  );
+  assert.strictEqual(action.outcome, sync.OUTCOME.FAST_FORWARD);
+  assert.strictEqual(action.write, 'v2\n');
+});
+
+atest('sync: CLI applies a fast-forward, updates the manifest, exits 0', async () => {
+  const { main: init } = require('../lib/init');
+  const syncCli = require('../lib/sync/cli');
+  const dir = tmpRepo();
+  const log = console.log;
+  console.log = () => {};
+  try {
+    init(['--repo', dir, '--stack', 'nextjs,react', '--tracker', 'none', '--render', '--no-color']);
+    const wf = path.join(dir, 'ai/WORKFLOW.md');
+
+    // Make the stored base stale so the current render reads as a template change,
+    // with the working file matching that stale base (no local edit).
+    const stale = 'stale\n' + fs.readFileSync(wf, 'utf8');
+    manifest.writeBase(dir, 'ai/WORKFLOW.md', stale);
+    fs.writeFileSync(wf, stale);
+    const m = manifest.readManifest(dir);
+    m.files['ai/WORKFLOW.md'].hash = manifest.hashContent(stale);
+    manifest.writeManifest(dir, m);
+
+    const rendered = require('../lib/render').renderTargets({
+      config: loadRepoConfig(dir, { required: true }),
+      presetsDir: syncCli.PRESETS_DIR,
+    }).targets.find(([rel]) => rel === 'ai/WORKFLOW.md')[1];
+
+    const code = syncCli.main(['--repo', dir, '--no-color']);
+    assert.strictEqual(code, 0);
+    assert.strictEqual(fs.readFileSync(wf, 'utf8'), rendered, 'file fast-forwarded to the render');
+    assert.strictEqual(
+      fs.readFileSync(path.join(dir, '_cairn/base/ai/WORKFLOW.md'), 'utf8'),
+      rendered,
+      'base advanced',
+    );
+    assert.strictEqual(
+      manifest.readManifest(dir).files['ai/WORKFLOW.md'].hash,
+      manifest.hashContent(rendered),
+    );
+  } finally {
+    console.log = log;
+  }
+});
+
+atest('sync: CLI writes conflict markers, exits 3, and doctor reports CONFLICT', async () => {
+  const { main: init } = require('../lib/init');
+  const syncCli = require('../lib/sync/cli');
+  const { statusFor, readManifest } = require('../lib/manifest');
+  const dir = tmpRepo();
+  const log = console.log;
+  const err = console.error;
+  console.log = () => {};
+  console.error = () => {};
+  try {
+    init(['--repo', dir, '--stack', 'nextjs,react', '--tracker', 'none', '--render', '--no-color']);
+    const agents = path.join(dir, 'ai/AGENTS.md');
+    const original = fs.readFileSync(agents, 'utf8');
+
+    // Stale base differs from the render on line 1; the working file differs from
+    // the base on the same line -> a genuine overlap.
+    const staleBase = original.replace(/^.*\n/, 'BASE LINE ONE\n');
+    const ourEdit = original.replace(/^.*\n/, 'OUR LINE ONE\n');
+    manifest.writeBase(dir, 'ai/AGENTS.md', staleBase);
+    fs.writeFileSync(agents, ourEdit);
+    const m = manifest.readManifest(dir);
+    m.files['ai/AGENTS.md'].hash = manifest.hashContent(ourEdit);
+    manifest.writeManifest(dir, m);
+
+    const code = syncCli.main(['--repo', dir, '--no-color']);
+    assert.strictEqual(code, 3, 'conflict exit code');
+    assert.match(fs.readFileSync(agents, 'utf8'), /<<<<<<< /, 'markers written in place');
+
+    const state = statusFor(dir, readManifest(dir)).find((f) => f.path === 'ai/AGENTS.md');
+    assert.strictEqual(state.state, 'CONFLICT');
+  } finally {
+    console.log = log;
+    console.error = err;
+  }
+});
+
+atest('sync: --dry-run writes nothing', async () => {
+  const { main: init } = require('../lib/init');
+  const syncCli = require('../lib/sync/cli');
+  const dir = tmpRepo();
+  const log = console.log;
+  console.log = () => {};
+  try {
+    init(['--repo', dir, '--stack', 'nextjs', '--tracker', 'none', '--render', '--no-color']);
+    const wf = path.join(dir, 'ai/WORKFLOW.md');
+    const stale = 'stale\n' + fs.readFileSync(wf, 'utf8');
+    manifest.writeBase(dir, 'ai/WORKFLOW.md', stale);
+    fs.writeFileSync(wf, stale);
+
+    const snapshot = fs.readFileSync(wf, 'utf8');
+    const baseSnapshot = fs.readFileSync(path.join(dir, '_cairn/base/ai/WORKFLOW.md'), 'utf8');
+    syncCli.main(['--repo', dir, '--dry-run', '--no-color']);
+    assert.strictEqual(fs.readFileSync(wf, 'utf8'), snapshot);
+    assert.strictEqual(fs.readFileSync(path.join(dir, '_cairn/base/ai/WORKFLOW.md'), 'utf8'), baseSnapshot);
   } finally {
     console.log = log;
   }

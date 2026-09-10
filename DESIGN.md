@@ -761,6 +761,11 @@ with fork semantics. None exists in BMAD or Spec Kit. If the build drifts toward
 
 ## Upgrades: merging incoming template changes with local edits
 
+> **Built in 0.6.0** — `lib/sync/`, `cairn sync`. `_cairn/base/` content store, the
+> 2×2, `git merge-file` for the conflict cell, `CONFLICT` as a fifth manifest state.
+> Section-level merge and per-mechanism routing (below) are deliberately not built —
+> every managed file is line-merged today. See `PLAN.md` for what's left.
+
 The question that decides whether any of the above survives contact with the five
 repos. A preset's Node.js developer template gets updated; each repo has its own
 edits; something has to reconcile them without destroying either side.

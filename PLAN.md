@@ -4,28 +4,33 @@ Execution order for what comes after v1. The *why* is in `DESIGN.md`
 ("The cross-repo context layer", "### Sequencing"); this is the running order and
 where we are in it.
 
-Last updated 2026-09-09 (evening — `cairn render` + preset library committed + pushed,
-`0.5.0`, 61 tests).
+Last updated 2026-09-10 — `cairn sync` built (`0.6.0`, 74 tests). Not yet published.
 
-**Resume here:** verify `npm view @stonepandastudio/cairn version`, `npm publish 0.5.0`
-if needed → charityiq Phase 2 (below). Then back to the roadmap: snap-proof gate
-sprint → context-resolver prototype → workspace layer → `cairn sync`.
+**Resume here:** `git push` + `npm publish 0.6.0` → charityiq Phase 2 (below,
+now rendered by a cairn that stores `_cairn/base/` from the start). Then back to
+the roadmap: snap-proof gate sprint → context-resolver prototype → workspace layer.
 
-## Where we are (0.5.0)
+## Where we are (0.6.0)
 
-- **Published through 0.4.2.** `youtrack` provider, list-`stack`, safe shim swap,
-  `tracker.envPrefix`, per-provider env hints — all live. **snap-proof adopted**
-  (backend + frontend on YouTrack, smoke-tested, branch `install-cairn`).
-- **`cairn render` built** (0.5.0, awaiting publish) — a small template engine
-  (`lib/render/engine.js`) + driver + `presets/core/workflow.json`. Turns the
-  bundled presets into a repo's `ai/` + `.claude/commands/`. **Greenfield only** —
-  writes absent files, manifests them, keeps anything on disk; `cairn sync` (the
-  three-way merge) is still deferred. `presets/` now ships in the tarball.
+- **Published through 0.5.0.** `youtrack` provider, list-`stack`, safe shim swap,
+  `tracker.envPrefix`, per-provider env hints, **`cairn render`** (template engine +
+  preset library) — all live. **snap-proof adopted** (backend + frontend on
+  YouTrack, smoke-tested, branch `install-cairn`).
+- **`cairn sync` built** (0.6.0, awaiting publish) — `lib/sync/`. Re-renders the
+  presets and reconciles each managed file against `_cairn/base/` (the last render,
+  now stored by `render` + `init`) via the 2×2: no-op / fast-forward / keep-local
+  (`MODIFIED`) / three-way merge. The merge shells out to `git merge-file --diff3`;
+  a conflict writes markers, exits 3, and shows as `CONFLICT` (fifth manifest
+  state, wired into `doctor` + `doctor --strict`). Base advances on every
+  fast-forward, clean merge, **and conflict**, so a resolve + re-run converges to a
+  quiet `MODIFIED`. `--adopt-base` for files rendered before 0.6.0.
 - **Preset library** — `core` + framework (`nestjs`, `react`, `nextjs`) + ORM
   (`typeorm`, `drizzle`) + styling (`tailwind`) + `angular`. Slots split
   framework/ORM, concatenate per `stack[]` entry. See `presets/EXTRACTION.md`.
-- **Deferred still:** workspace layer, hub, context layer, `cairn sync`, `local`
-  provider.
+- **Deferred still:** workspace layer, hub, context layer, `local` provider,
+  `cairn workspace sync` (walk all repos from the hub), section-level merge (only
+  if line-level `diff3` proves too noisy — not speculatively), `OUTDATED` in the
+  doctor (needs template hashes threaded through).
 
 ## Where we were
 
@@ -177,6 +182,47 @@ Then, in sequence, per DESIGN: **1b** hub → **2** context layer proper (conven
 preset, `cairn context adopt`, `build`, **the `local` tracker provider**) → **3**
 `cairn context serve` (MCP) → **4** agent presets → **5** guidelines import → **6**
 portable workflows.
+
+## `cairn sync` — template propagation — **BUILT (0.6.0)**
+
+Turns `cairn render` from one-shot greenfield into an upgrade path. Full spec in
+`DESIGN.md` ("### The upgrade algorithm is a 2×2" … "### What to build").
+
+**Shipped:**
+
+- **`_cairn/base/<rel>`** — verbatim copy of the last render, written by `render`
+  and `init` alongside the real file. `cairn sync`'s merge base. Committed like the
+  rest of `_cairn/`.
+- **The 2×2** (`lib/sync/index.js` `planFile`), diffing `base` / `ours` (disk) /
+  `theirs` (fresh render): no-op · fast-forward · keep-local (`MODIFIED`) ·
+  three-way merge. Plus `RESTORED` (deleted locally), `ORPHANED` (preset dropped
+  the path — never touched), `NO_BASE` (rendered pre-0.6.0 and edited since —
+  needs `--adopt-base`).
+- **Conflict cell** shells out to `git merge-file -p --diff3`. Clean → written;
+  conflicted → markers written in place, `cairn sync` exits 3. `CONFLICT` is a
+  fifth manifest state, wired into `doctor` + `doctor --strict`.
+- **Convergence:** base advances to `theirs` on fast-forward, clean merge, *and*
+  conflict — so resolve-markers + re-run lands on a quiet `MODIFIED`, not a second
+  merge of the same change. Flag clears once the markers are gone.
+- **Not auto-triggered** — nothing re-renders on `npm update`; `cairn sync` is
+  explicit, per repo.
+- 13 tests (`test/run.js`, "--- sync" block).
+
+**Deliberately not built (add only when the need is real):**
+
+- **Section-level merge** (document as ordered map of `##` sections). DESIGN:
+  build only if line-level `diff3` proves too noisy on the 400-line agent docs.
+- **Per-mechanism routing** (slot fill never merges, section-replace merges only
+  its named section, `fork` vs `link`). Needs the preset extension mechanism to
+  exist first — today every managed file is line-merged.
+- **`cairn workspace sync`** — walk every repo from the hub. Needs the workspace
+  layer.
+- **Health metric** — "after a preset update, how many repos need human
+  attention". Wire in once >1 repo actually renders.
+
+**Prior art if the above gets built:** [copier](https://copier.readthedocs.io/)
+(`.copier-answers.yml`, three-way update), cruft, RN `rn-diff-purge`, k8s
+server-side apply (per-section provenance).
 
 ## Immediate small fixes (not blocking, do when convenient)
 

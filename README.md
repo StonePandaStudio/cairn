@@ -24,11 +24,32 @@ npx cairn init --stack nestjs,typeorm --tracker jira-server --project-key MYPROJ
 | `cairn doctor` | Cross-repo drift report, plus per-repo generated-file state |
 | `cairn init` | Makes a repo cairn-managed: writes `cairn.config.json`, `_cairn/`, and the shim |
 | `cairn render` | Scaffolds `ai/` + `.claude/commands/` from the bundled presets, from the repo's stack + workflow |
+| `cairn sync` | Re-renders and three-way merges preset changes into a repo that has already rendered |
 
 `cairn render` is **greenfield only**: it writes files that do not exist, records them
-in the manifest, and leaves anything already on disk alone (reporting it). The
-three-way merge that would re-render over local edits — `cairn sync` — is not built
-yet; for a fresh repo there is nothing to merge.
+in the manifest, stores the render in `_cairn/base/`, and leaves anything already on
+disk alone (reporting it).
+
+`cairn sync` is the upgrade path. For each managed file it holds three versions —
+`base` (the last render, in `_cairn/base/`), `ours` (what is on disk), `theirs` (what
+the current presets render) — and runs a 2×2:
+
+| | template unchanged | template changed |
+|---|---|---|
+| **local unchanged** | no-op | fast-forward — write the new render |
+| **local changed** | keep local (`MODIFIED`) | three-way merge |
+
+Three cells are automatic. The merge shells out to `git merge-file`; a clean result
+is written, a conflicted one is written **with markers** and the command exits
+non-zero (`CONFLICT`, a fifth manifest state). Nothing is ever silently overwritten.
+Resolve the markers and run `cairn sync` again — the base has already advanced, so
+the second run is a quiet `MODIFIED`.
+
+```bash
+cairn sync --dry-run          # show the outcome per file, write nothing
+cairn sync                    # apply; exit 3 if any file is left in conflict
+cairn sync --adopt-base       # for files rendered before _cairn/base/ existed
+```
 
 ## The two folders
 
@@ -37,6 +58,7 @@ repo/
   cairn.config.json     you edit this. cairn only ever reads it.
   _cairn/               cairn writes this. nobody hand-edits it.
     manifest.json       what was generated, from which template, at which hash
+    base/               the last render of every managed file — `cairn sync`'s merge base
     scripts/jira.js     vendored tracker shim
   .claude/commands/     rendered from the workflow — one stub per step
   ai/
@@ -47,9 +69,10 @@ repo/
 ```
 
 `cairn render` seeds the rendered files once and records them in the manifest; it
-never rewrites a file you have edited (that is `cairn sync`, not built yet). The
-boundary is the whole design: hand-edited config living inside a generated directory
-is how generated directories acquire state nobody dares regenerate.
+never rewrites a file you have edited. `cairn sync` is what re-renders later preset
+changes over your edits, three-way merging where both moved. The boundary is the
+whole design: hand-edited config living inside a generated directory is how
+generated directories acquire state nobody dares regenerate.
 
 Generated files are **committed**, not gitignored. Claude Code discovers
 `.claude/commands/` and agent docs from disk, and a prompt change should show up in
@@ -132,12 +155,13 @@ match what is on disk?
 |---|---|
 | `MANAGED` | on-disk hash matches what cairn wrote |
 | `MODIFIED` | someone hand-edited a generated file |
-| `OUTDATED` | cairn has newer content for it — needs template hashes; comes with `cairn sync` |
-| `DELETED` | it is gone; a future `cairn sync` will restore it |
+| `OUTDATED` | cairn has newer content for it — needs template hashes threaded through |
+| `DELETED` | it is gone; `cairn sync` restores it from the current render |
+| `CONFLICT` | `cairn sync` left git merge markers in it — resolve, then sync again |
 
-Today the doctor reports `MANAGED`, `MODIFIED` and `DELETED`. `OUTDATED` (needs the
-template hashes threaded through) and `cairn sync` (the three-way merge that acts on
-these states) are still to come — `cairn render` is greenfield-only for now.
+Today the doctor reports `MANAGED`, `MODIFIED`, `DELETED` and `CONFLICT`. `OUTDATED`
+(needs the template hashes threaded through) is still to come. Acting on drift
+between the render and the working tree is `cairn sync`.
 
 A file can be perfectly in sync across repos while being hand-edited away from its
 template, and vice versa. `MODIFIED` outranks `OUTDATED` in the report because
@@ -174,6 +198,7 @@ lib/paint.js           ANSI + table rendering
 lib/tracker/           index (registry), cli, jira-server, youtrack, none
 lib/doctor/            index (analysis + report), scan, normalize, diff
 lib/render/            engine (a small template engine), index (driver), cli
+lib/sync/              index (the 2x2 + git merge-file), cli
 lib/init.js            cairn init
 templates/shims/       vendored shim source
 presets/               core/ + framework/ORM/styling presets rendered by `cairn render`
@@ -181,4 +206,5 @@ schema.json            JSON Schema for cairn.config.json
 test/run.js            dependency-free test runner
 ```
 
-No runtime dependencies. Node >= 18. `npm test` runs 61 tests.
+No runtime dependencies (`cairn sync` shells out to `git`). Node >= 18. `npm test`
+runs 74 tests.

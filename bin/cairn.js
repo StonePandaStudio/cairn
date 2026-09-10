@@ -3,14 +3,12 @@
 
 // cairn — shared AI workflow scaffolding for Stone Panda repos.
 //
-// v1 surface:
+// Surface:
 //   cairn tracker <cmd>   issue tracker client (replaces the copied ai/scripts/jira.js)
 //   cairn doctor          cross-repo drift report
 //   cairn init            make a repo cairn-managed
-//
-// Template rendering (command stubs, WORKFLOW.md, agent role contracts) is v2 and
-// deliberately absent: this release swaps the Jira client under five repos, and
-// mixing that with prompt changes would make any regression unattributable.
+//   cairn render          scaffold ai/ from the bundled presets (greenfield)
+//   cairn sync            three-way merge of preset changes into a rendered repo
 
 const HELP = `cairn — shared AI workflow scaffolding
 
@@ -20,6 +18,7 @@ Usage: cairn <command> [options]
   doctor [options]      cross-repo drift report (cairn doctor --help)
   init [options]        make a repo cairn-managed (cairn init --help)
   render [options]      scaffold ai/ from the bundled presets (cairn render --help)
+  sync [options]        merge preset changes into an already-rendered repo (cairn sync --help)
   version               print version
 
 Run \`cairn <command> --help\` for command options.
@@ -43,6 +42,10 @@ function main() {
 
     case 'render':
       process.exitCode = require('../lib/render/cli').main(rest);
+      return;
+
+    case 'sync':
+      process.exitCode = require('../lib/sync/cli').main(rest);
       return;
 
     case 'version':
