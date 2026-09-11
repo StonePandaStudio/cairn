@@ -4,11 +4,41 @@ Execution order for what comes after v1. The *why* is in `DESIGN.md`
 ("The cross-repo context layer", "### Sequencing"); this is the running order and
 where we are in it.
 
-Last updated 2026-09-10 — `cairn sync` built (`0.6.0`, 74 tests). Not yet published.
+Last updated 2026-09-11 — `0.6.0` published, charityiq-app split into 3 repos and
+rendered on it; `0.6.1` fixes `/create-brief` (below), not yet published.
 
-**Resume here:** `git push` + `npm publish 0.6.0` → charityiq Phase 2 (below,
-now rendered by a cairn that stores `_cairn/base/` from the start). Then back to
-the roadmap: snap-proof gate sprint → context-resolver prototype → workspace layer.
+**Resume here:** `npm publish 0.6.1` → `cairn sync` in backend/frontend/admin to
+pick up the fixed `create-brief.md` → charityiq starts driving `/create-brief` for
+real. Then back to the roadmap: snap-proof gate sprint → context-resolver
+prototype → workspace layer.
+
+## `0.6.1` — `/create-brief` didn't support a new, ID-less task
+
+Found using charityiq: with a remote tracker you can't predict the next issue key
+(YouTrack assigns it), so `/create-brief <key> <step>`'s stub gave no way to start
+a task without guessing one — a user tried passing a title instead of a key,
+malformed the call, got a parse error. Fixed by templating, not code (`create_brief`
+is an agent instruction, not a function):
+
+- `presets/core/commands/_stub.md` — `create_brief`'s stub now says, when the
+  tracker is remote, that omitting the task ID is valid (`{{ tracker.provider }}`
+  mints the key) — never guess/increment one yourself.
+- Same stub — for every tracker, leftover free text past the ID/step is now
+  documented as the brief's title, not an error, so `/create-brief Add CSV export`
+  seeds `## What` instead of erroring.
+- `presets/core/agents/architect.md` — `create_brief(task, step, title?)` Step 0
+  spec updated to match (title seeds `## What`; task-omitted path unchanged, now
+  explicit about never guessing a key).
+- `lib/render/index.js` — two new per-step context flags: `step.createsTask`
+  (`fn === 'create_brief'`) and `step.canOmitTask` (`createsTask && tracker.remote`).
+  Both branches templated in the stub; every other step (`enrich-description`,
+  `plan-task`, `execute-plan`, `code-review`) renders unchanged.
+- 1 new test (`test/run.js`) — remote vs `none` tracker render differs correctly,
+  other steps untouched. 75 passing.
+
+Propagation is the real test of `cairn sync`: publish, then `cairn sync` in
+backend/frontend/admin should fast-forward `.claude/commands/create-brief.md`
+cleanly (none of the three have hand-edited it).
 
 ## Where we are (0.6.0)
 
@@ -113,28 +143,40 @@ provider, and read both `ai/contexts/` trees for the context-convention design.
 `local`'s real driver is the `partOf` join key. It lands with the context layer
 (step 2). `jira-server` stays a provider — other projects (e.g. glossr) may still use it.
 
-## charityiq-app — on cairn's workflow (Phase 2, after 0.5.0 publish)
+## charityiq-app — on cairn's workflow (Phase 2)
 
-Separate product, Next.js 16 + Drizzle + Supabase, Sprint 0, own governance
-(`CLAUDE.md` hard rules, `docs/adr/`, versioned prompts). Single repo — cairn's
-cross-repo value doesn't apply yet, but the founder wants the brief→plan→execute
-workflow. Nothing in charityiq is touched until 0.5.0 is on npm.
+Plan changed shape mid-flight: not a single Next.js+Drizzle+Supabase repo — split
+into `D:\projects\charityiq-app\{backend,frontend,admin}` (+ `docs/`, `legacy/` —
+untouched), each its own repo. cairn's cross-repo value *does* apply now, sooner
+than expected.
 
-1. `git push` + `npm publish` `0.5.0`
-2. In charityiq: `pnpm add -D @stonepandastudio/cairn`
-3. `npx cairn init --stack nextjs,react,tailwind,drizzle --tracker none --render`
-   → creates `cairn.config.json`, `_cairn/`, `.claude/commands/*.md`, `ai/agents/*`,
-   `ai/AGENTS.md`, `ai/WORKFLOW.md`, `ai/infrastructure/code-guidelines.md` (seed —
-   fork it). Nothing pre-existing is overwritten.
-4. Reconcile `CLAUDE.md` — one line: `@ai/AGENTS.md` (or leave the workflow opt-in)
-5. Fork `ai/infrastructure/code-guidelines.md` — fold in the charityiq hard rules
-   (`requireTier`+`audit.log`, RAG-grounding) which stay tier-3
-6. Drive development through `/create-brief` → `/enrich-description` → `/plan-task` →
-   `/execute-plan` → `/code-review`
+- [x] `0.6.0` published, all three on it.
+- [x] **backend** — `cairn init --stack nestjs,typeorm --tracker youtrack
+  --project-key CI --render` (postgres is typeorm's driver, not a separate preset).
+- [x] **admin** (react admin frontend) — `cairn init --stack react,tailwind
+  --tracker youtrack --project-key CI --render`.
+- [x] **frontend** (react client) — same as admin, initialized after.
+- [x] Root `repos.json` — `backend`/`frontend`/`admin` (docs/legacy excluded),
+  rules for command stubs, `AGENTS.md`/`WORKFLOW.md`, agent docs,
+  `code-guidelines.md`, all `cohort: "stack"` — cross-stack `cohort: "all"` was
+  pure agent-name noise (`NestjsXAgent` vs `ReactXAgent`) that the doctor's
+  normalizer can't fold, since v2 render derives names rather than reading them
+  from a `vars` block. `cairn doctor` clean: 11 `IDENTICAL`, backend alone in the
+  nestjs cohort (nothing to compare against yet).
+- [x] Stale root `cairn.config.json` (from before the split) deleted.
+- [ ] Reconcile each repo's `CLAUDE.md` — one line: `@ai/AGENTS.md`
+- [ ] Fork each repo's `ai/infrastructure/code-guidelines.md` — fold in the
+  charityiq hard rules (`requireTier`+`audit.log`, RAG-grounding) which stay tier-3
+- [ ] Drive development through `/create-brief` → `/enrich-description` →
+  `/plan-task` → `/execute-plan` → `/code-review`
 
 Known rough edges in the render (iterate as charityiq uses it): the "read mandatory
 guidelines" lists in the agent docs still name `mappers.md` (snap-specific, no-ops
 for a repo without it); `INITIAL_PROMPT.md` is not rendered (per-project).
+
+Once charityiq has real `ai/contexts/` across backend/frontend/admin, it becomes a
+second data point for the context-convention design alongside snap-proof (step A) —
+worth reading when C (context-resolver prototype) starts.
 
 ## Order after 0: A → C → B
 

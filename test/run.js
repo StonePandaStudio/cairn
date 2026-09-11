@@ -797,6 +797,32 @@ atest('render: scaffolds ai/ from presets, greenfield-guarded', async () => {
   }
 });
 
+atest('render: create-brief.md documents omitting the task ID only for a remote tracker', async () => {
+  const { main: init } = require('../lib/init');
+  const log = console.log;
+  console.log = () => {};
+  try {
+    const remote = tmpRepo();
+    init(['--repo', remote, '--stack', 'nestjs', '--tracker', 'youtrack', '--project-key', 'CI', '--render', '--no-color']);
+    const remoteBrief = fs.readFileSync(path.join(remote, '.claude/commands/create-brief.md'), 'utf8');
+    assert.match(remoteBrief, /free-text title/, 'title-seeding hint present');
+    assert.match(remoteBrief, /Omit the task ID/, 'omit-task hint present for a remote tracker');
+    assert.match(remoteBrief, /YouTrack/);
+
+    const none = tmpRepo();
+    init(['--repo', none, '--stack', 'react', '--tracker', 'none', '--render', '--no-color']);
+    const noneBrief = fs.readFileSync(path.join(none, '.claude/commands/create-brief.md'), 'utf8');
+    assert.match(noneBrief, /free-text title/, 'title-seeding hint present regardless of tracker');
+    assert.doesNotMatch(noneBrief, /Omit the task ID/, 'no tracker to mint a key, so no omit-task hint');
+
+    // The hint is create_brief-specific — every other step stays generic.
+    const execPlan = fs.readFileSync(path.join(remote, '.claude/commands/execute-plan.md'), 'utf8');
+    assert.doesNotMatch(execPlan, /free-text title|Omit the task ID/);
+  } finally {
+    console.log = log;
+  }
+});
+
 // --------------------------------------------------------------------- sync
 
 const sync = require('../lib/sync');

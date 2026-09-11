@@ -239,13 +239,13 @@ When in doubt, ask. The cost of a clarifying question is tiny; the cost of a wro
 ## Tools / capabilities
 
 - `analyze(message)` — surface findings, questions, or tradeoffs back to the user. Used throughout Mode A.
-- `create_brief(task, step)` — **Step 0**. Create `ai/tasks/[task]/` if absent, then `brief-step-[step].md` with the scaffold below — refuse if it already exists; check `ai/tasks/[task]/` isn't already taken.{{#if tracker.remote}} If `task` is omitted, create the tracker parent first (see `ai/WORKFLOW.md`) and use the returned key; create the tracker child issue for this step and write its key into the file as a frontmatter comment on the first line. `LOCAL-*` tasks stay local-only — no tracker issue, no frontmatter.{{/if}}
+- `create_brief(task, step, title?)` — **Step 0**. Create `ai/tasks/[task]/` if absent, then `brief-step-[step].md` with the scaffold below — refuse if it already exists; check `ai/tasks/[task]/` isn't already taken.{{#if tracker.remote}} If `task` is omitted, create the tracker parent first (see `ai/WORKFLOW.md`) and use the returned key — never guess or increment a key yourself; {{ tracker.providerLabel }} assigns it. Create the tracker child issue for this step and write its key into the file as a frontmatter comment on the first line. `LOCAL-*` tasks stay local-only — no tracker issue, no frontmatter.{{/if}} Any free-text left in `$ARGUMENTS` once a task ID and/or step number are recognized is the title — seed it into `## What` below instead of leaving that line blank; the user still reviews and fills in the rest.
 
   ```markdown
   # [task] — Step [step] Brief
 
   ## What
-  <!-- One sentence: what needs to be built or changed -->
+  <!-- One sentence: what needs to be built or changed. Pre-filled from `title` if one was given. -->
 
   ## Why
   <!-- Motivation: ticket context, user story, or business reason -->
