@@ -4,23 +4,22 @@ Execution order for what comes after v1. The *why* is in `DESIGN.md`
 ("The cross-repo context layer", "### Sequencing"); this is the running order and
 where we are in it.
 
-Last updated 2026-09-14 — `0.6.4` published and synced into all 6 repos (snap-proof
-backend/frontend via yarn, charityiq backend/frontend/admin/docs via npm), all clean
-fast-forwards, no conflicts. **Verified.** `PROOF-6` fully closed: re-reviewed after the B1 fix,
-0 blocking issues, 45 unit tests passing. First real ticket through the whole
-pipeline end to end — though `create_brief`/`enrich_description`/`plan_task`/
-`execute_plan` ran on it *before* 0.6.4 rescued backend/frontend's stuck command
-stubs, so it doesn't count as a clean run on current templates for those steps; only
-the two `code_review` passes ran on current `reviewer.md`.
+Last updated 2026-09-14 — `0.6.4` verified across all 6 repos (see below). The
+legacy-command backlog is resolved: `0.7.0` (below) adopts the QA subsystem and
+tracker-assign/status/archive-tasks as real cairn presets, and the 7 pure-duplicate
+legacy files are `git rm`'d in snap-proof backend/frontend (staged, uncommitted).
+Not yet published; not yet synced into any repo.
 
-**Resume here:** the gate ("use it for a sprint") isn't done — one ticket, and not
-even fully on current templates. Two threads, either order:
-1. Drive one more real snap-proof ticket through the full pipeline now that every
-   repo is on current templates end to end, as the actual clean validation.
-2. Decide what to do with the still-unaddressed legacy-command backlog flagged
-   earlier (`review-plan.md`, `node-*.md`/`angular-*.md`, the QA-track files with no
-   cairn equivalent) — the `/review-plan` vs `/code-review` mixup is exactly the
-   failure mode this would prevent from recurring.
+**Resume here:** `npm publish 0.7.0` → `cairn sync` in snap-proof backend + frontend
+(picks up the new QA/tracker/archive presets; the duplicate removals are separate
+`git rm`s already staged there, commit them too) → charityiq's 5 repos (no QA/e2e
+docs there yet — charityiq wasn't part of this backlog, only snap-proof was; a plain
+sync just picks up 0.6.4→0.7.0 for it). The gate ("use it for a sprint") is still
+open regardless: one ticket (`PROOF-6`), not even fully on current templates for
+`create_brief`→`execute_plan`. Drive one more real ticket through the full pipeline
+now that every repo is genuinely current, as the actual clean validation — the QA
+pipeline (`/plan-tests`→`/execute-test-plan` or `/run-qa`) is itself now real enough
+to exercise on that same ticket, first real test of it too.
 
 Then the roadmap: finish the snap-proof gate sprint → context-resolver
 prototype → workspace layer.
@@ -50,6 +49,85 @@ way becomes real input to C's design (declared counterpart links, what "drift"
 looks like in practice, whether the charityiq docs-as-source shape needs its own
 handling). Do not build ad hoc propagation tooling or start C early to solve this
 faster — see the gate ordering above.
+
+## `0.7.0` — adopt the legacy backlog: tracker commands, archive-tasks, the QA subsystem
+
+Audited every legacy (non-cairn) `.claude/commands/` and `ai/agents/` file in
+snap-proof backend/frontend (a subagent fork read all ~21 files against the current
+presets — see the session for the full triage). Three verdicts: pure duplicates
+(same role, pre-cairn naming — deleted), functionality already fully covered by
+cairn's tracker CLI but never wrapped in a command doc (adopted, cheap), and a
+genuinely uncovered QA/test-generation subsystem (adopted, real design work).
+
+**Removed — 7 files, `git rm`'d in snap-proof (staged, not yet committed):**
+backend's `node-architect.md`/`node-developer.md`/`node-reviewer.md`/
+`.claude/commands/review-plan.md` (the file behind the `/review-plan` vs
+`/code-review` mixup earlier), frontend's `angular-developer.md`/
+`angular-reviewer.md`/`architect-lead.md` (the last one orphaned — no command even
+referenced it).
+
+**New — tracker-assign/status, always paired with a remote tracker:**
+- `presets/core/commands/tracker-status.md` / `tracker-assign.md` — renders as
+  `.claude/commands/{{ tracker.slug }}-status.md` / `-assign.md` (e.g.
+  `youtrack-status.md`), matching the exact filenames snap-proof already had.
+  1-token arg reports the current value, 2-token sets it — proven pattern lifted
+  from the legacy files almost verbatim, since the underlying `get`/`set-status`/
+  `set-assignee`/`close` already exist in `lib/tracker/cli.js`.
+- Fixed a real bug surfaced while writing these: `presets/core/WORKFLOW.md`
+  referenced `cairn tracker close-task`, which has never existed as a CLI
+  subcommand (only `close`, which already fans out to every subtask). Now says
+  `close` and names the new `-assign` command too.
+- `lib/render/index.js` — these two render only when `tracker.remote`; unlike every
+  other target they're not part of `workflow.steps`, so they're a separate
+  unconditional-then-gated block in `renderTargets`, not a new step type.
+
+**New — `archive-tasks`, universal (no tracker dependency):**
+`presets/core/commands/archive-tasks.md` — 2-week-old `ai/tasks/[KEY]/` folders to
+`ai/tasks/archive/<year>/<month>/`, git-log creation date with an mtime fallback,
+collision-suffix handling. Renders unconditionally (works for `tracker: none` too,
+archiving `LOCAL-*` folders same as tracker ones).
+
+**New — the QA subsystem, the real work:**
+Turned out to be two unrelated systems under one legacy label, not one:
+- **NestJS**: a 3-agent unit/integration-test pipeline — `qa-architect`
+  (`plan_tests(task, feature)`, named Jest cases, service/controller/integration
+  split) → `qa-developer` (`execute_test_plan`, Haiku, follows the plan verbatim,
+  one correction attempt per file, scoped runs only) → `qa-orchestrator`
+  (`run_qa(task, feature|all)`, Sonnet-or-higher, sequential Developers — never
+  parallel, two features can race a shared factory file — batch fan-in in `all`
+  mode, continue-on-failure per feature).
+- **Angular**: unrelated in shape — a single standalone Playwright e2e agent
+  (`qa.md`, `add_e2e_tests(path)`, `data-testid`-only-when-needed, page objects,
+  accessible-locator-first) invoked ad hoc via `/add-e2e-tests`, outside the task
+  workflow entirely.
+- Both **generified**: the legacy source had snap-proof-backend's exact API-module
+  name irregularities hardcoded into `qa-architect` (a table nobody else's codebase
+  would match), exact `yarn` script names and helper function names baked into
+  `qa-developer`, and a stale monorepo-era `frontend/e2e/` path prefix throughout
+  `angular-qa` (the actual path is `e2e/` at repo root — confirmed, the repo *is*
+  "frontend" now, post-split). All replaced with "read `ai/contexts/testing/
+  conventions.md` for this project's specifics" — same tier pattern as
+  `code-guidelines.md` — rather than copied verbatim.
+- `presets/nestjs/agents/qa-{architect,developer,orchestrator}.md` +
+  `presets/nestjs/commands/{plan-tests,execute-test-plan,run-qa}.md`;
+  `presets/angular/agents/qa.md` + `presets/angular/commands/add-e2e-tests.md`.
+- `lib/render/index.js` — new mechanism, not hardcoded to QA: for each stack entry,
+  glob `presets/<entry>/agents/*.md` and `presets/<entry>/commands/*.md` and render
+  every file found. Generic on purpose — the next stack-specific addon (any stack,
+  any shape) needs no render-code change, just files in the right folder.
+  `{{ model }}` in these resolves exactly like `reviewer.md`'s (the top-level tier);
+  `qa-developer.md` states Haiku as plain text instead, matching `developer.md`'s
+  own convention rather than introducing a second model-variable scheme.
+- 3 new tests (`test/run.js`): tracker-status/assign gate on `tracker.remote` and
+  are named after the slug; `close-task` is asserted absent (regression guard for
+  the WORKFLOW.md fix); QA files render only for the stack that ships them (nestjs
+  gets QA-pipeline docs, angular gets `qa.md`, react gets neither). 78 passing.
+- Verified: real render of both `nestjs,typeorm` and `angular` configs, spot-checked
+  `{{ tracker.exampleKey }}`/`{{ model }}` substitution by hand.
+
+Not extended to charityiq — none of backend/frontend/admin had this legacy
+functionality to begin with, so there's nothing to adopt there; `cairn sync` will
+just pick up the version bump.
 
 ## `0.6.4` — `cairn sync` silently orphaned any preset target a pre-cairn file already occupied
 

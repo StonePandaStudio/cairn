@@ -823,6 +823,65 @@ atest('render: create-brief.md documents omitting the task ID only for a remote 
   }
 });
 
+atest('render: archive-tasks is universal; tracker-status/assign only render with a remote tracker, named after it', async () => {
+  const { main: init } = require('../lib/init');
+  const log = console.log;
+  console.log = () => {};
+  try {
+    const remote = tmpRepo();
+    init(['--repo', remote, '--stack', 'nestjs', '--tracker', 'youtrack', '--project-key', 'CI', '--render', '--no-color']);
+    assert.ok(fs.existsSync(path.join(remote, '.claude/commands/archive-tasks.md')), 'archive-tasks renders with a remote tracker');
+    assert.ok(fs.existsSync(path.join(remote, '.claude/commands/youtrack-status.md')), 'named after the tracker slug');
+    assert.ok(fs.existsSync(path.join(remote, '.claude/commands/youtrack-assign.md')));
+    const status = fs.readFileSync(path.join(remote, '.claude/commands/youtrack-status.md'), 'utf8');
+    assert.match(status, /set-status/);
+    assert.match(status, /\.js\s*\n?\s*close \[key\]/, 'points at the real `close` subcommand, not the old close-task alias');
+    assert.doesNotMatch(status, /close-task/, 'close-task is not a real cairn tracker subcommand');
+
+    const none = tmpRepo();
+    init(['--repo', none, '--stack', 'react', '--tracker', 'none', '--render', '--no-color']);
+    assert.ok(fs.existsSync(path.join(none, '.claude/commands/archive-tasks.md')), 'archive-tasks renders with no tracker too');
+    assert.ok(!fs.existsSync(path.join(none, '.claude/commands/tracker-status.md')));
+    assert.ok(!fs.existsSync(path.join(none, '.claude/commands/tracker-assign.md')));
+  } finally {
+    console.log = log;
+  }
+});
+
+atest('render: stack-owned QA agents/commands render only for the stack that ships them', async () => {
+  const { main: init } = require('../lib/init');
+  const log = console.log;
+  console.log = () => {};
+  try {
+    const nest = tmpRepo();
+    init(['--repo', nest, '--stack', 'nestjs', '--tracker', 'none', '--render', '--no-color']);
+    for (const f of ['qa-architect.md', 'qa-developer.md', 'qa-orchestrator.md']) {
+      assert.ok(fs.existsSync(path.join(nest, 'ai/agents', f)), `nestjs ships ${f}`);
+    }
+    for (const f of ['plan-tests.md', 'execute-test-plan.md', 'run-qa.md']) {
+      assert.ok(fs.existsSync(path.join(nest, '.claude/commands', f)), `nestjs ships ${f}`);
+    }
+    assert.ok(!fs.existsSync(path.join(nest, 'ai/agents/qa.md')), 'no angular-only qa.md on nestjs');
+    const qaArchitect = fs.readFileSync(path.join(nest, 'ai/agents/qa-architect.md'), 'utf8');
+    assert.match(qaArchitect, /requires \*\*claude-sonnet-5 or higher\*\*/, '{{ model }} resolves the same as reviewer.md');
+    const qaDeveloper = fs.readFileSync(path.join(nest, 'ai/agents/qa-developer.md'), 'utf8');
+    assert.match(qaDeveloper, /\*\*Model:\*\* Haiku/, 'qa-developer states Haiku as plain text, like developer.md');
+
+    const ng = tmpRepo();
+    init(['--repo', ng, '--stack', 'angular', '--tracker', 'none', '--render', '--no-color']);
+    assert.ok(fs.existsSync(path.join(ng, 'ai/agents/qa.md')));
+    assert.ok(fs.existsSync(path.join(ng, '.claude/commands/add-e2e-tests.md')));
+    assert.ok(!fs.existsSync(path.join(ng, 'ai/agents/qa-architect.md')), 'no nestjs-only qa docs on angular');
+
+    const react = tmpRepo();
+    init(['--repo', react, '--stack', 'react', '--tracker', 'none', '--render', '--no-color']);
+    assert.ok(!fs.existsSync(path.join(react, 'ai/agents/qa.md')));
+    assert.ok(!fs.existsSync(path.join(react, 'ai/agents/qa-architect.md')));
+  } finally {
+    console.log = log;
+  }
+});
+
 // --------------------------------------------------------------------- sync
 
 const sync = require('../lib/sync');

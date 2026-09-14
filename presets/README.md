@@ -20,6 +20,10 @@ presets/
   nestjs/     NestJS + TypeScript framework spine, validation-stack + ORM agnostic
     variants/ validation-zod.md, validation-class-validator.md
     slots/    the framework side of each {{> stack/… }} point
+    agents/   qa-architect.md, qa-developer.md, qa-orchestrator.md — optional QA
+              pipeline (plan_tests/execute_test_plan/run_qa), stack-owned content,
+              not a shared core contract (no equivalent shape on other stacks)
+    commands/ plan-tests.md, execute-test-plan.md, run-qa.md — stubs for the above
   typeorm/    ORM add-on — entities, queries, migrations, decomposition
     slots/    the ORM side of the same {{> stack/… }} points (appended to nestjs)
   drizzle/    ORM add-on — Drizzle schema, drizzle-kit migrations, RLS in migrations
@@ -27,6 +31,9 @@ presets/
   angular/    Angular spine + SCSS theming + i18n (styling still inline here — one system, two repos)
     variants/ i18n-glossr.md, i18n-external-service.md
     slots/    the Angular side of the same {{> stack/… }} points
+    agents/   qa.md — optional standalone Playwright e2e-test agent (add_e2e_tests),
+              stack-owned, unrelated in shape to nestjs's QA pipeline
+    commands/ add-e2e-tests.md — stub for the above
   react/      React frontend spine — components, hooks, state, testing (styling-agnostic)
     slots/    the React side of the same {{> stack/… }} points
   nextjs/     App-Router layer over `react` — server/client boundary, actions, route handlers

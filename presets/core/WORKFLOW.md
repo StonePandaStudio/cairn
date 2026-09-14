@@ -43,7 +43,9 @@ it locally, mention that once, never sync it.
 {{/each}}
 
 Later stage moves (`{{ tracker.reviewStage }}` onward) are manual — the tracker UI,
-`/{{ tracker.slug }}-status`, or `cairn tracker close-task`.
+`/{{ tracker.slug }}-status`, or `cairn tracker close` (closes the parent and every
+subtask together). Assignee changes: `/{{ tracker.slug }}-assign`. Both commands are
+manual-trigger only, never called by a workflow step.
 
 Everything goes through `cairn tracker <command> …` (or the vendored
 `ai/scripts/*.js` shim). Credentials live in `.env` (gitignored).
