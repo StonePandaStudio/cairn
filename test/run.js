@@ -925,7 +925,7 @@ test('sync: a file deleted locally is restored from the current render', () => {
   assert.strictEqual(action.write, 'a\nb\n');
 });
 
-test('sync: a preset file the manifest lacks is CREATED, greenfield-guarded', () => {
+test('sync: a preset file the manifest lacks is CREATED, greenfield-guarded; a squatter is UNTRACKED, not invisible', () => {
   const dir = tmpRepo();
   const m = manifest.emptyManifest();
   manifest.record(m, 'ai/kept.md', 'core/agents/x.md', 'k\n');
@@ -935,7 +935,7 @@ test('sync: a preset file the manifest lacks is CREATED, greenfield-guarded', ()
   manifest.writeManifest(dir, m);
 
   // A second target the manifest has never seen. One is absent (create it), one
-  // already sits on disk unmanaged (leave it).
+  // already sits on disk unmanaged — reported, not silently left alone or clobbered.
   fs.writeFileSync(path.join(dir, 'ai/squatter.md'), 'not ours\n');
   const { planSync } = sync;
   const orig = require('../lib/render').renderTargets;
@@ -950,7 +950,54 @@ test('sync: a preset file the manifest lacks is CREATED, greenfield-guarded', ()
     const { actions } = planSync({ config: {}, presetsDir: 'x', manifest: m, repoPath: dir });
     const byRel = Object.fromEntries(actions.map((a) => [a.rel, a.outcome]));
     assert.strictEqual(byRel['ai/new.md'], sync.OUTCOME.CREATED);
-    assert.strictEqual(byRel['ai/squatter.md'], undefined, 'an unmanaged file on disk is left alone');
+    assert.strictEqual(byRel['ai/squatter.md'], sync.OUTCOME.UNTRACKED);
+    const squatterAction = actions.find((a) => a.rel === 'ai/squatter.md');
+    assert.strictEqual(squatterAction.write, undefined, 'never written without --adopt-base');
+  } finally {
+    require('../lib/render').renderTargets = orig;
+  }
+});
+
+test('sync: --adopt-base brings a squatter under management without clobbering it', () => {
+  const dir = tmpRepo();
+  const m = manifest.emptyManifest();
+  manifest.writeManifest(dir, m);
+  fs.mkdirSync(path.join(dir, 'ai'), { recursive: true });
+  fs.writeFileSync(path.join(dir, 'ai/squatter.md'), 'legacy content\n');
+
+  const { planSync } = sync;
+  const orig = require('../lib/render').renderTargets;
+
+  try {
+    // First: template matches what's already on disk — adopting should be a
+    // quiet UNCHANGED, and the squatter's content must survive untouched.
+    require('../lib/render').renderTargets = () => ({
+      targets: [['ai/squatter.md', 'legacy content\n', 'core/agents/z.md']],
+    });
+    {
+      const { actions } = planSync({ config: {}, presetsDir: 'x', manifest: m, repoPath: dir, adoptBase: true });
+      const action = actions.find((a) => a.rel === 'ai/squatter.md');
+      assert.strictEqual(action.outcome, sync.OUTCOME.UNCHANGED);
+      assert.strictEqual(action.source, 'core/agents/z.md');
+      assert.strictEqual(fs.readFileSync(path.join(dir, 'ai/squatter.md'), 'utf8'), 'legacy content\n');
+    }
+
+    // Apply it for real (same mock still active) so the manifest entry + base
+    // actually land.
+    const { actions: real } = sync.planSync({ config: {}, presetsDir: 'x', manifest: m, repoPath: dir, adoptBase: true });
+    const { applyPlan } = require('../lib/sync/cli');
+    const { makePaint } = require('../lib/paint');
+    applyPlan(dir, m, real, makePaint(false));
+    assert.ok(m.files['ai/squatter.md'], 'manifest entry created on first adopt');
+
+    // Now the template moves. A plain sync (no --adopt-base needed this time,
+    // it's tracked now) should fast-forward.
+    require('../lib/render').renderTargets = () => ({
+      targets: [['ai/squatter.md', 'new template\n', 'core/agents/z.md']],
+    });
+    const { actions } = planSync({ config: {}, presetsDir: 'x', manifest: m, repoPath: dir, adoptBase: false });
+    const action = actions.find((a) => a.rel === 'ai/squatter.md');
+    assert.strictEqual(action.outcome, sync.OUTCOME.FAST_FORWARD);
   } finally {
     require('../lib/render').renderTargets = orig;
   }

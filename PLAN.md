@@ -4,18 +4,72 @@ Execution order for what comes after v1. The *why* is in `DESIGN.md`
 ("The cross-repo context layer", "### Sequencing"); this is the running order and
 where we are in it.
 
-Last updated 2026-09-14 — `0.6.2` published, not yet synced anywhere. snap-proof gate
-sprint underway: `PROOF-6` (image cleanup) ran the full `create_brief` →
-`enrich_description` → `plan_task` → `execute_plan` (Haiku) → `code_review` (Opus)
-pipeline end to end on real work — first full validation. `0.6.3` loosens the
-developer/reviewer model gates (below), not yet published.
+Last updated 2026-09-14 — `0.6.3` published and synced into snap-proof
+backend/frontend, which is how `0.6.4` (below) got found: `/code-review` on `PROOF-6`
+still hit the old pre-cairn `node-reviewer.md`, because the user ran the repo's
+*legacy* `/review-plan` command, not cairn's `/code-review` — which led to
+discovering `cairn sync` had been silently leaving 7 preset targets per repo on
+their original pre-cairn content since `cairn init`, unmanifested, forever. `0.6.4`
+fixes that (below), not yet published.
 
-**Resume here:** `npm publish 0.6.3` → `cairn sync` in snap-proof backend/frontend +
-charityiq backend/frontend/admin (picks up both 0.6.2 and 0.6.3 in one sync) →
-re-run `/code-review` on `PROOF-6` to confirm the report now lands in
+**Resume here:** `npm publish 0.6.4` → `cairn sync --adopt-base` in snap-proof
+backend/frontend (rescues the 7 stuck files — verified via local dry-run already,
+both clean fast-forwards) → charityiq backend/frontend/admin (plain `cairn sync`,
+unaffected by this bug, just picks up 0.6.2-0.6.4) → re-run `/code-review PROOF-6 1`
+(not `/review-plan`) to confirm the report lands in
 `ai/tasks/PROOF-6/review-step-1.md` and to recover the lost class-2-definition
-finding. Then back to the roadmap: finish the snap-proof gate sprint →
-context-resolver prototype → workspace layer.
+finding. Then decide what to do with the now-orphaned legacy commands/agent docs
+(`review-plan.md`, `node-*.md`, `angular-*.md`, the QA-track files with no cairn
+equivalent) before finishing the snap-proof gate sprint → context-resolver
+prototype → workspace layer.
+
+## `0.6.4` — `cairn sync` silently orphaned any preset target a pre-cairn file already occupied
+
+Found chasing why `/code-review` on `PROOF-6` still showed the pre-0.6.2 reviewer
+doc after two syncs: the user had actually run the repo's legacy `/review-plan`
+command (which reads `ai/agents/node-reviewer.md`, untouched pre-cairn content), not
+cairn's own `/code-review`. Real bug underneath that mix-up: `planSync`'s loop over
+brand-new preset targets (`lib/sync/index.js`, the block after the manifest loop)
+skipped any target whose path already had a file on it —
+`if (fs.existsSync(...)) continue;` — with no record, no report, and no
+`--adopt-base` rescue path (that flag only wired into the loop over
+*already-manifested* entries). `cairn init` on a repo with pre-existing same-named
+files left them all in exactly this state. In snap-proof backend that was 7 files:
+4 command stubs + `ai/AGENTS.md` + `ai/infrastructure/code-guidelines.md` (+196
+lines behind) + `ai/WORKFLOW.md`; frontend had all 5 command stubs + the same three
+docs. None of it was visible in `cairn sync`'s output, `cairn doctor`, or the
+manifest — indistinguishable from "nothing to do here."
+
+- `lib/sync/index.js` — new `OUTCOME.UNTRACKED`. A preset target with no manifest
+  entry and an existing file at that path now reports `UNTRACKED` (needs
+  `--adopt-base`) instead of vanishing; with `--adopt-base` it's routed through
+  `planFile` the same way an already-tracked no-base entry is (adopt current
+  content as base, then the normal 2x2 — quiet if template already matches,
+  fast-forward/merge/conflict otherwise). `planFile`'s no-op/local-edit branch
+  doesn't set `source`/`write` for an already-managed file (nothing to do) — since
+  this file has never been recorded at all, both are forced so this run always
+  creates its manifest entry.
+- `lib/sync/cli.js` — `UNTRACKED` colored red, folded into the same non-zero-exit
+  and "re-run with --adopt-base" reporting as `NO_BASE`; help text and the
+  `--adopt-base` description updated to name the squatter case explicitly.
+- 2 tests changed/added (`test/run.js`): the old "squatter is left alone,
+  invisibly" assertion now asserts `UNTRACKED`, plus a new adopt-base round-trip
+  test (quiet adopt when content already matches → manifest entry created →
+  a later template change fast-forwards normally). 76 passing.
+- Verified against the real repos before publishing: dry-run on snap-proof
+  backend/frontend both show clean `fast-forward` for all 7/8 previously-stuck
+  files, no conflicts; charityiq (greenfield, no pre-cairn collisions) shows no
+  new `UNTRACKED`/`CREATED` at all — only the expected `code-guidelines.md` local
+  edit already tracked in the gate TODO.
+
+Separate from the code fix: this surfaces a real cleanup backlog in snap-proof —
+pre-cairn `.claude/commands/{review-plan,plan-tests,run-qa,task-assign,task-status,
+youtrack-assign,youtrack-status,execute-test-plan,archive-tasks}.md` and
+`ai/agents/{node,angular}-*.md` are either duplicate-by-different-name (dangerous —
+`/review-plan` vs `/code-review` is exactly what caused the confusion this session)
+or genuinely orphaned (the QA workflow track cairn has no equivalent for yet). Not
+addressed here — needs the user to decide archive vs. keep per file, not something
+to silently delete.
 
 ## `0.6.3` — developer/reviewer model gates blocked going *up* a tier
 
