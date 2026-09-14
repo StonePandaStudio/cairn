@@ -4,13 +4,42 @@ Execution order for what comes after v1. The *why* is in `DESIGN.md`
 ("The cross-repo context layer", "### Sequencing"); this is the running order and
 where we are in it.
 
-Last updated 2026-09-11 — `0.6.0` published, charityiq-app split into 3 repos and
-rendered on it; `0.6.1` fixes `/create-brief` (below), not yet published.
+Last updated 2026-09-14 — `0.6.1` published and synced (charityiq backend/frontend/
+admin, snap-proof backend/frontend). snap-proof gate sprint underway: `PROOF-6`
+(image cleanup) ran the full `create_brief` → `enrich_description` → `plan_task` →
+`execute_plan` (Haiku) → `code_review` (Opus) pipeline end to end on real work —
+first full validation. `0.6.2` fixes the reviewer-report gap found doing that
+(below), not yet published.
 
-**Resume here:** `npm publish 0.6.1` → `cairn sync` in backend/frontend/admin to
-pick up the fixed `create-brief.md` → charityiq starts driving `/create-brief` for
-real. Then back to the roadmap: snap-proof gate sprint → context-resolver
-prototype → workspace layer.
+**Resume here:** `npm publish 0.6.2` → `cairn sync` in snap-proof backend/frontend +
+charityiq backend/frontend/admin → re-run `/code-review` on `PROOF-6` to confirm the
+report now lands in `ai/tasks/PROOF-6/review-step-1.md` and to recover the lost
+class-2-definition finding. Then back to the roadmap: finish the snap-proof gate
+sprint → context-resolver prototype → workspace layer.
+
+## `0.6.2` — reviewer's report was never written to disk
+
+Found running the gate sprint on snap-proof: `code_review` on `PROOF-6` (Opus) flagged
+the class-2 orphan-image definition as wrong, but the report only ever existed as a
+chat message — the terminal scrollback cleared before it was captured, and there was
+no `ai/tasks/PROOF-6/review-step-1.md` to fall back on. Every other step
+(`brief`/`description`/`plan`) writes its output to `ai/tasks/[task]/`; review was the
+one step that didn't, so its findings can vanish with no way to recover them or diff
+across re-reviews. Fixed by templating (`code_review` is an agent instruction, not a
+function):
+
+- `presets/core/agents/reviewer.md` — Report format section now says to write
+  `ai/tasks/[task]/review-step-[step].md` in addition to printing the report in
+  chat; principle 4 ("Report only. Do not edit files") narrowed to source files,
+  carving out the exception for its own report file.
+- `presets/core/agents/architect.md` — `review-step-[N].md` added to the "File roles
+  at a glance" table (written by Reviewer, not immutable — overwritten on re-review,
+  same as `description`/`plan`).
+- No render/`lib/` changes — pure prose in two rendered agent docs. 75 passing
+  (unchanged; nothing here is render-logic).
+
+Whether the class-2 finding itself was a real bug or a false positive is still open —
+lost with the chat output. Re-running review after this ships is also how we find out.
 
 ## `0.6.1` — `/create-brief` didn't support a new, ID-less task
 

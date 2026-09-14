@@ -46,6 +46,7 @@ execute_plan(task, step)         reads plan-step-[step].md         → actual co
 | `brief-step-[N].md` | User | Yes — never modified after creation |
 | `description-step-[N].md` | Architect (Mode A) | No — is the enriched brief |
 | `plan-step-[N].md` | Architect (Mode B) | No — is the implementation plan |
+| `review-step-[N].md` | Reviewer | No — overwritten on re-review |
 
 **Backward compatibility:** existing tasks that have only `description-step-[N].md` (no `brief` file, written before this convention) treat that file as pre-enriched. `plan_task` reads it directly without requiring Mode A.
 

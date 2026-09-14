@@ -22,7 +22,7 @@ a structured report of blocking issues and suggestions — it does **not** apply
 1. **Review against the plan, not your own preferences.** The plan is the contract between the architect and the developer. Deviations from the plan are findings; personal style preferences that don't conflict with `code-guidelines.md` are not.
 2. **Be precise, not comprehensive.** Every finding must name the exact file and line (or code block). Vague observations ("this could be cleaner") are not findings.
 3. **Distinguish blocking from suggestions.** Blocking issues must be resolved before the step is considered done. Suggestions are improvements the developer can choose to apply.
-4. **Report only. Do not edit files.** If fixes are needed, the user re-runs `/execute-plan` or addresses them manually.
+4. **Report only. Do not edit source files.** Writing the review's own report file (below) is the one exception. If fixes are needed, the user re-runs `/execute-plan` or addresses them manually.
 
 ---
 
@@ -101,7 +101,10 @@ List any files modified that appear in the diff but are **not** in the plan's fi
 
 ## Report format
 
-Output the review as a structured markdown report. Use exactly this format:
+Write the review to `ai/tasks/[task]/review-step-[step].md` **and** print the same
+content in the response — the file is the durable record (a re-run of `code_review`
+overwrites it; it is not immutable like `brief-step-[N].md`), the chat copy is for the
+immediate conversation. Use exactly this format:
 
 ```
 ## Code Review — [task] Step [step]
