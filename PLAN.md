@@ -4,18 +4,35 @@ Execution order for what comes after v1. The *why* is in `DESIGN.md`
 ("The cross-repo context layer", "### Sequencing"); this is the running order and
 where we are in it.
 
-Last updated 2026-09-14 — `0.6.1` published and synced (charityiq backend/frontend/
-admin, snap-proof backend/frontend). snap-proof gate sprint underway: `PROOF-6`
-(image cleanup) ran the full `create_brief` → `enrich_description` → `plan_task` →
-`execute_plan` (Haiku) → `code_review` (Opus) pipeline end to end on real work —
-first full validation. `0.6.2` fixes the reviewer-report gap found doing that
-(below), not yet published.
+Last updated 2026-09-14 — `0.6.2` published, not yet synced anywhere. snap-proof gate
+sprint underway: `PROOF-6` (image cleanup) ran the full `create_brief` →
+`enrich_description` → `plan_task` → `execute_plan` (Haiku) → `code_review` (Opus)
+pipeline end to end on real work — first full validation. `0.6.3` loosens the
+developer/reviewer model gates (below), not yet published.
 
-**Resume here:** `npm publish 0.6.2` → `cairn sync` in snap-proof backend/frontend +
-charityiq backend/frontend/admin → re-run `/code-review` on `PROOF-6` to confirm the
-report now lands in `ai/tasks/PROOF-6/review-step-1.md` and to recover the lost
-class-2-definition finding. Then back to the roadmap: finish the snap-proof gate
-sprint → context-resolver prototype → workspace layer.
+**Resume here:** `npm publish 0.6.3` → `cairn sync` in snap-proof backend/frontend +
+charityiq backend/frontend/admin (picks up both 0.6.2 and 0.6.3 in one sync) →
+re-run `/code-review` on `PROOF-6` to confirm the report now lands in
+`ai/tasks/PROOF-6/review-step-1.md` and to recover the lost class-2-definition
+finding. Then back to the roadmap: finish the snap-proof gate sprint →
+context-resolver prototype → workspace layer.
+
+## `0.6.3` — developer/reviewer model gates blocked going *up* a tier
+
+Found discussing model selection for the pipeline: `developer.md` told the user to
+switch down to Haiku even if already running Sonnet/Opus, and `reviewer.md` hard-
+blocked anything but exact-match Sonnet — so reviewing with Opus (strictly more
+capable, same cost shape — a bounded diff, not open-ended generation) required
+fighting the agent doc instead of just doing it. Changed both to a direction-aware
+check: a higher tier than required proceeds after a one-time confirmation (cost
+tradeoff, not a correctness one); a lower tier still hard-blocks (defeats the point
+of the gate). Prose-only, no render/`lib/` changes:
+
+- `presets/core/agents/developer.md` — Model line: Sonnet/Opus/Fable active →
+  confirm once, continue; anything else → prompt `/model haiku` as before.
+- `presets/core/agents/reviewer.md` — Model Check: `{{ model }}` or higher → confirm
+  once, continue; lower than `{{ model }}` → stop and notify, as before.
+- 75 passing (unchanged).
 
 ## `0.6.2` — reviewer's report was never written to disk
 

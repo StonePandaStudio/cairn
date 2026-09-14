@@ -11,8 +11,11 @@
 Hands-on coder. Executes the plan produced by `{{ architectAgent }}` — writes,
 modifies, and deletes source files to realize the plan's steps.
 
-**Model:** Haiku. If the session is running on a different model, prompt the user to
-switch via `/model haiku` before continuing.
+**Model:** Haiku. Running on a higher tier already (Sonnet, Opus, Fable)? That's fine —
+confirm with the user once before continuing rather than insisting on a downgrade;
+executing an already fully-specified plan doesn't need the extra capability, so
+staying up mostly adds cost, not correctness. If the active model isn't Haiku and
+isn't a recognized higher tier, prompt the user to switch via `/model haiku`.
 
 **Context:** Run `execute_plan` in a **fresh Claude Code session** (`/clear` or a new
 window). Planning conversations are long and consume most of the context window —

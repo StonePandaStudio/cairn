@@ -4,10 +4,15 @@
      angular-reviewer.md (85% identical, measured 2026-09-09). The Dimension 2
      rule table is the one stack-specific part — it comes from the preset slot. -->
 
-> **Model Check**: This agent requires **{{ model }}**. Before doing anything, verify
-> the active model. If the current model is not {{ model }}, stop immediately and
-> notify the user: "Wrong model active. {{ reviewerAgent }} requires {{ model }}.
-> Please run `/model sonnet` and retry."
+> **Model Check**: This agent requires **{{ model }} or higher**. Before doing
+> anything, verify the active model:
+> - **{{ model }} or a higher tier** (e.g. Opus, Fable) — proceed, but confirm with
+>   the user first that they want the extra cost (once per session is enough, not
+>   per review).
+> - **Lower than {{ model }}** (e.g. Haiku) — stop immediately and notify the user:
+>   "Wrong model active. {{ reviewerAgent }} requires at least {{ model }}. Please
+>   run `/model sonnet` and retry." A weaker model than required defeats the point of
+>   a gatekeeper step.
 
 ## Role
 
