@@ -9,6 +9,7 @@
 //   cairn init            make a repo cairn-managed
 //   cairn render          scaffold ai/ from the bundled presets (greenfield)
 //   cairn sync            three-way merge of preset changes into a rendered repo
+//   cairn context         cross-repo authored context layer (prototype)
 
 const HELP = `cairn — shared AI workflow scaffolding
 
@@ -19,6 +20,7 @@ Usage: cairn <command> [options]
   init [options]        make a repo cairn-managed (cairn init --help)
   render [options]      scaffold ai/ from the bundled presets (cairn render --help)
   sync [options]        merge preset changes into an already-rendered repo (cairn sync --help)
+  context <cmd> [...]   cross-repo authored context layer (cairn context --help)
   version               print version
 
 Run \`cairn <command> --help\` for command options.
@@ -46,6 +48,10 @@ function main() {
 
     case 'sync':
       process.exitCode = require('../lib/sync/cli').main(rest);
+      return;
+
+    case 'context':
+      process.exitCode = require('../lib/context/cli').main(rest);
       return;
 
     case 'version':

@@ -25,6 +25,7 @@ npx cairn init --stack nestjs,typeorm --tracker jira-server --project-key MYPROJ
 | `cairn init` | Makes a repo cairn-managed: writes `cairn.config.json`, `_cairn/`, and the shim |
 | `cairn render` | Scaffolds `ai/` + `.claude/commands/` from the bundled presets, from the repo's stack + workflow |
 | `cairn sync` | Re-renders and three-way merges preset changes into a repo that has already rendered |
+| `cairn context <cmd>` | **Prototype.** Resolves `ai/contexts/**/*.md` across a `repos.json` workspace into a graph — declared `counterpartOf` links, inferred reverse edges, and a same-path/same-title suggest pass. `build` / `check` / `counterparts <id>`; `check` never fails CI on its own (`--strict` opts in) |
 
 `cairn render` is **greenfield only**: it writes files that do not exist, records them
 in the manifest, stores the render in `_cairn/base/`, and leaves anything already on

@@ -1193,6 +1193,168 @@ atest('sync: --dry-run writes nothing', async () => {
   }
 });
 
+// ------------------------------------------------------------------- context
+
+const frontmatter = require('../lib/context/frontmatter');
+const context = require('../lib/context');
+
+test('context/frontmatter: scalars, booleans, inline and block arrays', () => {
+  const text = [
+    '---',
+    'counterpartOf: frontend:ai/contexts/entities/invoice.md',
+    'unmanaged: true',
+    'empty:',
+    'inline: [a, b, c]',
+    'block:',
+    '  - x',
+    '  - y',
+    '---',
+    '# Invoice',
+    'body text',
+  ].join('\n');
+  const { data, body } = frontmatter.parse(text);
+  assert.strictEqual(data.counterpartOf, 'frontend:ai/contexts/entities/invoice.md');
+  assert.strictEqual(data.unmanaged, true);
+  assert.strictEqual(data.empty, null);
+  assert.deepStrictEqual(data.inline, ['a', 'b', 'c']);
+  assert.deepStrictEqual(data.block, ['x', 'y']);
+  assert.match(body, /^# Invoice/);
+  assert.strictEqual(frontmatter.firstHeading(body), 'Invoice');
+});
+
+test('context/frontmatter: no fence at all is a no-op, not an error', () => {
+  const { data, body } = frontmatter.parse('# Just a doc\nno frontmatter here\n');
+  assert.deepStrictEqual(data, {});
+  assert.match(body, /^# Just a doc/);
+});
+
+function writeCtx(repoDir, relPath, content) {
+  const abs = path.join(repoDir, relPath);
+  fs.mkdirSync(path.dirname(abs), { recursive: true });
+  fs.writeFileSync(abs, content);
+}
+
+test('context: declared counterpartOf infers the reverse edge and suppresses CANDIDATE', () => {
+  const backend = tmpRepo();
+  const frontend = tmpRepo();
+  writeCtx(backend, 'ai/contexts/entities/invoice.md', '---\ncounterpartOf: frontend:ai/contexts/entities/invoice.md\n---\n# Invoice\n');
+  writeCtx(frontend, 'ai/contexts/entities/invoice.md', '---\n---\n# Invoice\n');
+
+  const graph = context.build([
+    { name: 'backend', path: backend },
+    { name: 'frontend', path: frontend },
+  ]);
+  assert.strictEqual(graph.nodes.size, 2);
+  assert.strictEqual(graph.edges.length, 2);
+  const reverse = graph.edges.find((e) => e.from === 'frontend:ai/contexts/entities/invoice.md');
+  assert.ok(reverse.inferred, 'reverse edge is marked inferred');
+
+  const result = context.check(graph);
+  assert.ok(!result.findings.some((f) => f.type === 'CANDIDATE'), 'a declared link is never also suggested');
+
+  const cp = context.counterparts(graph, 'backend:ai/contexts/entities/invoice.md');
+  assert.strictEqual(cp.length, 1);
+  assert.strictEqual(cp[0].id, 'frontend:ai/contexts/entities/invoice.md');
+  assert.strictEqual(cp[0].title, 'Invoice');
+});
+
+test('context: undeclared same-path pair is CANDIDATE; notCounterpartOf silences it', () => {
+  const backend = tmpRepo();
+  const frontend = tmpRepo();
+  writeCtx(backend, 'ai/contexts/entities/waitlist.md', '# Waitlist\n');
+  writeCtx(frontend, 'ai/contexts/entities/waitlist.md', '# Waitlist\n');
+
+  let graph = context.build([
+    { name: 'backend', path: backend },
+    { name: 'frontend', path: frontend },
+  ]);
+  let result = context.check(graph);
+  assert.ok(result.findings.some((f) => f.type === 'CANDIDATE'));
+
+  writeCtx(backend, 'ai/contexts/entities/waitlist.md', '---\nnotCounterpartOf: [ai/contexts/entities/waitlist.md]\n---\n# Waitlist\n');
+  graph = context.build([
+    { name: 'backend', path: backend },
+    { name: 'frontend', path: frontend },
+  ]);
+  result = context.check(graph);
+  assert.ok(!result.findings.some((f) => f.type === 'CANDIDATE'), 'notCounterpartOf silences the suggestion');
+});
+
+test('context: DANGLING for an unresolvable counterpartOf, OFF_CONVENTION for no category folder unless unmanaged', () => {
+  const backend = tmpRepo();
+  writeCtx(backend, 'ai/contexts/entities/ghost.md', '---\ncounterpartOf: backend:ai/contexts/entities/nope.md\n---\n# Ghost\n');
+  writeCtx(backend, 'ai/contexts/mappers.md', '# Mappers\n');
+  writeCtx(backend, 'ai/contexts/features/audit-log/overview.md', '---\n---\n# Audit Log\n');
+
+  const graph = context.build([{ name: 'backend', path: backend }]);
+  const result = context.check(graph);
+  assert.ok(result.findings.some((f) => f.type === 'DANGLING' && f.id === 'backend:ai/contexts/entities/ghost.md'));
+  assert.ok(
+    result.findings.some((f) => f.type === 'OFF_CONVENTION' && f.id === 'backend:ai/contexts/mappers.md'),
+    'no category folder at all is off-convention',
+  );
+  assert.ok(
+    !result.findings.some((f) => f.id === 'backend:ai/contexts/features/audit-log/overview.md' && f.type === 'OFF_CONVENTION'),
+    'nested category/feature/aspect.md is on-convention, not just category/name.md',
+  );
+
+  writeCtx(backend, 'ai/contexts/mappers.md', '---\nunmanaged: true\n---\n# Mappers\n');
+  const graph2 = context.build([{ name: 'backend', path: backend }]);
+  const result2 = context.check(graph2);
+  assert.ok(!result2.findings.some((f) => f.id === 'backend:ai/contexts/mappers.md'), 'unmanaged: true opts a file out entirely');
+});
+
+test('context: check never fails on its own (always returns, never throws) and reports the unwired finding types once', () => {
+  const empty = tmpRepo();
+  const graph = context.build([{ name: 'solo', path: empty }]);
+  const result = context.check(graph);
+  assert.deepStrictEqual(result.findings, []);
+  assert.deepStrictEqual(result.notChecked, ['BROKEN_ANCHOR', 'CONTENT_MISMATCH', 'TRACKER_DESYNC']);
+});
+
+atest('context: CLI build/check/counterparts against a repos.json workspace, --strict exits 1 only on findings', async () => {
+  const workspace = tmpRepo();
+  const backend = path.join(workspace, 'backend');
+  const frontend = path.join(workspace, 'frontend');
+  fs.mkdirSync(backend, { recursive: true });
+  fs.mkdirSync(frontend, { recursive: true });
+  writeCtx(backend, 'ai/contexts/entities/invoice.md', '# Invoice\n');
+  writeCtx(frontend, 'ai/contexts/entities/invoice.md', '# Invoice\n');
+  fs.writeFileSync(
+    path.join(workspace, 'repos.json'),
+    JSON.stringify({ repos: [{ name: 'backend', path: 'backend' }, { name: 'frontend', path: 'frontend' }] }),
+  );
+
+  const contextCli = require('../lib/context/cli');
+  const cwd = process.cwd();
+  const log = console.log;
+  const logged = [];
+  console.log = (s) => logged.push(s);
+  try {
+    process.chdir(workspace);
+    const buildExit = contextCli.main(['build', '--json', '--no-color']);
+    assert.strictEqual(buildExit, 0);
+    const built = JSON.parse(logged.pop());
+    assert.strictEqual(built.nodes.length, 2);
+
+    const checkExit = contextCli.main(['check', '--json', '--no-color']);
+    assert.strictEqual(checkExit, 0, 'plain check never fails CI');
+    const checked = JSON.parse(logged.pop());
+    assert.ok(checked.findings.some((f) => f.type === 'CANDIDATE'));
+
+    const strictExit = contextCli.main(['check', '--strict', '--json', '--no-color']);
+    assert.strictEqual(strictExit, 1, '--strict exits 1 when findings exist');
+    logged.pop();
+
+    const cpExit = contextCli.main(['counterparts', 'backend:ai/contexts/entities/invoice.md', '--json', '--no-color']);
+    assert.strictEqual(cpExit, 0);
+    assert.deepStrictEqual(JSON.parse(logged.pop()), []);
+  } finally {
+    process.chdir(cwd);
+    console.log = log;
+  }
+});
+
 // ------------------------------------------------------------------- runner
 
 (async () => {

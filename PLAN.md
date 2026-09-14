@@ -4,51 +4,106 @@ Execution order for what comes after v1. The *why* is in `DESIGN.md`
 ("The cross-repo context layer", "### Sequencing"); this is the running order and
 where we are in it.
 
-Last updated 2026-09-14 — `0.6.4` verified across all 6 repos (see below). The
-legacy-command backlog is resolved: `0.7.0` (below) adopts the QA subsystem and
-tracker-assign/status/archive-tasks as real cairn presets, and the 7 pure-duplicate
-legacy files are `git rm`'d in snap-proof backend/frontend (staged, uncommitted).
-Not yet published; not yet synced into any repo.
+Last updated 2026-09-14 — `0.7.0` (legacy backlog: QA subsystem, tracker/archive
+commands) published and synced into all 6 repos, committed everywhere. `0.8.0`
+(below) is `cairn context build/check/counterparts` — the C prototype, built out of
+sequence (see "Gate skipped, explicitly" below). Not yet published; not yet synced.
 
-**Resume here:** `npm publish 0.7.0` → `cairn sync` in snap-proof backend + frontend
-(picks up the new QA/tracker/archive presets; the duplicate removals are separate
-`git rm`s already staged there, commit them too) → charityiq's 5 repos (no QA/e2e
-docs there yet — charityiq wasn't part of this backlog, only snap-proof was; a plain
-sync just picks up 0.6.4→0.7.0 for it). The gate ("use it for a sprint") is still
-open regardless: one ticket (`PROOF-6`), not even fully on current templates for
-`create_brief`→`execute_plan`. Drive one more real ticket through the full pipeline
-now that every repo is genuinely current, as the actual clean validation — the QA
-pipeline (`/plan-tests`→`/execute-test-plan` or `/run-qa`) is itself now real enough
-to exercise on that same ticket, first real test of it too.
+**Resume here:** `npm publish 0.8.0` → `cairn sync` in all 6 repos. Then: continue
+using `cairn context check` against snap-proof's real `ai/contexts/` (already run
+once locally — 34 nodes, 0 `OFF_CONVENTION`, 6 `CANDIDATE` matching the previously-
+known entity pairs, 34/34 `MISSING_FRONTMATTER` since nothing has adopted the
+convention yet) to decide the next slice: `cairn context adopt` (the interactive
+brownfield pass — the thing that would actually let the 34 `MISSING_FRONTMATTER`
+findings get resolved) or the `local` tracker provider, both still unbuilt per
+DESIGN.md's sequencing.
 
-Then the roadmap: finish the snap-proof gate sprint → context-resolver
-prototype → workspace layer.
+### Gate skipped, explicitly
 
-## Interim policy — propagating decisions/docs/contexts across repos, until C
+The user chose to skip "drive one more ticket through the pipeline" (the gate's
+remaining validation step) and move straight to the context layer — "it will be
+validated anyway." Recorded here because it's a real, deliberate deviation from the
+A → C → B ordering `DESIGN.md`/this file argued for all session, not an oversight.
+The gate itself (adopt v1, use it for a sprint) is still technically open —
+`PROOF-6` is the only ticket through the full pipeline, and not entirely on current
+templates. Worth returning to, just not blocking C anymore.
 
-No tooling for this exists yet (`cairn context` is unbuilt — see DESIGN.md "The
-cross-repo context layer"). Two live cases surfaced doing charityiq/snap-proof work:
+## Interim policy — propagating decisions/docs/contexts across repos
+
+`cairn context` (below) now resolves and checks — but there is still no `adopt` or
+automated write path. `check` only reports drift on `ai/contexts/**` files that
+already exist; it does not create or edit anything. So the manual-propagation
+policy from before `0.8.0` still holds, just with a real tool alongside it now:
 
 - **charityiq**: decisions made in the `docs/` repo (static HTML briefs + ADRs) need
   to reach `admin`/`backend`/`frontend` as tasks touch them. `docs/` isn't itself one
   of the linked app repos — a 4th, source-only repo — a variant DESIGN.md's own
-  examples don't cover directly.
+  examples don't cover directly, and `cairn context build` treats it as just another
+  repo in the workspace unless told otherwise (untested — charityiq has no
+  `repos.json` yet).
 - **snap-proof**: backend ↔ frontend need to share entity/feature decisions. This
   *is* DESIGN.md's own worked example almost verbatim (`ai/contexts/entities/
-  invoice.md` in both repos, line 962) — the simpler, intra-project half of the
-  problem; per DESIGN.md line 1058-1060 it needs no hub, unlike the cross-project
-  graph.
+  invoice.md` in both repos, line 962), and is now the repo `cairn context` was
+  proven against for real.
 
-**Until C (context-resolver prototype) starts, propagate manually via each repo's
-`ai/contexts/**`** — the convention architect.md already points agents at. When a
-decision spans repos, write/update the corresponding `ai/contexts/**` doc in each
-repo it touches, by hand. This isn't a placeholder to route around — per the gate's
-step A item 7 ("read every repo's `ai/contexts/` — raw material for the context
-convention"), doing this manually *is* the gate work, and every case handled this
-way becomes real input to C's design (declared counterpart links, what "drift"
-looks like in practice, whether the charityiq docs-as-source shape needs its own
-handling). Do not build ad hoc propagation tooling or start C early to solve this
-faster — see the gate ordering above.
+**Write the `ai/contexts/**` doc by hand in each repo a decision touches, same as
+before. Then run `cairn context check` to see the declared/candidate state** —
+useful now even without `adopt`: it tells you when a same-named pair exists in two
+repos with no declared link yet (`CANDIDATE`), and once you add `counterpartOf` by
+hand, confirms the reverse edge resolved and the pair stopped showing up as a
+suggestion. Do not build ad hoc propagation tooling beyond this — `adopt` is next,
+not a hand-rolled substitute for it.
+
+## `0.8.0` — `cairn context build/check/counterparts`, the C prototype
+
+Built exactly the scope this file already specced under "C. Prototype the context
+resolver" (see below in this file's older sections) — frontmatter parser, declared
+`counterpartOf`/`describes` resolved into a graph with inferred reverse edges, the
+suggest pass, the 7 `context check` finding types (4 computed, 3 reported as not-
+wired-yet, never a hard failure), `--json`, never fails CI unless `--strict`. Not
+built: `adopt`, `serve` (MCP), the `local` tracker provider, hub/workspace
+integration — deliberately, per DESIGN's own sequencing (those are step B's later
+phases, after the workspace layer).
+
+- `lib/context/frontmatter.js` — minimal YAML-frontmatter parser, zero-dependency
+  (same stance as everywhere else in cairn): scalars, booleans, inline `[a, b]` and
+  block `- a` arrays, no nesting, no multiline scalars. No fence at the top of the
+  file is a no-op (`{}`), not an error.
+- `lib/context/index.js` — `build(repos)` walks each repo's `ai/contexts/**/*.md`
+  (repos in the `doctor.resolveRepos` shape — same `repos.json` workspace doctor
+  already reads, reused directly, no new config format). Node id is
+  `<repoName>:<path-within-repo>` — the same string a human writes in
+  `counterpartOf`. `check(graph)` returns findings; `counterparts(graph, id)`
+  returns resolved nodes with content attached, matching DESIGN's "the server
+  returns graph + content" (Q3) even though there's no server yet — `serve` will
+  be a thin CLI-to-MCP wrapper over this same function later, not a rewrite.
+- **Convention, revised against real data mid-build**: first cut required exactly
+  `ai/contexts/<category>/<name>.md` (one folder, one file) and flagged 12/34 real
+  snap-proof docs `OFF_CONVENTION` — `features/<name>/overview.md`,
+  `pages/<page>/<sub>/business-logic.md`. Both are deliberate, sensible nesting by
+  feature/page, not violations. Loosened to "at least one category folder, then
+  anything" — only a bare `ai/contexts/foo.md` with no category folder is
+  `OFF_CONVENTION` now (unless `unmanaged: true`). This is exactly the kind of
+  correction "prove the approach on real data" is supposed to produce.
+- **Suggest pass**: same relative path or same first-`#`-heading title, across
+  different repos, with no declared link and not silenced by `notCounterpartOf`
+  (matched by full id or bare relative path, either side). Run against snap-proof's
+  real backend/frontend: found the 6 entity pairs this file already knew about
+  (`equipment-type`, `image`, `invoice`, `project`, `site-device`, `site`) — a real
+  validation against known ground truth, not just a passing test.
+- `lib/context/cli.js` + `bin/cairn.js context` — `build` / `check` / `counterparts
+  <id>`, `--config repos.json` (default), `--json`, `--strict` (check only — exit 1
+  if findings exist; plain `check` always exits 0, per DESIGN's "never fails CI").
+- `D:\projects\snap-proof\repos.json` created (outside this repo — snap-proof
+  itself is not a git repo, just the two clones side by side) — closes a pending
+  TODO from the gate-adoption section below ("update the cairn workspace so `cairn
+  doctor` sees the youtrack provider"), and is what made the real-data run above
+  possible without an ad hoc script.
+- 7 new tests (`test/run.js`): frontmatter edge cases, declared-link reverse
+  inference + CANDIDATE suppression, `notCounterpartOf` silencing, DANGLING,
+  OFF_CONVENTION with the nested-path fix and the `unmanaged` override, `check`
+  never throwing, and a full CLI round-trip through a real `repos.json` workspace
+  with `--strict`. 85 passing.
 
 ## `0.7.0` — adopt the legacy backlog: tracker commands, archive-tasks, the QA subsystem
 
