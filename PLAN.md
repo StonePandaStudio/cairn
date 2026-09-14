@@ -4,23 +4,25 @@ Execution order for what comes after v1. The *why* is in `DESIGN.md`
 ("The cross-repo context layer", "### Sequencing"); this is the running order and
 where we are in it.
 
-Last updated 2026-09-14 — `0.6.3` published and synced into snap-proof
-backend/frontend, which is how `0.6.4` (below) got found: `/code-review` on `PROOF-6`
-still hit the old pre-cairn `node-reviewer.md`, because the user ran the repo's
-*legacy* `/review-plan` command, not cairn's `/code-review` — which led to
-discovering `cairn sync` had been silently leaving 7 preset targets per repo on
-their original pre-cairn content since `cairn init`, unmanifested, forever. `0.6.4`
-fixes that (below), not yet published.
+Last updated 2026-09-14 — `0.6.4` published and synced into all 6 repos (snap-proof
+backend/frontend via yarn, charityiq backend/frontend/admin/docs via npm), all clean
+fast-forwards, no conflicts. **Verified.** `PROOF-6` fully closed: re-reviewed after the B1 fix,
+0 blocking issues, 45 unit tests passing. First real ticket through the whole
+pipeline end to end — though `create_brief`/`enrich_description`/`plan_task`/
+`execute_plan` ran on it *before* 0.6.4 rescued backend/frontend's stuck command
+stubs, so it doesn't count as a clean run on current templates for those steps; only
+the two `code_review` passes ran on current `reviewer.md`.
 
-**Resume here:** `npm publish 0.6.4` → `cairn sync --adopt-base` in snap-proof
-backend/frontend (rescues the 7 stuck files — verified via local dry-run already,
-both clean fast-forwards) → charityiq backend/frontend/admin (plain `cairn sync`,
-unaffected by this bug, just picks up 0.6.2-0.6.4) → re-run `/code-review PROOF-6 1`
-(not `/review-plan`) to confirm the report lands in
-`ai/tasks/PROOF-6/review-step-1.md` and to recover the lost class-2-definition
-finding. Then decide what to do with the now-orphaned legacy commands/agent docs
-(`review-plan.md`, `node-*.md`, `angular-*.md`, the QA-track files with no cairn
-equivalent) before finishing the snap-proof gate sprint → context-resolver
+**Resume here:** the gate ("use it for a sprint") isn't done — one ticket, and not
+even fully on current templates. Two threads, either order:
+1. Drive one more real snap-proof ticket through the full pipeline now that every
+   repo is on current templates end to end, as the actual clean validation.
+2. Decide what to do with the still-unaddressed legacy-command backlog flagged
+   earlier (`review-plan.md`, `node-*.md`/`angular-*.md`, the QA-track files with no
+   cairn equivalent) — the `/review-plan` vs `/code-review` mixup is exactly the
+   failure mode this would prevent from recurring.
+
+Then the roadmap: finish the snap-proof gate sprint → context-resolver
 prototype → workspace layer.
 
 ## `0.6.4` — `cairn sync` silently orphaned any preset target a pre-cairn file already occupied
