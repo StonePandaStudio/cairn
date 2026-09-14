@@ -25,6 +25,32 @@ even fully on current templates. Two threads, either order:
 Then the roadmap: finish the snap-proof gate sprint → context-resolver
 prototype → workspace layer.
 
+## Interim policy — propagating decisions/docs/contexts across repos, until C
+
+No tooling for this exists yet (`cairn context` is unbuilt — see DESIGN.md "The
+cross-repo context layer"). Two live cases surfaced doing charityiq/snap-proof work:
+
+- **charityiq**: decisions made in the `docs/` repo (static HTML briefs + ADRs) need
+  to reach `admin`/`backend`/`frontend` as tasks touch them. `docs/` isn't itself one
+  of the linked app repos — a 4th, source-only repo — a variant DESIGN.md's own
+  examples don't cover directly.
+- **snap-proof**: backend ↔ frontend need to share entity/feature decisions. This
+  *is* DESIGN.md's own worked example almost verbatim (`ai/contexts/entities/
+  invoice.md` in both repos, line 962) — the simpler, intra-project half of the
+  problem; per DESIGN.md line 1058-1060 it needs no hub, unlike the cross-project
+  graph.
+
+**Until C (context-resolver prototype) starts, propagate manually via each repo's
+`ai/contexts/**`** — the convention architect.md already points agents at. When a
+decision spans repos, write/update the corresponding `ai/contexts/**` doc in each
+repo it touches, by hand. This isn't a placeholder to route around — per the gate's
+step A item 7 ("read every repo's `ai/contexts/` — raw material for the context
+convention"), doing this manually *is* the gate work, and every case handled this
+way becomes real input to C's design (declared counterpart links, what "drift"
+looks like in practice, whether the charityiq docs-as-source shape needs its own
+handling). Do not build ad hoc propagation tooling or start C early to solve this
+faster — see the gate ordering above.
+
 ## `0.6.4` — `cairn sync` silently orphaned any preset target a pre-cairn file already occupied
 
 Found chasing why `/code-review` on `PROOF-6` still showed the pre-0.6.2 reviewer
