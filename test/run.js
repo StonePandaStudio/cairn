@@ -850,6 +850,56 @@ atest('render: archive-tasks is universal; tracker-status/assign only render wit
   }
 });
 
+atest('init: --validation-stack picks the nestjs validation library; rejects an unknown one', async () => {
+  const { main: init, VALIDATION_STACKS } = require('../lib/init');
+  const log = console.log;
+  console.log = () => {};
+  try {
+    assert.deepStrictEqual(VALIDATION_STACKS, ['zod', 'class-validator']);
+
+    const cv = tmpRepo();
+    init(['--repo', cv, '--stack', 'nestjs', '--validation-stack', 'class-validator', '--render', '--no-color']);
+    const cvCfg = JSON.parse(fs.readFileSync(path.join(cv, 'cairn.config.json'), 'utf8'));
+    assert.strictEqual(cvCfg.validationStack, 'class-validator');
+    const cvGuidelines = fs.readFileSync(path.join(cv, 'ai/infrastructure/code-guidelines.md'), 'utf8');
+    assert.match(cvGuidelines, /class-validator|ResponseMapper/);
+    assert.doesNotMatch(cvGuidelines, /createZodDto|nestjs-zod/);
+
+    const dflt = tmpRepo();
+    init(['--repo', dflt, '--stack', 'nestjs', '--render', '--no-color']);
+    const dfltCfg = JSON.parse(fs.readFileSync(path.join(dflt, 'cairn.config.json'), 'utf8'));
+    assert.strictEqual(dfltCfg.validationStack, 'zod', 'default with no flag is zod');
+
+    const bad = tmpRepo();
+    const err = console.error;
+    let captured = '';
+    console.error = (s) => { captured += s; };
+    try {
+      const exit = init(['--repo', bad, '--stack', 'nestjs', '--validation-stack', 'joi', '--no-color']);
+      assert.strictEqual(exit, 2);
+      assert.match(captured, /Unknown validation stack "joi"/);
+    } finally {
+      console.error = err;
+    }
+  } finally {
+    console.log = log;
+  }
+});
+
+atest('render: variant/validation-stack/<name> partials are isolated per choice, no cross-contamination', async () => {
+  const render = require('../lib/render');
+  const zod = render.renderTargets({ config: { stack: ['nestjs'], tracker: { provider: 'none' }, validationStack: 'zod' }, presetsDir: 'presets' });
+  const cv = render.renderTargets({ config: { stack: ['nestjs'], tracker: { provider: 'none' }, validationStack: 'class-validator' }, presetsDir: 'presets' });
+  const zodOut = zod.targets.find(([r]) => r === 'ai/infrastructure/code-guidelines.md')[1];
+  const cvOut = cv.targets.find(([r]) => r === 'ai/infrastructure/code-guidelines.md')[1];
+  assert.doesNotMatch(zodOut, /\{\{/, 'zod render has no unresolved tags');
+  assert.doesNotMatch(cvOut, /\{\{/, 'class-validator render has no unresolved tags');
+  assert.match(zodOut, /createZodDto/);
+  assert.doesNotMatch(zodOut, /ResponseMapper/);
+  assert.match(cvOut, /ResponseMapper/);
+  assert.doesNotMatch(cvOut, /createZodDto/);
+});
+
 atest('render: nestjs code-guidelines.md validation slots resolve (were silently empty — {{> slot: x }} never matched the engine\'s {{> stack/x }} partial syntax)', async () => {
   const { main: init } = require('../lib/init');
   const log = console.log;

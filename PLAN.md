@@ -6,27 +6,22 @@ where we are in it.
 
 Last updated 2026-09-15 — `0.7.0` through `0.8.2` published, synced into all 6
 repos, all clean. `0.8.3` (review-feedback-loop) and `0.9.0` (below — nestjs
-validation-stack default switched to Zod, and a real silent-render bug fixed along
-the way) not yet published, not yet synced.
+validation-stack is now a real per-repo choice, Zod by default; a silent-render bug
+fixed along the way) not yet published, not yet synced. `0.9.0` absorbed a same-day
+follow-up ("let users pick the validation library at init") that turns out to be
+the actual fix for the risk found while building the first half of it — see below,
+this replaced an earlier "hand-patch after sync" plan with a clean config-driven one.
 
-**Resume here:** `npm publish 0.9.0` → `cairn sync` in all 6 repos, **but verified by
-dry-run first that `code-guidelines.md` needs per-repo handling, not a blind
-apply**: snap-proof backend's fork was never touched since its (broken/empty) base,
-so sync offers a **clean `fast-forward` there — would silently inject Zod content
-into a repo whose real DTOs (confirmed: `login.dto.ts`, `register.dto.ts`) already
-use class-validator**. charityiq backend's fork already diverged (its own hard
-rules folded in), so sync correctly reports `CONFLICT` there instead — the existing
-safety net catches that one on its own; charityiq's real DTOs are also
-class-validator, same story, just not silent.
-
-So: **do not accept the code-guidelines.md fast-forward in snap-proof backend
-as-is.** Apply the rest of the sync normally, then hand-write the class-validator +
-`@ResponseMapper` sections back into snap-proof backend's `code-guidelines.md`
-(the content this file always lacked — recoverable from ai-kit's git history,
-`presets/nestjs/variants/validation-class-validator.md` before its removal in this
-commit). For charityiq backend, resolve the conflict with the user — their real
-code is also class-validator today, so keeping that (not accepting Zod) is likely
-right there too, but that's a real per-repo decision, not a mechanical one. Then:
+**Resume here:** `npm publish 0.9.0` → **before running `cairn sync` on the two real
+nestjs repos**, add `"validationStack": "class-validator"` to `cairn.config.json` in
+snap-proof backend and charityiq backend (both confirmed on class-validator in real
+code — `login.dto.ts`, `register.dto.ts`, etc.) — a normal hand-edit, same as any
+other `cairn.config.json` field. *Then* sync: snap-proof backend's `code-guidelines.md`
+fast-forwards to the *correct* content this time (it was empty before, not
+Zod-shaped-and-wrong); charityiq backend's existing `CONFLICT` should resolve
+cleanly too, now that the incoming template matches what its DTOs actually do. Sync
+the other 4 repos normally — no per-repo config change needed, `validationStack`
+defaults to `zod` and none of them have a real conflicting pattern yet. Then:
 continue
 using `cairn context check` against snap-proof's real `ai/contexts/` (already run
 once locally — 34 nodes, 0 `OFF_CONVENTION`, 6 `CANDIDATE` matching the previously-
@@ -72,67 +67,92 @@ hand, confirms the reverse edge resolved and the pair stopped showing up as a
 suggestion. Do not build ad hoc propagation tooling beyond this — `adopt` is next,
 not a hand-rolled substitute for it.
 
-## `0.9.0` — nestjs validation default is Zod; found the 6 slots were silently empty
+## `0.9.0` — nestjs validation is a real per-repo choice; found 6 silently-empty slots
 
-Asked directly: "for node/nest preset we need to replace class-validator with Zod."
+Two asks in the same day, the second one resolving a risk the first one surfaced.
+
+**First ask: "replace class-validator with Zod" for the nestjs preset.**
 Investigating turned up something bigger — `presets/nestjs/code-guidelines.md` had
 6 `{{> slot: dto-naming }}`-style references (dto-naming, dto-definition,
 validation-stack, controller-response, response-transformation, pagination-dtos).
 That syntax has never matched the render engine's actual partial pattern
-(`{{> stack/name }}` — `makeResolvePartial` only recognizes a `stack/` prefix).
+(`{{> stack/name }}` — `makeResolvePartial` only recognized a `stack/` prefix).
 Every one has rendered as nothing, silently, since this file existed — in every
-nestjs repo, `cairn init` ever produced. Real content existed for both choices
+nestjs repo `cairn init` ever produced. Real content existed for both choices
 (`presets/nestjs/variants/{validation-zod,validation-class-validator}.md`), written
 as multi-slot files using `## slot: x` headers — a second, also-never-wired
-mechanism for splitting one file into several slots. Nothing in `lib/render/`
-consumes `variants/` at all; `presets/README.md` already documented this candidly
-("seeds... no renderer consumes them yet") but that framing hadn't been re-checked
-against what's actually live since presets went from seeds to rendered reality.
+mechanism for splitting one file into several slots.
 
-Fixed by using the mechanism that already works, not by building the one that
-doesn't: split each variant's 6 `## slot: x` sections into individual
-`presets/nestjs/slots/<name>.md` files — the same one-file-per-slot shape
-`implementation-reference.md` already used successfully — and pointed
-`code-guidelines.md`'s 6 references at `{{> stack/<name> }}`. Zod's content became
-the live slots; class-validator's did not, per the ask — validation is no longer a
-configurable choice for the nestjs preset, same single-default architecture as
-everything else in `presets/nestjs/`. `implementation-reference.md`'s DTO/controller
-sections updated to match (`ZodValidationPipe`, `@ZodResponse`, no more dangling
-"per the validation-stack variant" reference to a variant nothing ever loaded).
-`variants/` removed — dead directory, nothing left to point at it.
+First fix made Zod the sole, hardcoded default (matching the literal ask) by moving
+its content into individual `presets/nestjs/slots/<name>.md` files — reusing the
+one-file-per-slot shape `implementation-reference.md` already used successfully —
+and deleted `variants/` as dead weight. Dry-run against both real nestjs repos
+*before* publishing turned up the problem: **snap-proof and charityiq backend both
+already run class-validator in real code** (`login.dto.ts`, `register.dto.ts`,
+etc.). snap-proof's `code-guidelines.md` fork was never touched since its
+(broken/empty) base, so `cairn sync` would have offered a *clean* fast-forward —
+silently replacing a gap with *wrong* content instead of the *missing* content it
+had. charityiq's fork had already diverged, so sync correctly reported `CONFLICT`
+instead — caught on its own, snap-proof needed the dry-run because there was
+nothing there to conflict against.
 
-**Found before publishing, not after — checked with dry-runs against both real
-nestjs repos before touching anything live:** snap-proof backend and charityiq
-backend **both already run class-validator in real code** (`login.dto.ts`,
-`register.dto.ts`, etc.) — this default only ever mattered for work that hadn't
-started yet, never for what's already built. snap-proof backend's
-`code-guidelines.md` fork was never touched since its (broken/empty) base, so
-`cairn sync` offers a clean `fast-forward` there — would silently replace the gap
-with *wrong* content instead of the *missing* content it had before, since nothing
-there uses Zod. charityiq backend's fork already diverged (hard rules folded in
-earlier), so sync correctly reports `CONFLICT` instead of applying anything — the
-existing "never silently overwrite" guarantee catches that one on its own; snap-proof
-needed the dry-run to catch it because there was nothing to conflict against. See
-"Resume here" above for the per-repo handling this requires — not a mechanical
-`cairn sync --adopt-base` roll-out like the versions before it.
+**Second ask, same day: "can we let the user pick the validation library at init?"**
+— turns out to be the actual fix for exactly that risk, not a separate feature.
+Built the real thing this time instead of patching around the gap: a generic
+`variants` mechanism in the render context (`{ groupName: selectedName }`,
+`nestjs`'s `validation-stack` is the only group today, but the shape isn't
+nestjs-specific — angular's still-dormant i18n `variants/` could use the same
+mechanism later without a second one being built) and a new partial form,
+`{{> variant/<group>/<name> }}`, resolving
+`presets/<stack-entry>/variants/<group>/<selected>/<name>.md`. Recovered
+`validation-class-validator.md` from git history (deleted one version earlier in
+this same release) and split it the same way as the Zod content, into
+`presets/nestjs/variants/validation-stack/class-validator/*.md` alongside
+`.../zod/*.md`. `cairn.config.json` gets a `validationStack` field (`zod` default);
+`cairn init --validation-stack class-validator` sets it, validated the same way
+`--tracker` is. `implementation-reference.md`'s few Zod-specific lines became
+`{{#if validation.zod}}…{{else}}…{{/if}}` — the engine's `{{#if}}` is a truthy
+lookup on one path, no equality expressions, so `validation.zod` /
+`validation.classValidator` are precomputed booleans in the context, same reasoning
+as `tracker.remote` being one instead of a template-side provider comparison.
 
-- `presets/nestjs/slots/{dto-naming,dto-definition,validation-stack,
-  controller-response,response-transformation,pagination-dtos}.md` — new, Zod
-  content adapted from the deleted `validation-zod.md` variant (dropped the
-  "In use by: glossr-api" project attribution — that belongs in `EXTRACTION.md`
-  history, not live template prose).
-- `presets/nestjs/code-guidelines.md` — 6 `{{> slot: x }}` → `{{> stack/x }}`.
-- `presets/nestjs/slots/implementation-reference.md` — DTO/controller sections
-  updated to describe the Zod pattern instead of a dangling variant reference.
-- `presets/nestjs/variants/` — removed (both files; `validation-class-validator.md`'s
-  content is not lost, it's what real snap-proof/charityiq backend code already
-  does — recoverable from git history if ever needed as a written reference again).
-- `presets/README.md` — nestjs layout entry updated: no longer "validation-stack
-  agnostic," Zod is not a configurable choice.
-- 1 new test (`test/run.js`): all 6 slots render real content (no unresolved
-  `{{` of any kind survives), asserting on Zod-specific markers
-  (`createZodDto`, `ZodValidationPipe`, `@ZodResponse`, `z.coerce.number`) as the
-  regression guard for the exact silent-empty bug found here. 88 passing.
+This turns the snap-proof/charityiq risk from "hand-patch the rendered file after
+sync" into "set the right config value before syncing, then the normal sync
+mechanics just work" — see "Resume here" above for the actual per-repo steps.
+
+- `lib/config.js` — `validationStack: 'zod'` added to `DEFAULTS`, covered by the
+  existing `...DEFAULTS, ...raw` spread in `loadRepoConfig`, no new normalize
+  function needed (it's a plain string, not a nested shape).
+- `lib/init.js` — `VALIDATION_STACKS` (exported), `--validation-stack` flag,
+  validated in `main()` next to the existing `--tracker` check, written into
+  `buildConfig()`'s output unconditionally (harmless on non-nestjs stacks, same
+  as `tracker` always being present regardless of stack).
+- `lib/render/index.js` — `buildContext` computes `variants`, `validationStack`,
+  and the `validation.{zod,classValidator}` booleans; `makeResolvePartial` gains
+  the `variant/<group>/<name>` branch alongside the existing `stack/<name>` one,
+  concatenating across stack entries the same way.
+- `schema.json` — `validationStack` added (`additionalProperties: false` meant
+  leaving it out would make any schema-validating editor flag it as unknown).
+- `presets/nestjs/variants/validation-stack/{zod,class-validator}/*.md` — 6 files
+  each, one full slot set per choice. Zod's carried over from the first fix;
+  class-validator's recovered from git history and re-split the same way (dropped
+  the "In use by: glossr-api"/"In use by: snap-backend" project-attribution
+  comments when splitting either — that belongs in `EXTRACTION.md` history, not
+  live template prose; kept `@ResponseMapper` verbatim in class-validator's,
+  since that's a real, accurate, battle-tested project decorator, not something
+  to generalize away from).
+- `presets/nestjs/code-guidelines.md` — the 6 references now read
+  `{{> variant/validation-stack/<name> }}`.
+- `presets/nestjs/slots/implementation-reference.md` — the few Zod/class-validator
+  divergent lines wrapped in `{{#if validation.zod}}…{{else}}…{{/if}}`.
+- `presets/README.md` — nestjs layout entry rewritten to describe the real
+  mechanism and point at PLAN.md for why nestjs's `variants/` works and angular's
+  (still dormant) doesn't yet.
+- 3 new tests (`test/run.js`): the CLI flag (both values render distinct, correct,
+  non-cross-contaminated content; an unknown value is rejected with exit 2); the
+  partial-isolation guarantee directly; the original silent-empty-slots regression
+  guard (still Zod-flavored, since that's still the default with no flag passed).
+  90 passing.
 
 ## `0.8.3` — a review's blocking issues went nowhere; nothing ever re-opened them
 

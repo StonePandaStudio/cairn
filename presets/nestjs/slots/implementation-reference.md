@@ -15,8 +15,8 @@ is always `ai/infrastructure/code-guidelines.md`.
 - Thin controllers: delegate all business logic to services
 - `@Get()` / `@Post()` / `@Put()` / `@Patch()` / `@Delete()` with explicit route paths
 - Bind inputs with `@Body()`, `@Param()`, `@Query()`
-- Apply `ZodValidationPipe` and `@UseGuards()` where required
-- Return consistent response shapes; `@ZodResponse({ type: … })` on every endpoint that returns data
+- Apply {{#if validation.zod}}`ZodValidationPipe`{{else}}`ValidationPipe`{{/if}} and `@UseGuards()` where required
+- Return consistent response shapes; {{#if validation.zod}}`@ZodResponse({ type: … })` on every endpoint that returns data{{else}}use response DTOs and `@ResponseMapper(ResponseDtoClass)`{{/if}}
 
 ### Services
 - All business logic in feature services; API-layer services handle HTTP concerns only
@@ -24,8 +24,8 @@ is always `ai/infrastructure/code-guidelines.md`.
 - async/await throughout
 
 ### DTOs
-- One file per DTO, `.dto.ts` suffix; a Zod schema per DTO, extended via `createZodDto()` — see `ai/infrastructure/code-guidelines.md` § DTOs for the naming and validation conventions
-- `@ApiProperty()` from `@nestjs/swagger` on every property not already covered by Zod schema metadata
+- One file per DTO, `.dto.ts` suffix; {{#if validation.zod}}a Zod schema per DTO, extended via `createZodDto()`{{else}}validation decorators on every property{{/if}} — see `ai/infrastructure/code-guidelines.md` § DTOs for the naming and validation conventions
+- `@ApiProperty()` from `@nestjs/swagger` on every property{{#if validation.zod}} not already covered by Zod schema metadata{{/if}}
 - Request DTOs in `src/api/dtos/`; shared/internal DTOs in `src/feature/dtos/`
 
 ### Error handling

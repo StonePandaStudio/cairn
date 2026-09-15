@@ -17,13 +17,17 @@ presets/
   core/       stack-agnostic — agent role contracts, command stub, WORKFLOW/AGENTS skeletons
     agents/   architect.md, developer.md, reviewer.md   (85–92% identical across stacks)
     commands/ _stub.md                                  (renders one file per workflow step)
-  nestjs/     NestJS + TypeScript framework spine, ORM agnostic. Validation is
-              Zod (`zod` + `nestjs-zod`) — the 6 dto-naming/dto-definition/
-              validation-stack/controller-response/response-transformation/
-              pagination-dtos slots below, all Zod-specific; not a configurable
-              choice (class-validator was the prior default; dropped, not kept
-              as an unused alternative — see PLAN.md for why)
+  nestjs/     NestJS + TypeScript framework spine, ORM agnostic
     slots/    the framework side of each {{> stack/… }} point
+    variants/validation-stack/{zod,class-validator}/
+              the 6 dto-naming/dto-definition/validation-stack/
+              controller-response/response-transformation/pagination-dtos
+              slots, one full set per choice. Selected by `cairn.config.json`'s
+              `validationStack` (`--validation-stack` on `cairn init`, default
+              `zod`) — resolved by `{{> variant/validation-stack/<name> }}` in
+              code-guidelines.md, a different (working) mechanism from angular's
+              still-dormant `variants/` below — see PLAN.md for why nestjs's
+              needed fixing and angular's doesn't yet.
     agents/   qa-architect.md, qa-developer.md, qa-orchestrator.md — optional QA
               pipeline (plan_tests/execute_test_plan/run_qa), stack-owned content,
               not a shared core contract (no equivalent shape on other stacks)

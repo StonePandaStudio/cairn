@@ -19,6 +19,12 @@
       ],
       "examples": ["angular", ["nestjs", "typeorm"], "cli"]
     },
+    "validationStack": {
+      "type": "string",
+      "enum": ["zod", "class-validator"],
+      "description": "Only meaningful when \"nestjs\" is in `stack` — ignored otherwise. Selects which presets/nestjs/variants/validation-stack/<name>/ slot set fills code-guidelines.md's DTO/validation sections.",
+      "default": "zod"
+    },
     "tracker": {
       "type": "object",
       "additionalProperties": false,
