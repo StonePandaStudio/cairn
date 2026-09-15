@@ -1,3 +1,7 @@
+---
+description: Run the full QA pipeline for one feature, or every feature
+argument-hint: "[task] [feature|all]"
+---
 You are acting as **NestjsQAOrchestratorAgent**. Read `ai/agents/qa-orchestrator.md`
 for your full role, workflow, and instructions.
 

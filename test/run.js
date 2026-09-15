@@ -848,6 +848,26 @@ atest('render: archive-tasks is universal; tracker-status/assign only render wit
   }
 });
 
+atest('render: every command file has a description frontmatter block on line 1 for the picker', async () => {
+  const { main: init } = require('../lib/init');
+  const log = console.log;
+  console.log = () => {};
+  try {
+    const dir = tmpRepo();
+    init(['--repo', dir, '--stack', 'nestjs', '--tracker', 'youtrack', '--project-key', 'CI', '--render', '--no-color']);
+    const commandsDir = path.join(dir, '.claude/commands');
+    const files = fs.readdirSync(commandsDir).filter((f) => f.endsWith('.md'));
+    assert.ok(files.length >= 8, 'sanity: nestjs+youtrack renders at least the 5 workflow + 3 tracker/archive commands');
+    for (const f of files) {
+      const content = fs.readFileSync(path.join(commandsDir, f), 'utf8');
+      assert.match(content, /^---\ndescription: \S.*\n/, `${f} starts with a description frontmatter block on line 1`);
+      assert.doesNotMatch(content.split('\n')[1], /\*\*/, `${f}'s description has no leftover markdown bold`);
+    }
+  } finally {
+    console.log = log;
+  }
+});
+
 atest('render: stack-owned QA agents/commands render only for the stack that ships them', async () => {
   const { main: init } = require('../lib/init');
   const log = console.log;

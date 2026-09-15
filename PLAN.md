@@ -4,12 +4,14 @@ Execution order for what comes after v1. The *why* is in `DESIGN.md`
 ("The cross-repo context layer", "### Sequencing"); this is the running order and
 where we are in it.
 
-Last updated 2026-09-14 — `0.7.0` (legacy backlog: QA subsystem, tracker/archive
-commands) published and synced into all 6 repos, committed everywhere. `0.8.0`
-(below) is `cairn context build/check/counterparts` — the C prototype, built out of
-sequence (see "Gate skipped, explicitly" below). Not yet published; not yet synced.
+Last updated 2026-09-15 — `0.7.0` and `0.8.0` published, synced into all 6 repos,
+confirmed a clean no-op sync for `0.8.0` (it added no rendered files, CLI-only).
+`0.8.1` (below) fixes every command's picker display — not yet published, not yet
+synced.
 
-**Resume here:** `npm publish 0.8.0` → `cairn sync` in all 6 repos. Then: continue
+**Resume here:** `npm publish 0.8.1` → `cairn sync` in all 6 repos (this one *does*
+change rendered content — every `.claude/commands/*.md` gets a new frontmatter
+block — expect `fast-forward` everywhere, not `unchanged`). Then: continue
 using `cairn context check` against snap-proof's real `ai/contexts/` (already run
 once locally — 34 nodes, 0 `OFF_CONVENTION`, 6 `CANDIDATE` matching the previously-
 known entity pairs, 34/34 `MISSING_FRONTMATTER` since nothing has adopted the
@@ -53,6 +55,32 @@ repos with no declared link yet (`CANDIDATE`), and once you add `counterpartOf` 
 hand, confirms the reverse edge resolved and the pair stopped showing up as a
 suggestion. Do not build ad hoc propagation tooling beyond this — `adopt` is next,
 not a hand-rolled substitute for it.
+
+## `0.8.1` — every command's slash-picker entry showed raw `**AgentName**` markdown
+
+Found from a screenshot: `/code-review` in the picker showed "You are acting as
+**NestjsReviewerAgent**. Read `ai/agents/reviewer.md`..." verbatim, literal
+asterisks and all. Root cause confirmed via the claude-code-guide subagent, not
+guessed: Claude Code's command picker reads a `description:` YAML-frontmatter field
+for its one-line summary; with no frontmatter at all, it falls back to the file's
+first body line, unrendered. None of cairn's command presets had ever set one.
+
+- `presets/core/commands/_stub.md` — `description: {{ step.oneLine }}` (a field
+  `workflow.json` already carried, previously only used in `AGENTS.md`'s own
+  summary table — same data, second consumer, not a new one) +
+  `argument-hint: "[task]? [step] [title]"`, conditionally built from the same
+  `step.canOmitTask`/`step.createsTask` flags 0.6.1 added.
+- `presets/core/commands/{archive-tasks,tracker-status,tracker-assign}.md` and
+  `presets/nestjs/commands/{plan-tests,execute-test-plan,run-qa}.md` and
+  `presets/angular/commands/add-e2e-tests.md` — each gets a short static
+  `description` + `argument-hint`.
+- Verified the fence lands on line 1 with no leading blank line ahead of it — the
+  `{{! }}` header comment is dropped as its own token during rendering, not by a
+  text-level strip, so nothing of its surrounding whitespace survives into the
+  frontmatter.
+- 1 new test (`test/run.js`): every rendered command file starts with
+  `---\ndescription: ...` and its description line carries no leftover `**`. 86
+  passing.
 
 ## `0.8.0` — `cairn context build/check/counterparts`, the C prototype
 

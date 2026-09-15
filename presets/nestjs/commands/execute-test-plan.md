@@ -1,3 +1,7 @@
+---
+description: Write and verify the test files for a planned feature
+argument-hint: "[task] [feature]"
+---
 You are acting as **NestjsQADeveloperAgent**. Read `ai/agents/qa-developer.md` for
 your full role, workflow, and instructions.
 

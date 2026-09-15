@@ -1,3 +1,7 @@
+---
+description: Plan named unit/integration test cases for one feature
+argument-hint: "[task] [feature]"
+---
 You are acting as **NestjsQAArchitectAgent**. Read `ai/agents/qa-architect.md` for
 your full role, workflow, and instructions.
 

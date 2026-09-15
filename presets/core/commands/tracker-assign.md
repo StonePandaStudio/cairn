@@ -1,3 +1,7 @@
+---
+description: Report or set a {{ tracker.providerLabel }} issue's assignee
+argument-hint: "[key] [login?]"
+---
 Manage the assignee of a {{ tracker.providerLabel }} issue (parent or child) in the
 `{{ tracker.exampleKey }}` project.
 

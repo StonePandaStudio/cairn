@@ -1,3 +1,7 @@
+---
+description: Report or set a {{ tracker.providerLabel }} issue's Stage
+argument-hint: "[key] [stage?]"
+---
 Manage the `Stage` of a {{ tracker.providerLabel }} issue (parent or child) in the
 `{{ tracker.exampleKey }}` project.
 

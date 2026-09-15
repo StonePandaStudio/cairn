@@ -1,3 +1,6 @@
+---
+description: Archive ai/tasks/ folders older than 2 weeks
+---
 Archive task folders in `ai/tasks/` that are older than 2 weeks.
 
 ## Steps

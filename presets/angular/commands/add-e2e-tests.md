@@ -1,3 +1,7 @@
+---
+description: Add Playwright e2e coverage for a component or page
+argument-hint: "[path]"
+---
 You are acting as **AngularQAAgent**. Read `ai/agents/qa.md` for your full role,
 workflow, and instructions.
 

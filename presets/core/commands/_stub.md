@@ -1,7 +1,15 @@
 {{! cairn preset: core. The renderer emits one file per workflow.steps[] entry,
     named `<step.command>.md`, into `.claude/commands/`. Every stub in
     snap-proof/{backend,frontend} is byte-identical to this modulo the two
-    variables below (plus a stray BOM on the frontend copies). }}
+    variables below (plus a stray BOM on the frontend copies).
+
+    The frontmatter is what Claude Code's slash-command picker shows — without
+    it, the picker falls back to this file's first body line verbatim, literal
+    `**bold**` asterisks and all. See PLAN.md for how that was found. }}
+---
+description: {{ step.oneLine }}
+argument-hint: "[task]{{#if step.canOmitTask}}?{{/if}} [step]{{#if step.createsTask}} [title]{{/if}}"
+---
 You are acting as **{{ step.agentName }}**. Read `{{ step.agentDoc }}` for your full role, workflow, and instructions.
 
 Run `{{ step.fn }}($ARGUMENTS)` — treat the first token as the task ID (e.g. {{ tracker.exampleKey }}-210) and the second as the step number (e.g. 1).
