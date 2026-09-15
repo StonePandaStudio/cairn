@@ -6,12 +6,13 @@ where we are in it.
 
 Last updated 2026-09-15 — `0.7.0` and `0.8.0` published, synced into all 6 repos,
 confirmed a clean no-op sync for `0.8.0` (it added no rendered files, CLI-only).
-`0.8.1` (below) fixes every command's picker display — not yet published, not yet
-synced.
+`0.8.1` (picker frontmatter) and `0.8.2` (below — the tracker command path bug,
+found live in charityiq backend) not yet published, not yet synced.
 
-**Resume here:** `npm publish 0.8.1` → `cairn sync` in all 6 repos (this one *does*
-change rendered content — every `.claude/commands/*.md` gets a new frontmatter
-block — expect `fast-forward` everywhere, not `unchanged`). Then: continue
+**Resume here:** `npm publish 0.8.2` → `cairn sync` in all 6 repos (both unpublished
+versions change rendered content — every `.claude/commands/*.md` gets frontmatter,
+and the two tracker command docs + `WORKFLOW.md` get the `npx cairn tracker` fix —
+expect `fast-forward`, not `unchanged`, almost everywhere). Then: continue
 using `cairn context check` against snap-proof's real `ai/contexts/` (already run
 once locally — 34 nodes, 0 `OFF_CONVENTION`, 6 `CANDIDATE` matching the previously-
 known entity pairs, 34/34 `MISSING_FRONTMATTER` since nothing has adopted the
@@ -55,6 +56,37 @@ repos with no declared link yet (`CANDIDATE`), and once you add `counterpartOf` 
 hand, confirms the reverse edge resolved and the pair stopped showing up as a
 suggestion. Do not build ad hoc propagation tooling beyond this — `adopt` is next,
 not a hand-rolled substitute for it.
+
+## `0.8.2` — tracker command docs pointed at a shim path not guaranteed to exist
+
+Found live: `/create-brief` in charityiq backend (greenfield — `cairn init` there,
+never migrated from a hand-written tracker script) worked only because the agent
+independently noticed `ai/scripts/` didn't exist and improvised running cairn from
+`node_modules` directly, then flagged that `/youtrack-status` and `/youtrack-assign`
+"point to that missing helper and will fail as written." Root cause: `lib/init.js`
+only ever writes `ai/scripts/<slug>.js` when *replacing* a legacy script that was
+already there (`LEGACY_SHIM_TARGETS`, by design — see its own comment, "cairn never
+invents one of these paths in a repo that lacked it"); the one file every `cairn
+init` unconditionally writes is `_cairn/scripts/jira.js` (that literal name,
+regardless of provider — it dispatches on `cairn.config.json`, the filename is just
+historical). Every tracker command doc assumed the conditional path instead of the
+guaranteed one.
+
+Not a rendering bug — the docs were simply telling agents to trust a file cairn
+never promises to create. Fixed the docs, not `init`: writing `ai/scripts/<slug>.js`
+into every greenfield repo "just in case" would be an unwanted generated file with
+no purpose there (the whole point of that path is migration continuity for repos
+that already called it from elsewhere) — `npx cairn tracker <cmd>` is simpler,
+always resolves (`cairn` is a devDependency, not global — a bare `cairn tracker …`
+only works if something else put it on `PATH`), and needs no generated file at all.
+
+- `presets/core/WORKFLOW.md`, `presets/core/commands/{tracker-status,tracker-assign}.md`
+  — lead with `npx cairn tracker <cmd>`; `_cairn/scripts/jira.js` named as the
+  always-present equivalent; a legacy `ai/scripts/<slug>.js`, if present, is a third
+  option explicitly flagged as not guaranteed.
+- Test assertions updated to match, plus 2 new ones (`test/run.js`) guarding the two
+  specific claims that regressed here: leads with `npx cairn tracker`, and states
+  the legacy shim isn't guaranteed. 86 passing.
 
 ## `0.8.1` — every command's slash-picker entry showed raw `**AgentName**` markdown
 

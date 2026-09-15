@@ -43,12 +43,20 @@ it locally, mention that once, never sync it.
 {{/each}}
 
 Later stage moves (`{{ tracker.reviewStage }}` onward) are manual — the tracker UI,
-`/{{ tracker.slug }}-status`, or `cairn tracker close` (closes the parent and every
-subtask together). Assignee changes: `/{{ tracker.slug }}-assign`. Both commands are
-manual-trigger only, never called by a workflow step.
+`/{{ tracker.slug }}-status`, or `npx cairn tracker close` (closes the parent and
+every subtask together). Assignee changes: `/{{ tracker.slug }}-assign`. Both
+commands are manual-trigger only, never called by a workflow step.
 
-Everything goes through `cairn tracker <command> …` (or the vendored
-`ai/scripts/*.js` shim). Credentials live in `.env` (gitignored).
+Everything goes through `npx cairn tracker <command> …` — `cairn` is a
+devDependency, not a global install, so `npx` (or `node_modules/.bin/cairn`) is
+what actually resolves it; a bare `cairn tracker …` only works if something else
+put it on `PATH`. `_cairn/scripts/jira.js` is the same client vendored into the
+repo (every `cairn init` writes it, regardless of provider — the filename is
+historical, it dispatches on this repo's actual `tracker.provider`) and works
+identically; a legacy `ai/scripts/*.js` shim, if this repo has one from before it
+adopted cairn, is a third equivalent path — but that one is **not** guaranteed to
+exist here, only files `cairn init` actually found and replaced are. Credentials
+live in `.env` (gitignored).
 {{else}}
 ## No remote tracker
 

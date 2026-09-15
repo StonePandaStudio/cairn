@@ -1,6 +1,6 @@
 {
   "name": "@stonepandastudio/cairn",
-  "version": "0.8.1",
+  "version": "0.8.2",
   "description": "Shared AI workflow scaffolding for Stone Panda repos — issue tracker client and drift doctor.",
   "license": "UNLICENSED",
   "repository": {

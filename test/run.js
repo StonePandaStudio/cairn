@@ -835,8 +835,10 @@ atest('render: archive-tasks is universal; tracker-status/assign only render wit
     assert.ok(fs.existsSync(path.join(remote, '.claude/commands/youtrack-assign.md')));
     const status = fs.readFileSync(path.join(remote, '.claude/commands/youtrack-status.md'), 'utf8');
     assert.match(status, /set-status/);
-    assert.match(status, /\.js\s*\n?\s*close \[key\]/, 'points at the real `close` subcommand, not the old close-task alias');
+    assert.match(status, /npx cairn tracker close \[key\]/, 'points at the real `close` subcommand, not the old close-task alias');
     assert.doesNotMatch(status, /close-task/, 'close-task is not a real cairn tracker subcommand');
+    assert.match(status, /npx cairn tracker/, 'leads with the always-resolvable npx path, not a maybe-missing ai/scripts/ shim');
+    assert.match(status, /not guaranteed to exist/, 'warns that the legacy ai/scripts/ shim may not be present (a greenfield repo has none)');
 
     const none = tmpRepo();
     init(['--repo', none, '--stack', 'react', '--tracker', 'none', '--render', '--no-color']);
