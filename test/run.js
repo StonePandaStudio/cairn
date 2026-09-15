@@ -850,6 +850,23 @@ atest('render: archive-tasks is universal; tracker-status/assign only render wit
   }
 });
 
+atest('render: nestjs code-guidelines.md validation slots resolve (were silently empty — {{> slot: x }} never matched the engine\'s {{> stack/x }} partial syntax)', async () => {
+  const { main: init } = require('../lib/init');
+  const log = console.log;
+  console.log = () => {};
+  try {
+    const dir = tmpRepo();
+    init(['--repo', dir, '--stack', 'nestjs', '--tracker', 'none', '--render', '--no-color']);
+    const guidelines = fs.readFileSync(path.join(dir, 'ai/infrastructure/code-guidelines.md'), 'utf8');
+    assert.doesNotMatch(guidelines, /\{\{[#>/]/, 'no unresolved template tags of any kind survive into the rendered file');
+    for (const marker of ['Payload', 'createZodDto', 'ZodValidationPipe', 'ZodResponse', 'z.coerce.number']) {
+      assert.match(guidelines, new RegExp(marker.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), `${marker} present — the slot actually rendered content, not a gap`);
+    }
+  } finally {
+    console.log = log;
+  }
+});
+
 atest('render: architect.md Mode B re-opens review-step-N.md and amends rather than rewrites the plan', async () => {
   const { main: init } = require('../lib/init');
   const log = console.log;

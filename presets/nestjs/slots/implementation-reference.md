@@ -15,8 +15,8 @@ is always `ai/infrastructure/code-guidelines.md`.
 - Thin controllers: delegate all business logic to services
 - `@Get()` / `@Post()` / `@Put()` / `@Patch()` / `@Delete()` with explicit route paths
 - Bind inputs with `@Body()`, `@Param()`, `@Query()`
-- Apply `@UsePipes(ValidationPipe)` and `@UseGuards()` where required
-- Return consistent response shapes; use response DTOs and mappers
+- Apply `ZodValidationPipe` and `@UseGuards()` where required
+- Return consistent response shapes; `@ZodResponse({ type: … })` on every endpoint that returns data
 
 ### Services
 - All business logic in feature services; API-layer services handle HTTP concerns only
@@ -24,8 +24,8 @@ is always `ai/infrastructure/code-guidelines.md`.
 - async/await throughout
 
 ### DTOs
-- One file per DTO, `.dto.ts` suffix; validation decorators for every property (per the validation-stack variant)
-- `@ApiProperty()` from `@nestjs/swagger` on every property
+- One file per DTO, `.dto.ts` suffix; a Zod schema per DTO, extended via `createZodDto()` — see `ai/infrastructure/code-guidelines.md` § DTOs for the naming and validation conventions
+- `@ApiProperty()` from `@nestjs/swagger` on every property not already covered by Zod schema metadata
 - Request DTOs in `src/api/dtos/`; shared/internal DTOs in `src/feature/dtos/`
 
 ### Error handling

@@ -17,8 +17,12 @@ presets/
   core/       stack-agnostic — agent role contracts, command stub, WORKFLOW/AGENTS skeletons
     agents/   architect.md, developer.md, reviewer.md   (85–92% identical across stacks)
     commands/ _stub.md                                  (renders one file per workflow step)
-  nestjs/     NestJS + TypeScript framework spine, validation-stack + ORM agnostic
-    variants/ validation-zod.md, validation-class-validator.md
+  nestjs/     NestJS + TypeScript framework spine, ORM agnostic. Validation is
+              Zod (`zod` + `nestjs-zod`) — the 6 dto-naming/dto-definition/
+              validation-stack/controller-response/response-transformation/
+              pagination-dtos slots below, all Zod-specific; not a configurable
+              choice (class-validator was the prior default; dropped, not kept
+              as an unused alternative — see PLAN.md for why)
     slots/    the framework side of each {{> stack/… }} point
     agents/   qa-architect.md, qa-developer.md, qa-orchestrator.md — optional QA
               pipeline (plan_tests/execute_test_plan/run_qa), stack-owned content,

@@ -30,7 +30,7 @@
 
 DTO file naming follows the validation stack:
 
-{{> slot: dto-naming }}
+{{> stack/dto-naming }}
 
 ## File Organization
 
@@ -88,7 +88,7 @@ export interface RegisterOwnerResult {
 
 Response typing and serialization are stack-specific:
 
-{{> slot: controller-response }}
+{{> stack/controller-response }}
 
 ## Services
 
@@ -108,14 +108,14 @@ Response typing and serialization are stack-specific:
     - `*-response.dto.ts` for responses
     - `*-query.dto.ts` for query parameters
 
-{{> slot: dto-definition }}
+{{> stack/dto-definition }}
 
 ## Validation
 
 * Validate at API boundaries (in controllers via DTOs)
 * Provide clear, user-friendly validation error messages
 
-{{> slot: validation-stack }}
+{{> stack/validation-stack }}
 
 ## Error Handling
 
@@ -161,7 +161,7 @@ throw new NotFoundException('User not found');
 
 ## Response Transformation
 
-{{> slot: response-transformation }}
+{{> stack/response-transformation }}
 
 ## Pagination
 
@@ -186,7 +186,7 @@ async list(params: { page: number; pageSize: number }): Promise<{ items: Foo[]; 
 
 Query-param coercion and response-DTO declaration are stack-specific:
 
-{{> slot: pagination-dtos }}
+{{> stack/pagination-dtos }}
 
 ## Security
 
