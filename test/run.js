@@ -850,6 +850,23 @@ atest('render: archive-tasks is universal; tracker-status/assign only render wit
   }
 });
 
+atest('render: architect.md Mode B re-opens review-step-N.md and amends rather than rewrites the plan', async () => {
+  const { main: init } = require('../lib/init');
+  const log = console.log;
+  console.log = () => {};
+  try {
+    const dir = tmpRepo();
+    init(['--repo', dir, '--stack', 'nestjs', '--tracker', 'youtrack', '--project-key', 'CI', '--render', '--no-color']);
+    const architect = fs.readFileSync(path.join(dir, 'ai/agents/architect.md'), 'utf8');
+    assert.match(architect, /Also check for `ai\/tasks\/\[task\]\/review-step-\[step\]\.md`/, 'B.1 checks for a review file');
+    assert.match(architect, /Blocking issues are required amendments/);
+    assert.match(architect, /amend the\nexisting plan file, don't rewrite it from scratch/, 'B.3 amends rather than overwriting');
+    assert.match(architect, /Mark completed phases\/steps done/);
+  } finally {
+    console.log = log;
+  }
+});
+
 atest('render: every command file has a description frontmatter block on line 1 for the picker', async () => {
   const { main: init } = require('../lib/init');
   const log = console.log;

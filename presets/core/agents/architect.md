@@ -124,16 +124,33 @@ Read `ai/tasks/[task]/description-step-[step].md` as the authoritative brief.
 - **File doesn't exist** — `enrich_description` was never run. Trigger Mode A first.
 - **File exists but feels too thin** — significant open questions, missing decisions, no discussion context — fall back to Mode A rather than guessing.
 
+**Also check for `ai/tasks/[task]/review-step-[step].md`.** If it exists alongside
+an existing `plan-step-[step].md`, this invocation is a re-plan after review, not a
+first plan — the review's blocking issues are why you were called. Read it in full.
+Blocking issues are required amendments; suggestions are the user's call, note which
+ones you folded in and why. This is the loop that otherwise goes nowhere: nothing
+else ever re-opens a review file once it's written.
+
 #### B.2 — Re-read relevant context
 
 Confirm the mandatory infrastructure docs and any `ai/contexts/**` referenced by the description are fresh in context. Re-skim the source analogs chosen during Mode A.
 
 #### B.3 — Write the plan
 
-Save to `ai/tasks/[task]/plan-step-[step].md` using the "Plan format" below. The plan
-must be **small, verifiable steps** a developer agent can execute without re-deriving
-the architecture. Order steps so the app stays compilable at each checkpoint where
-possible.
+**First plan for this step:** save to `ai/tasks/[task]/plan-step-[step].md` using the
+"Plan format" below. The plan must be **small, verifiable steps** a developer agent
+can execute without re-deriving the architecture. Order steps so the app stays
+compilable at each checkpoint where possible.
+
+**Re-plan after review (a `review-step-[step].md` triggered this):** amend the
+existing plan file, don't rewrite it from scratch. Mark completed phases/steps done
+(the developer already executed them; redoing them is wasted work and risks
+diverging from what's actually in the working tree). Fold each blocking issue's fix,
+and any accepted suggestions, into the remaining phases — add a phase if the fix
+doesn't fit an existing one. Record any fact the review surfaced that changes future
+steps (a framework constraint, a wrong assumption in the original plan) in the plan
+itself, not just in your response, so `execute_plan` sees it too. State clearly,
+near the top of the file, which phase execution should resume from.
 
 #### B.4 — Update context documentation
 

@@ -4,15 +4,12 @@ Execution order for what comes after v1. The *why* is in `DESIGN.md`
 ("The cross-repo context layer", "### Sequencing"); this is the running order and
 where we are in it.
 
-Last updated 2026-09-15 — `0.7.0` and `0.8.0` published, synced into all 6 repos,
-confirmed a clean no-op sync for `0.8.0` (it added no rendered files, CLI-only).
-`0.8.1` (picker frontmatter) and `0.8.2` (below — the tracker command path bug,
-found live in charityiq backend) not yet published, not yet synced.
+Last updated 2026-09-15 — `0.7.0` through `0.8.2` published, synced into all 6
+repos, all clean. `0.8.3` (below — the review-feedback-loop gap, found live in
+charityiq backend running `CI-8`) not yet published, not yet synced.
 
-**Resume here:** `npm publish 0.8.2` → `cairn sync` in all 6 repos (both unpublished
-versions change rendered content — every `.claude/commands/*.md` gets frontmatter,
-and the two tracker command docs + `WORKFLOW.md` get the `npx cairn tracker` fix —
-expect `fast-forward`, not `unchanged`, almost everywhere). Then: continue
+**Resume here:** `npm publish 0.8.3` → `cairn sync` in all 6 repos (`architect.md`
+changes — expect `fast-forward` there, `unchanged` elsewhere). Then: continue
 using `cairn context check` against snap-proof's real `ai/contexts/` (already run
 once locally — 34 nodes, 0 `OFF_CONVENTION`, 6 `CANDIDATE` matching the previously-
 known entity pairs, 34/34 `MISSING_FRONTMATTER` since nothing has adopted the
@@ -56,6 +53,35 @@ repos with no declared link yet (`CANDIDATE`), and once you add `counterpartOf` 
 hand, confirms the reverse edge resolved and the pair stopped showing up as a
 suggestion. Do not build ad hoc propagation tooling beyond this — `adopt` is next,
 not a hand-rolled substitute for it.
+
+## `0.8.3` — a review's blocking issues went nowhere; nothing ever re-opened them
+
+Found live in charityiq backend: `/code-review CI-8 1` wrote `review-step-1.md`
+with 10 blocking issues (failing tests, a Nest 12 / Jest ESM incompatibility, a
+missing RLS suite). The user asked whether `/plan-task` would pick that up before
+re-running it — it wouldn't have. Traced precisely (their own investigation, not
+guessed): `architect.md` B.1 reads only `description-step-[step].md`; `developer.md`
+never mentions the review at all. `review-step-[N].md` appeared solely in the "File
+roles" table — written, never read again by anything. The 0.6.2 fix made review
+survive to disk; nothing then closed the loop back into planning.
+
+Fix scoped to `architect.md` only, not `developer.md` — a second "fix-from-review"
+mode on the developer would duplicate the real fix: an amended plan that already
+states what's done and what's left is something `execute_plan` already knows how to
+follow, unchanged. Keeps developer.md's "just follow the plan, decide nothing"
+invariant intact.
+
+- `presets/core/agents/architect.md` B.1 — also checks for
+  `ai/tasks/[task]/review-step-[step].md`. Present alongside an existing plan means
+  this invocation is a re-plan after review: blocking issues are required
+  amendments, suggestions are the user's call.
+- B.3 — split into "first plan" (write fresh, unchanged behavior) vs "re-plan after
+  review" (amend the existing `plan-step-[step].md` — mark completed phases done,
+  fold fixes into the remaining ones, record any fact the review surfaced that
+  changes later steps, state which phase to resume from). Never rewrite a plan
+  whose early phases the developer already executed.
+- 1 new test (`test/run.js`): both the B.1 review-check and the B.3 amend language
+  render. 87 passing.
 
 ## `0.8.2` — tracker command docs pointed at a shim path not guaranteed to exist
 
