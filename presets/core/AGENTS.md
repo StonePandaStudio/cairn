@@ -51,7 +51,8 @@ Work in this repo, but do not plan in ignorance of the rest. When a task touches
 sibling owns (an API, a schema, a screen, a decision record), read that sibling's
 `CLAUDE.md` and `ai/contexts/**` first. Never edit a sibling as a side effect: a needed
 change there is a separate task in that repo. A missing contract is a finding to report,
-not something to mock silently.
+not something to mock silently.{{#if tracker.remote}} `/request-change [repo] [task]` files it as a
+linked {{ tracker.providerLabel }} issue for that repo's architect to pick up.{{/if}}
 
 ---
 

@@ -322,6 +322,98 @@ test('tracker: none passes markdown through untouched', () => {
   assert.strictEqual(createNone().toMarkup('# Title'), '# Title');
 });
 
+// Serve canned JSON for `fetch` calls, recording each one. Restores on completion.
+async function withFetch(routes, fn) {
+  const calls = [];
+  const orig = global.fetch;
+  global.fetch = async (url, opts = {}) => {
+    const u = String(url).replace(/^https?:\/\/[^/]+/, '');
+    calls.push({ url: u, method: opts.method || 'GET', body: opts.body ? JSON.parse(opts.body) : null });
+    const hit = Object.entries(routes).find(([k]) => u.startsWith(k));
+    const body = hit ? hit[1] : {};
+    return { ok: true, status: 200, text: async () => JSON.stringify(body), json: async () => body };
+  };
+  try {
+    await fn(calls);
+  } finally {
+    global.fetch = orig;
+  }
+}
+
+const ytEnv = { YOUTRACK_URL: 'https://yt.example', YOUTRACK_TOKEN: 't', YOUTRACK_PROJECT: 'CI' };
+
+atest('tracker: youtrack link resolves the issue id, then posts a "depends on" command', async () => {
+  await withFetch({ '/api/issues/CI-14': { id: '2-14' } }, async (calls) => {
+    const res = await createYouTrack({}, ytEnv).link({ key: 'CI-14', dependsOn: 'CI-20' });
+    assert.deepStrictEqual(res, { key: 'CI-14', dependsOn: 'CI-20' });
+    const cmd = calls.find((c) => c.url === '/api/commands');
+    assert.strictEqual(cmd.method, 'POST');
+    assert.deepStrictEqual(cmd.body, { issues: [{ id: '2-14' }], query: 'depends on CI-20' });
+  });
+});
+
+atest('tracker: youtrack link rejects missing keys and self-dependency before any request', async () => {
+  await withFetch({}, async (calls) => {
+    const t = createYouTrack({}, ytEnv);
+    await assert.rejects(() => t.link({ dependsOn: 'CI-1' }), /requires a key/);
+    await assert.rejects(() => t.link({ key: 'CI-1' }), /requires dependsOn/);
+    await assert.rejects(() => t.link({ key: 'CI-1', dependsOn: 'CI-1' }), /depend on itself/);
+    assert.strictEqual(calls.length, 0);
+  });
+});
+
+atest('tracker: youtrack get reports subtask and Depend links from one links fetch', async () => {
+  const links = [
+    { direction: 'INWARD', linkType: { name: 'Subtask' }, issues: [{ idReadable: 'CI-1' }] },
+    { direction: 'OUTWARD', linkType: { name: 'Subtask' }, issues: [{ idReadable: 'CI-3' }] },
+    { direction: 'INWARD', linkType: { name: 'Depend' }, issues: [{ idReadable: 'CI-20' }] },
+    { direction: 'OUTWARD', linkType: { name: 'Depend' }, issues: [{ idReadable: 'CI-30' }] },
+  ];
+  await withFetch(
+    { '/api/issues/CI-2/links': links, '/api/issues/CI-2': { idReadable: 'CI-2', summary: 's', customFields: [] } },
+    async (calls) => {
+      const issue = await createYouTrack({}, ytEnv).get('CI-2');
+      assert.strictEqual(issue.parent, 'CI-1');
+      assert.deepStrictEqual(issue.subtasks, ['CI-3']);
+      assert.deepStrictEqual(issue.dependsOn, ['CI-20']);
+      assert.deepStrictEqual(issue.requiredFor, ['CI-30']);
+      assert.strictEqual(calls.filter((c) => c.url.includes('/links')).length, 1);
+    },
+  );
+});
+
+atest('tracker: link is a skip on none and an explicit error on jira-server', async () => {
+  assert.strictEqual((await createNone().link({ key: 'X-1', dependsOn: 'X-2' })).skipped, true);
+  await assert.rejects(
+    () => createJiraServer({ projectKey: 'X' }, {}).link({ key: 'X-1', dependsOn: 'X-2' }),
+    /not implemented for jira-server/,
+  );
+});
+
+test('render: request-change exists only with both a workspace and a remote tracker', () => {
+  const render = require('../lib/render');
+  const root = workspaceFixture(
+    { repos: [{ name: 'backend', path: 'backend' }, { name: 'frontend', path: 'frontend' }] },
+    { backend: { stack: ['nestjs'] }, frontend: { stack: ['react'] } },
+  );
+  const repoPath = path.join(root, 'frontend');
+  const rels = (config, rp) =>
+    render.renderTargets({ config, presetsDir: 'presets', repoPath: rp }).targets.map((t) => t[0]);
+  const yt = { stack: ['react'], tracker: { provider: 'youtrack', projectKey: 'CI' } };
+  const none = { stack: ['react'], tracker: { provider: 'none' } };
+
+  assert.ok(rels(yt, repoPath).includes('.claude/commands/request-change.md'));
+  assert.ok(!rels(none, repoPath).includes('.claude/commands/request-change.md'), 'no tracker');
+  assert.ok(!rels(yt, null).includes('.claude/commands/request-change.md'), 'no workspace');
+
+  const cmd = render.renderTargets({ config: yt, presetsDir: 'presets', repoPath }).targets.find(
+    (t) => t[0] === '.claude/commands/request-change.md',
+  )[1];
+  assert.ok(/^---\ndescription: .*YouTrack/.test(cmd), 'frontmatter, provider named');
+  assert.ok(!/\{\{/.test(cmd), 'no unresolved template tags');
+  assert.ok(cmd.includes('ReactArchitectAgent'));
+});
+
 // --------------------------------------------------------------------- cli
 
 test('cli: flags without a value are booleans', () => {
