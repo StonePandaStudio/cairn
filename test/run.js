@@ -414,6 +414,30 @@ test('render: request-change exists only with both a workspace and a remote trac
   assert.ok(cmd.includes('ReactArchitectAgent'));
 });
 
+test('render: the tracker gets a digest, not the description file', () => {
+  const render = require('../lib/render');
+  const root = workspaceFixture(
+    { repos: [{ name: 'backend', path: 'backend' }, { name: 'frontend', path: 'frontend' }] },
+    { backend: { stack: ['nestjs'] }, frontend: { stack: ['react'] } },
+  );
+  const yt = { stack: ['react'], tracker: { provider: 'youtrack', projectKey: 'CI' } };
+  const pick = (cfg, rp, rel) =>
+    render.renderTargets({ config: cfg, presetsDir: 'presets', repoPath: rp }).targets.find((t) => t[0] === rel)[1];
+
+  const wf = pick(yt, null, 'ai/WORKFLOW.md');
+  assert.ok(/### What goes to the tracker/.test(wf));
+  assert.ok(/under about 600 characters/.test(wf));
+  assert.ok(!/← the enriched description[;\s|]/.test(wf), 'no longer says to paste the enriched description');
+  assert.ok(!/Exception: `\/request-change`/.test(wf), 'request exception only inside a workspace');
+  assert.ok(/Exception: `\/request-change`/.test(pick(yt, path.join(root, 'frontend'), 'ai/WORKFLOW.md')));
+
+  const arch = pick(yt, null, 'ai/agents/architect.md');
+  assert.ok(/never the description file itself/.test(arch));
+
+  const none = pick({ stack: ['react'], tracker: { provider: 'none' } }, null, 'ai/WORKFLOW.md');
+  assert.ok(!/What goes to the tracker/.test(none));
+});
+
 // --------------------------------------------------------------------- cli
 
 test('cli: flags without a value are booleans', () => {

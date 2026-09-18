@@ -42,6 +42,23 @@ it locally, mention that once, never sync it.
 | `{{ this.fn }}(task, step)` | {{ this.trackerAction }} |
 {{/each}}
 
+### What goes to the tracker
+
+The tracker is an index for people scanning a board. `ai/tasks/[KEY]/` is the source
+of truth, and the sync is one-way, so a pasted copy of a step file goes stale the
+moment the file is edited. Post a digest, never the file:
+
+- **`create_brief`** — the child issue gets the title, 2–3 sentences of what and why,
+  and the brief's path (`ai/tasks/[KEY]/brief-step-[N].md`).
+- **`enrich_description`** — under about 600 characters: a 1–3 sentence outcome, at most
+  5 one-line key decisions, and the path `ai/tasks/[KEY]/description-step-[N].md` as the
+  last line. No tables, no file lists, no code, no implementation steps.
+- **`plan_task`** — the stage move only. Nothing from the plan is posted.
+{{#if workspace}}
+- **Exception: `/request-change`.** The receiving repo has no local copy of the request,
+  so its issue carries the full What / Why / Acceptance. Keep them tight anyway.
+{{/if}}
+
 Later stage moves (`{{ tracker.reviewStage }}` onward) are manual — the tracker UI,
 `/{{ tracker.slug }}-status`, or `npx cairn tracker close` (closes the parent and
 every subtask together). Assignee changes: `/{{ tracker.slug }}-assign`. Both

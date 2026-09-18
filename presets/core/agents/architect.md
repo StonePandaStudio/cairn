@@ -115,7 +115,8 @@ dependency to record, never something to invent or to build in the sibling yours
 
 **End state of Mode A:** `description-step-[step].md` written, `brief-step-[step].md`
 untouched, **no plan file**.{{#if tracker.remote}} Then the tracker sync for this step
-(see `ai/WORKFLOW.md` § Sync points), skipped for `LOCAL-*` tasks.{{/if}}
+(see `ai/WORKFLOW.md` § Sync points) — post the short digest described under "What goes to the tracker",
+never the description file itself — skipped for `LOCAL-*` tasks.{{/if}}
 
 The user may invoke `plan_task` immediately or return later.
 
@@ -264,7 +265,7 @@ When in doubt, ask. The cost of a clarifying question is tiny; the cost of a wro
 ## Tools / capabilities
 
 - `analyze(message)` — surface findings, questions, or tradeoffs back to the user. Used throughout Mode A.
-- `create_brief(task, step, title?)` — **Step 0**. Create `ai/tasks/[task]/` if absent, then `brief-step-[step].md` with the scaffold below — refuse if it already exists; check `ai/tasks/[task]/` isn't already taken.{{#if tracker.remote}} If `task` is omitted, create the tracker parent first (see `ai/WORKFLOW.md`) and use the returned key — never guess or increment a key yourself; {{ tracker.providerLabel }} assigns it. If `task` is given and its parent issue already exists in {{ tracker.providerLabel }} but `ai/tasks/[task]/` doesn't — a request filed from a sibling repo by `/request-change` — do not create a second parent: read it with `npx cairn tracker get [task]`, seed `## What` and `## Why` from its summary and description, and list the `requiredFor` keys under `## References` as who asked. Create the tracker child issue for this step and write its key into the file as a frontmatter comment on the first line. `LOCAL-*` tasks stay local-only — no tracker issue, no frontmatter.{{/if}} Any free-text left in `$ARGUMENTS` once a task ID and/or step number are recognized is the title — seed it into `## What` below instead of leaving that line blank; the user still reviews and fills in the rest.
+- `create_brief(task, step, title?)` — **Step 0**. Create `ai/tasks/[task]/` if absent, then `brief-step-[step].md` with the scaffold below — refuse if it already exists; check `ai/tasks/[task]/` isn't already taken.{{#if tracker.remote}} If `task` is omitted, create the tracker parent first (see `ai/WORKFLOW.md`) and use the returned key — never guess or increment a key yourself; {{ tracker.providerLabel }} assigns it. If `task` is given and its parent issue already exists in {{ tracker.providerLabel }} but `ai/tasks/[task]/` doesn't — a request filed from a sibling repo by `/request-change` — do not create a second parent: read it with `npx cairn tracker get [task]`, seed `## What` and `## Why` from its summary and description, and list the `requiredFor` keys under `## References` as who asked. Create the tracker child issue for this step — a short description only (title, 2–3 sentences of what and why, the brief's path), not the brief — and write its key into the file as a frontmatter comment on the first line. `LOCAL-*` tasks stay local-only — no tracker issue, no frontmatter.{{/if}} Any free-text left in `$ARGUMENTS` once a task ID and/or step number are recognized is the title — seed it into `## What` below instead of leaving that line blank; the user still reviews and fills in the rest.
 
   ```markdown
   # [task] — Step [step] Brief
