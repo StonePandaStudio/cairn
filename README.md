@@ -171,9 +171,17 @@ overwriting a hand edit is the destructive outcome.
 ### Workspace config (`repos.json`)
 
 - `repos[]` — name, path, stack (`"angular"` or a list `["nestjs", "typeorm"]` —
-  framework first). Per-repo settings live in each repo's own `cairn.config.json`;
+  framework first), and an optional one-line `role` (`"REST API, source of truth for the
+  contract"`). Per-repo settings live in each repo's own `cairn.config.json`;
   the inline `vars` blocks are a fallback used only until a repo has been through
   `cairn init`, so migration can happen one repo at a time.
+- **The workspace reaches the agents too.** `cairn render` / `cairn sync` look for this
+  file at `../repos.json` (or `workspace` in the repo's `cairn.config.json`). If the repo
+  is listed in it alongside others, the rendered `ai/AGENTS.md` gains a **Workspace**
+  table (sibling name, relative path, stack, `role`), and the architect's mandatory
+  checklist and description format require it to name which siblings the task touches.
+  Without this, a repo's agents know nothing of the other repos in the project. Adding a
+  repo or a `role` changes the render; `cairn sync` carries it in.
 - `pathAliases` — local → canonical. When one repo names a stub `execute-tests.md`
   where the others use `execute-test-plan.md`, aliasing folds them onto the cohort's
   names instead of reporting one `MISSING` and one `STRANDED` for the same file.
@@ -194,6 +202,7 @@ opt-in hub that references the projects for cross-project comparison. See `DESIG
 ```
 bin/cairn.js           subcommand router
 lib/config.js          cairn.config.json + .env loading
+lib/workspace.js       sibling repos from repos.json, for the renderer
 lib/manifest.js        generated-file hashing and state
 lib/paint.js           ANSI + table rendering
 lib/tracker/           index (registry), cli, jira-server, youtrack, none
@@ -208,4 +217,4 @@ test/run.js            dependency-free test runner
 ```
 
 No runtime dependencies (`cairn sync` shells out to `git`). Node >= 18. `npm test`
-runs 74 tests.
+runs the whole suite.

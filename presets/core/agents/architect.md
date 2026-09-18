@@ -81,7 +81,8 @@ Before proposing structure, read:
 **Situational — read what applies:**
 - `ai/contexts/entities/*.md` for any domain entity the task touches
 - other `ai/contexts/**` for any feature area the task modifies
-
+{{#if workspace}}- for each sibling repo the task touches (`ai/AGENTS.md` → Workspace): its `CLAUDE.md`, its `ai/contexts/**`, and the file that owns the contract you depend on
+{{/if}}
 Then, in the source tree, look for the **nearest existing analog** and read how it's
 wired. New work should follow the same shape unless there's a specific reason to
 diverge.
@@ -106,6 +107,11 @@ Once alignment is reached, write the discussion outcome to
 `ai/tasks/[task]/description-step-[step].md`. This is a **new file** — never modify
 `brief-step-[step].md`. The description becomes the authoritative task brief:
 complete enough that `plan_task` can run from it alone.
+{{#if workspace}}
+It must say which sibling repos the task touches and what it needs from each (an endpoint,
+a DTO, a screen), or state `none`. A contract that does not exist yet is an open
+dependency to record, never something to invent or to build in the sibling yourself.
+{{/if}}
 
 **End state of Mode A:** `description-step-[step].md` written, `brief-step-[step].md`
 untouched, **no plan file**.{{#if tracker.remote}} Then the tracker sync for this step
@@ -189,7 +195,8 @@ Before producing a plan, confirm you have read:
 - [ ] `ai/infrastructure/project-structure.md`
 - [ ] `ai/infrastructure/mappers.md`
 - [ ] All `ai/contexts/**` files relevant to the entities or features in scope
-- [ ] At least one existing analog in the source tree for the pattern you're about to prescribe
+{{#if workspace}}- [ ] Every sibling repo the task touches (`ai/AGENTS.md` → Workspace), or an explicit note that it touches none
+{{/if}}- [ ] At least one existing analog in the source tree for the pattern you're about to prescribe
 
 ---
 

@@ -36,6 +36,26 @@ Read `{{ this.doc }}` for the full role, workflow, tools, and instructions.{{#if
 
 ---
 
+{{#if workspace}}
+## Workspace
+
+This repo is one of {{ workspace.count }} in a workspace (`{{ workspace.file }}`). The others:
+
+| Repo | Path | Stack | Role |
+|---|---|---|---|
+{{#each workspace.siblings}}
+| `{{ this.name }}` | `{{ this.path }}` | {{ this.stack }} | {{ this.role }} |
+{{/each}}
+
+Work in this repo, but do not plan in ignorance of the rest. When a task touches what a
+sibling owns (an API, a schema, a screen, a decision record), read that sibling's
+`CLAUDE.md` and `ai/contexts/**` first. Never edit a sibling as a side effect: a needed
+change there is a separate task in that repo. A missing contract is a finding to report,
+not something to mock silently.
+
+---
+
+{{/if}}
 ## Tracker
 
 {{#if tracker.remote}}

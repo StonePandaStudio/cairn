@@ -1461,6 +1461,74 @@ atest('context: CLI build/check/counterparts against a repos.json workspace, --s
   }
 });
 
+// ---------------------------------------------------------------- workspace
+
+function workspaceFixture(reposJson, repoConfigs) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'cairn-ws-'));
+  fs.writeFileSync(path.join(root, 'repos.json'), JSON.stringify(reposJson));
+  for (const [name, cfg] of Object.entries(repoConfigs)) {
+    fs.mkdirSync(path.join(root, name), { recursive: true });
+    if (cfg) fs.writeFileSync(path.join(root, name, 'cairn.config.json'), JSON.stringify(cfg));
+  }
+  return root;
+}
+
+test('workspace: siblings come from ../repos.json, self excluded, stack read from their config', () => {
+  const { workspaceContext } = require('../lib/workspace');
+  const root = workspaceFixture(
+    { repos: [{ name: 'backend', path: 'backend', role: 'REST API' }, { name: 'frontend', path: 'frontend' }] },
+    { backend: { stack: ['nestjs', 'typeorm'] }, frontend: { stack: ['react'] } },
+  );
+  const ws = workspaceContext(path.join(root, 'frontend'), {});
+  assert.strictEqual(ws.count, 2);
+  assert.strictEqual(ws.file, '../repos.json');
+  assert.deepStrictEqual(ws.siblings, [
+    { name: 'backend', path: '../backend', stack: 'nestjs, typeorm', role: 'REST API' },
+  ]);
+});
+
+test('workspace: none when repos.json is absent, the repo is not listed, or it is alone', () => {
+  const { workspaceContext } = require('../lib/workspace');
+  const lone = fs.mkdtempSync(path.join(os.tmpdir(), 'cairn-ws-'));
+  fs.mkdirSync(path.join(lone, 'a'));
+  assert.strictEqual(workspaceContext(path.join(lone, 'a'), {}), null, 'no repos.json');
+
+  const unlisted = workspaceFixture({ repos: [{ name: 'b', path: 'b' }, { name: 'c', path: 'c' }] }, { a: null, b: null, c: null });
+  assert.strictEqual(workspaceContext(path.join(unlisted, 'a'), {}), null, 'repo not a member');
+
+  const solo = workspaceFixture({ repos: [{ name: 'a', path: 'a' }] }, { a: null });
+  assert.strictEqual(workspaceContext(path.join(solo, 'a'), {}), null, 'no siblings');
+  assert.strictEqual(workspaceContext(null, {}), null, 'no repoPath');
+});
+
+test('workspace: config.workspace overrides the ../repos.json default', () => {
+  const { workspaceContext } = require('../lib/workspace');
+  const root = workspaceFixture({ repos: [] }, { a: null, b: null });
+  fs.writeFileSync(path.join(root, 'a', 'ws.json'), JSON.stringify({ repos: [{ name: 'a', path: '.' }, { name: 'b', path: '../b' }] }));
+  const ws = workspaceContext(path.join(root, 'a'), { workspace: 'ws.json' });
+  assert.deepStrictEqual(ws.siblings.map((s) => s.name), ['b']);
+  assert.strictEqual(ws.file, 'ws.json');
+});
+
+test('workspace: render emits the Workspace section and architect checks only inside a workspace', () => {
+  const render = require('../lib/render');
+  const root = workspaceFixture(
+    { repos: [{ name: 'backend', path: 'backend', role: 'REST API' }, { name: 'frontend', path: 'frontend' }] },
+    { backend: { stack: ['nestjs'] }, frontend: { stack: ['react'] } },
+  );
+  const config = { stack: ['react'], tracker: { provider: 'none' } };
+  const pick = (targets, rel) => targets.find((t) => t[0] === rel)[1];
+
+  const inside = render.renderTargets({ config, presetsDir: 'presets', repoPath: path.join(root, 'frontend') }).targets;
+  assert.ok(/## Workspace/.test(pick(inside, 'ai/AGENTS.md')));
+  assert.ok(pick(inside, 'ai/AGENTS.md').includes('| `backend` | `../backend` | nestjs | REST API |'));
+  assert.ok(/Every sibling repo the task touches/.test(pick(inside, 'ai/agents/architect.md')));
+
+  const outside = render.renderTargets({ config, presetsDir: 'presets' }).targets;
+  assert.ok(!/Workspace/.test(pick(outside, 'ai/AGENTS.md')), 'no repoPath -> no section');
+  assert.ok(!/sibling repo/.test(pick(outside, 'ai/agents/architect.md')));
+});
+
 // ------------------------------------------------------------------- runner
 
 (async () => {

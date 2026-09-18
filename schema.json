@@ -19,6 +19,11 @@
       ],
       "examples": ["angular", ["nestjs", "typeorm"], "cli"]
     },
+    "workspace": {
+      "type": "string",
+      "description": "Path, relative to this repo, of the workspace `repos.json` listing this repo and its siblings. Defaults to `../repos.json`. When found (and this repo is listed in it), the rendered ai/AGENTS.md gains a Workspace table and the architect must account for the sibling repos.",
+      "examples": ["../repos.json"]
+    },
     "validationStack": {
       "type": "string",
       "enum": ["zod", "class-validator"],
