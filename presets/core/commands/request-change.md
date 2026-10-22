@@ -31,8 +31,12 @@ task this serves; if there is none, say the request will be unlinked.
      `backend`), which marks who owns the request. Start the description file with a
      `Requested by: [source-task] ([this repo])` line. It prints the new key.
    - `link [source-task] [new-key]` — the source task now *depends on* the request.
-     If `link` isn't supported by this tracker, or the source is a `LOCAL-*` task, skip
-     it and say so; the key is still recorded in the next step.
+     Skip it if the source is a `LOCAL-*` task. If it fails with `Unknown command: link`,
+     the installed cairn predates it: tell the user to update cairn, don't give up on the
+     link. Fall back to `append-description [source-task] "Depends on [new-key] ([target repo])"`
+     and `append-description [new-key] "Blocks [source-task] ([this repo])"` so the
+     relation is at least visible on both issues. If `link` itself errors (e.g. jira-server,
+     not implemented), use the same fallback.
 5. **Record the dependency** under `## Open dependencies` in
    `ai/tasks/[source-task]/description-step-[N].md` (create the section if absent):
    the new key, the repo, and what it unblocks. `plan_task` must treat it as a blocker

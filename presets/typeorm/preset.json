@@ -1,0 +1,4 @@
+{
+  "kind": "orm",
+  "description": "TypeORM entities, queries, migrations, decomposition (appended to nestjs)"
+}

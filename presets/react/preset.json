@@ -1,0 +1,4 @@
+{
+  "kind": "framework",
+  "description": "React frontend spine: components, hooks, state, testing (styling-agnostic)"
+}

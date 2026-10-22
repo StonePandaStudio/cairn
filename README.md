@@ -26,6 +26,7 @@ npx cairn init --stack nestjs,typeorm --tracker jira-server --project-key MYPROJ
 | `cairn render` | Scaffolds `ai/` + `.claude/commands/` from the bundled presets, from the repo's stack + workflow |
 | `/request-change` | Not a `cairn` subcommand — a slash command `render` adds to repos that share a workspace and a remote tracker. Files a `[target-repo]` issue in the shared tracker project, linked so the requesting task *depends on* it; the target repo adopts it with `/create-brief <key>` |
 | `cairn sync` | Re-renders and three-way merges preset changes into a repo that has already rendered |
+| `cairn preset list` | The bundled presets — kind (framework / orm / styling), what each ships, and which ones this repo's `stack` uses. `render`, `sync` and `init` also check the stack: a name listed twice or `core` as an entry is refused; a name with no preset (a typo) warns with a suggestion — `cli` and `unknown` are the deliberate exceptions |
 | `cairn context <cmd>` | **Prototype.** Resolves `ai/contexts/**/*.md` across a `repos.json` workspace into a graph — declared `counterpartOf` links, inferred reverse edges, and a same-path/same-title suggest pass. `build` / `check` / `counterparts <id>`; `check` never fails CI on its own (`--strict` opts in) |
 
 `cairn render` is **greenfield only**: it writes files that do not exist, records them
@@ -204,6 +205,7 @@ opt-in hub that references the projects for cross-project comparison. See `DESIG
 bin/cairn.js           subcommand router
 lib/config.js          cairn.config.json + .env loading
 lib/workspace.js       sibling repos from repos.json, for the renderer
+lib/presets.js         preset catalogue + stack validation; lib/preset/ is `cairn preset`
 lib/manifest.js        generated-file hashing and state
 lib/paint.js           ANSI + table rendering
 lib/tracker/           index (registry), cli, jira-server, youtrack, none

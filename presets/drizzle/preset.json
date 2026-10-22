@@ -1,0 +1,4 @@
+{
+  "kind": "orm",
+  "description": "Drizzle schema, drizzle-kit migrations, RLS in migrations (Postgres/Supabase)"
+}

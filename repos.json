@@ -1,110 +1,13 @@
 {
-  "$comment": "Workspace for `cairn doctor`. Repos listed here are compared against each other. Per-repo settings (tracker, stack, agent names) belong in each repo's own cairn.config.json — the inline `vars` blocks below are a fallback used only until a repo has been through `cairn init`.",
+  "$comment": "Workspace for `cairn doctor`. Repos listed here are compared against each other. Per-repo settings (tracker, stack, agent names) belong in each repo's own cairn.config.json — an entry here only needs name, path and stack. An inline `vars` block is a fallback used only for a repo that has not been through `cairn init` yet. charityiq-app/ and snap-proof/ each carry their own repos.json too (the sibling list rendered into their AGENTS.md); this one spans all of them for doctor.",
 
   "repos": [
-    {
-      "name": "glossr-api",
-      "path": "D:/projects/glossr/glossr-api",
-      "stack": ["nestjs", "typeorm"],
-      "vars": {
-        "jiraKey": "GLO",
-        "storyType": "Story",
-        "subtaskType": "Sub-task",
-        "architectAgent": "NodeArchitectAgent",
-        "architectDoc": "ai/agents/node-architect.md",
-        "developerAgent": "NodeDeveloperAgent",
-        "developerDoc": "ai/agents/node-developer.md",
-        "reviewerAgent": "NodeReviewerAgent",
-        "reviewerDoc": "ai/agents/node-reviewer.md",
-        "qaArchitectAgent": "NodeQAArchitectAgent",
-        "qaArchitectDoc": "ai/agents/node-qa-architect.md",
-        "qaDeveloperAgent": "NodeQADeveloperAgent",
-        "qaDeveloperDoc": "ai/agents/node-qa-developer.md",
-        "qaOrchestratorAgent": "NodeQAOrchestratorAgent",
-        "qaOrchestratorDoc": "ai/agents/node-qa-orchestrator.md"
-      }
-    },
-    {
-      "name": "snap-backend",
-      "path": "D:/projects/snap-proof/backend",
-      "stack": ["nestjs", "typeorm"],
-      "vars": {
-        "jiraKey": "PROOF",
-        "storyType": "Task",
-        "subtaskType": "Sub-task",
-        "architectAgent": "NodeArchitectAgent",
-        "architectDoc": "ai/agents/node-architect.md",
-        "developerAgent": "NodeDeveloperAgent",
-        "developerDoc": "ai/agents/node-developer.md",
-        "reviewerAgent": "NodeReviewerAgent",
-        "reviewerDoc": "ai/agents/node-reviewer.md",
-        "qaArchitectAgent": "NodeQAArchitectAgent",
-        "qaArchitectDoc": "ai/agents/node-qa-architect.md",
-        "qaDeveloperAgent": "NodeQADeveloperAgent",
-        "qaDeveloperDoc": "ai/agents/node-qa-developer.md",
-        "qaOrchestratorAgent": "NodeQAOrchestratorAgent",
-        "qaOrchestratorDoc": "ai/agents/node-qa-orchestrator.md"
-      }
-    },
-    {
-      "name": "snap-frontend",
-      "path": "D:/projects/snap-proof/frontend",
-      "stack": "angular",
-      "vars": {
-        "jiraKey": "PROOF",
-        "storyType": "Task",
-        "subtaskType": "Sub-task",
-        "architectAgent": "AngularArchitectAgent",
-        "architectDoc": "ai/agents/architect-lead.md",
-        "developerAgent": "AngularDeveloperAgent",
-        "developerDoc": "ai/agents/angular-developer.md",
-        "reviewerAgent": "AngularReviewerAgent",
-        "reviewerDoc": "ai/agents/angular-reviewer.md",
-        "qaDeveloperAgent": "AngularQAAgent",
-        "qaDeveloperDoc": "ai/agents/angular-qa.md"
-      }
-    },
-    {
-      "name": "glossr-frontend",
-      "path": "D:/projects/glossr/glossr-frontend",
-      "stack": "angular",
-      "vars": {
-        "jiraKey": "GLO",
-        "storyType": "Story",
-        "subtaskType": "Sub-task",
-        "architectAgent": "AngularArchitectAgent",
-        "architectDoc": "ai/agents/architect-lead.md",
-        "developerAgent": "AngularDeveloperAgent",
-        "developerDoc": "ai/agents/angular-developer.md",
-        "reviewerAgent": "AngularReviewerAgent",
-        "reviewerDoc": "ai/agents/angular-reviewer.md"
-      }
-    },
-    {
-      "$comment": "No issue tracker and no ai/scripts/. It is in the workspace as the stack-agnostic test case: rules that require a tracker skip it, and its renamed command stubs are folded onto the canonical names via pathAliases rather than reported as gaps.",
-      "name": "glossr-cli",
-      "path": "D:/projects/glossr/glossr-cli",
-      "stack": "cli",
-      "pathAliases": {
-        ".claude/commands/execute-tests.md": ".claude/commands/execute-test-plan.md",
-        ".claude/commands/review-code.md": ".claude/commands/code-review.md"
-      },
-      "vars": {
-        "jiraKey": "GLO",
-        "storyType": "Story",
-        "subtaskType": "Sub-task",
-        "architectAgent": "CliArchitectAgent",
-        "architectDoc": "ai/agents/cli-architect.md",
-        "developerAgent": "CliDeveloperAgent",
-        "developerDoc": "ai/agents/cli-developer.md",
-        "reviewerAgent": "CliReviewerAgent",
-        "reviewerDoc": "ai/agents/cli-node-reviewer.md",
-        "qaArchitectAgent": "CliQAArchitectAgent",
-        "qaArchitectDoc": "ai/agents/cli-qa-architect.md",
-        "qaDeveloperAgent": "CliQADeveloperAgent",
-        "qaDeveloperDoc": "ai/agents/cli-qa-developer.md"
-      }
-    }
+    { "name": "charityiq-backend", "path": "D:/projects/charityiq-app/backend", "stack": ["nestjs", "typeorm"] },
+    { "name": "charityiq-frontend", "path": "D:/projects/charityiq-app/frontend", "stack": ["react"] },
+    { "name": "charityiq-admin", "path": "D:/projects/charityiq-app/admin", "stack": ["react", "tailwind"] },
+    { "name": "charityiq-docs", "path": "D:/projects/charityiq-app/docs", "stack": ["unknown"] },
+    { "name": "snap-backend", "path": "D:/projects/snap-proof/backend", "stack": ["nestjs", "typeorm"] },
+    { "name": "snap-frontend", "path": "D:/projects/snap-proof/frontend", "stack": ["angular"] }
   ],
 
   "shared": [

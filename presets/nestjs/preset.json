@@ -1,0 +1,4 @@
+{
+  "kind": "framework",
+  "description": "NestJS + TypeScript spine, ORM-agnostic; optional QA pipeline agents"
+}

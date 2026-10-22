@@ -20,14 +20,24 @@ prefix so a folder name can never collide with a real issue key.
 ## Sync to {{ tracker.providerLabel }}
 
 `ai/tasks/[KEY]/` mirrors to the `{{ tracker.exampleKey }}` project. The folder name
-is the parent issue key; each step's child-issue key is stamped into the first line
+is the parent issue key; each step's issue key is stamped into the first line
 of its `brief-step-[N].md`:
 
 ```
 <!-- {{ tracker.subtaskMarker }}: {{ tracker.exampleKey }}-4 -->
 ```
 
-Issue keys are project-sequential, not per-parent — a parent and child with
+**Step 1 is the parent issue itself** — its marker carries the folder key, and a
+one-step task is one issue. From step 2 on, each step gets a child issue under the
+parent and its marker carries the child's key. Nothing is split off or moved when a
+task grows a second step: the parent keeps step 1's history and stays step 1's issue,
+and `brief-step-1.md`'s marker is never rewritten.
+
+A marker equal to the folder key means the step's issue *is* the parent: do that
+step's tracker actions once, on that one issue — no summary to append to the parent,
+no second stage move.
+
+Child keys are project-sequential, not per-parent — a parent and child with
 unrelated numbers is normal. The parent link is the tracker's own link, not the key.
 
 **In scope:** a folder starting `{{ tracker.exampleKey }}-` whose step file carries
@@ -48,8 +58,11 @@ The tracker is an index for people scanning a board. `ai/tasks/[KEY]/` is the so
 of truth, and the sync is one-way, so a pasted copy of a step file goes stale the
 moment the file is edited. Post a digest, never the file:
 
-- **`create_brief`** — the child issue gets the title, 2–3 sentences of what and why,
-  and the brief's path (`ai/tasks/[KEY]/brief-step-[N].md`).
+- **`create_brief`** — the step's issue (the parent for step 1, a child from step 2)
+  gets the title, 2–3 sentences of what and why, and the brief's path
+  (`ai/tasks/[KEY]/brief-step-[N].md`). The first time a child is created for a task
+  whose step 1 sits on the parent, append one line to the parent: it tracks step 1 and
+  steps 2+ are its sub-issues.
 - **`enrich_description`** — under about 600 characters: a 1–3 sentence outcome, at most
   5 one-line key decisions, and the path `ai/tasks/[KEY]/description-step-[N].md` as the
   last line. No tables, no file lists, no code, no implementation steps.

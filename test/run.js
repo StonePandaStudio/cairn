@@ -438,6 +438,155 @@ test('render: the tracker gets a digest, not the description file', () => {
   assert.ok(!/What goes to the tracker/.test(none));
 });
 
+test('render: step 1 is the parent issue, children start at step 2', () => {
+  const render = require('../lib/render');
+  const yt = { stack: ['react'], tracker: { provider: 'youtrack', projectKey: 'CI' } };
+  const pick = (rel) =>
+    render.renderTargets({ config: yt, presetsDir: 'presets', repoPath: null }).targets.find((t) => t[0] === rel)[1];
+
+  const wf = pick('ai/WORKFLOW.md');
+  assert.ok(/Step 1 is the parent issue itself/.test(wf));
+  assert.ok(/marker equal to the folder key/.test(wf));
+  assert.ok(/step 1: create the parent issue if new and use it as the step's issue, no child/.test(wf));
+  assert.ok(!/always create the child issue/.test(wf), 'no unconditional child per step');
+
+  const arch = pick('ai/agents/architect.md');
+  assert.ok(/create no child for it/.test(arch));
+  assert.ok(/From step 2 on, create a child issue/.test(arch));
+});
+
+// ------------------------------------------------------------------ presets
+
+test('presets: listPresets reads every folder but core, with kind and what it ships', () => {
+  const { listPresets } = require('../lib/presets');
+  const all = listPresets();
+  const names = all.map((p) => p.name);
+  assert.ok(!names.includes('core'), 'core is applied to everyone, not a choice');
+  for (const n of ['nestjs', 'react', 'typeorm', 'tailwind']) assert.ok(names.includes(n), n);
+  const nest = all.find((p) => p.name === 'nestjs');
+  assert.strictEqual(nest.kind, 'framework');
+  assert.ok(nest.ships.includes('slots') && nest.ships.includes('agents'));
+  assert.strictEqual(all.find((p) => p.name === 'tailwind').kind, 'styling');
+  assert.ok(all.every((p) => p.kind !== 'other'), 'every bundled preset carries a preset.json');
+});
+
+test('presets: a folder without preset.json is still listed, as kind "other"', () => {
+  const { listPresets } = require('../lib/presets');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cairn-presets-'));
+  fs.mkdirSync(path.join(dir, 'svelte', 'slots'), { recursive: true });
+  fs.mkdirSync(path.join(dir, 'core'));
+  assert.deepStrictEqual(listPresets(dir), [{ name: 'svelte', kind: 'other', description: '', ships: ['slots'] }]);
+});
+
+test('presets: validateStack accepts real presets and the deliberate preset-less names', () => {
+  const { validateStack } = require('../lib/presets');
+  assert.deepStrictEqual(validateStack(['nestjs', 'typeorm']), { errors: [], warnings: [] });
+  assert.deepStrictEqual(validateStack(['cli']), { errors: [], warnings: [] });
+  assert.deepStrictEqual(validateStack(['unknown']), { errors: [], warnings: [] });
+});
+
+test('presets: a likely typo warns with a suggestion, an unrelated name warns without one', () => {
+  const { validateStack } = require('../lib/presets');
+  const typo = validateStack(['react', 'tailwnd']);
+  assert.strictEqual(typo.errors.length, 0, 'a warning must not block');
+  assert.ok(/no preset "tailwnd".*did you mean "tailwind"\?/.test(typo.warnings[0]));
+  const other = validateStack(['zzzzzz']);
+  assert.ok(/no preset "zzzzzz"/.test(other.warnings[0]) && !/did you mean/.test(other.warnings[0]));
+});
+
+test('presets: core as an entry and a repeated name are errors', () => {
+  const { validateStack } = require('../lib/presets');
+  assert.ok(/always applied/.test(validateStack(['core', 'react']).errors[0]));
+  assert.ok(/more than once/.test(validateStack(['react', 'react']).errors[0]));
+});
+
+test('presets: checkStack prints warnings but only errors return false', () => {
+  const { checkStack } = require('../lib/presets');
+  const lines = [];
+  const err = (l) => lines.push(l);
+  assert.strictEqual(checkStack(['react', 'tailwnd'], { err }), true);
+  assert.ok(lines[0].startsWith('warning: stack:'));
+  lines.length = 0;
+  assert.strictEqual(checkStack(['react', 'react'], { err }), false);
+  assert.ok(lines[0].startsWith('error: stack:'));
+});
+
+test('presets: init and render refuse a stack that lists a name twice', () => {
+  const { main: init } = require('../lib/init');
+  const dir = tmpRepo();
+  const errs = [];
+  const orig = console.error;
+  console.error = (l) => errs.push(l);
+  try {
+    assert.strictEqual(init(['--repo', dir, '--stack', 'react,react', '--tracker', 'none', '--no-color']), 2);
+  } finally {
+    console.error = orig;
+  }
+  assert.ok(errs.some((l) => /more than once/.test(l)));
+  assert.ok(!fs.existsSync(path.join(dir, 'cairn.config.json')), 'nothing written on refusal');
+
+  const repo = tmpRepo();
+  fs.writeFileSync(path.join(repo, 'cairn.config.json'), JSON.stringify({ stack: ['react', 'react'], tracker: { provider: 'none' } }));
+  console.error = () => {};
+  try {
+    assert.strictEqual(require('../lib/render/cli').main(['--repo', repo]), 2);
+  } finally {
+    console.error = orig;
+  }
+  assert.ok(!fs.existsSync(path.join(repo, 'ai')), 'render wrote nothing');
+});
+
+test('preset cli: list marks the primary and add-on presets of the repo, --json is structured', () => {
+  const { main } = require('../lib/preset/cli');
+  const dir = tmpRepo();
+  fs.writeFileSync(
+    path.join(dir, 'cairn.config.json'),
+    JSON.stringify({ stack: ['nestjs', 'typeorm', 'cli'], tracker: { provider: 'none' } }),
+  );
+  const out = [];
+  const log = console.log;
+  console.log = (l) => out.push(l);
+  try {
+    assert.strictEqual(main(['list', '--repo', dir, '--json']), 0);
+    const parsed = JSON.parse(out.pop());
+    assert.deepStrictEqual(parsed.stack, ['nestjs', 'typeorm', 'cli']);
+    const byName = Object.fromEntries(parsed.presets.map((p) => [p.name, p.inUse]));
+    assert.strictEqual(byName.nestjs, 'primary');
+    assert.strictEqual(byName.typeorm, 'add-on');
+    assert.strictEqual(byName.react, null);
+
+    assert.strictEqual(main(['list', '--repo', dir, '--no-color']), 0);
+    const text = out.join(String.fromCharCode(10));
+    assert.ok(/nestjs.*primary/.test(text));
+    assert.ok(/cli \(core only, deliberate\)/.test(text));
+  } finally {
+    console.log = log;
+  }
+});
+
+test('preset cli: list works outside a repo, and an unknown subcommand exits 2', () => {
+  const { main } = require('../lib/preset/cli');
+  const out = [];
+  const log = console.log;
+  const errLog = console.error;
+  const stderr = process.stderr.write;
+  console.log = (l) => out.push(l);
+  console.error = () => {};
+  process.stderr.write = () => true;
+  const cwd = process.cwd();
+  process.chdir(os.tmpdir());
+  try {
+    assert.strictEqual(main(['list', '--no-color']), 0);
+    assert.ok(!/In use/.test(out.join(String.fromCharCode(10))), 'no repo, no "In use" column');
+    assert.strictEqual(main(['add', 'react']), 2);
+  } finally {
+    process.chdir(cwd);
+    console.log = log;
+    console.error = errLog;
+    process.stderr.write = stderr;
+  }
+});
+
 // --------------------------------------------------------------------- cli
 
 test('cli: flags without a value are booleans', () => {
@@ -631,7 +780,7 @@ atest('init: writes config, shim and manifest', async () => {
   const dir = tmpRepo();
   const log = console.log;
   console.log = () => {};
-  const code = main(['--repo', dir, '--stack', 'backend', '--tracker', 'jira-server', '--project-key', 'PROOF', '--story-type', 'Task', '--no-color']);
+  const code = main(['--repo', dir, '--stack', 'nestjs', '--tracker', 'jira-server', '--project-key', 'PROOF', '--story-type', 'Task', '--no-color']);
   console.log = log;
 
   assert.strictEqual(code, 0);
@@ -655,7 +804,7 @@ atest('init: youtrack config omits the Jira-only issueTypes block', async () => 
   const dir = tmpRepo();
   const log = console.log;
   console.log = () => {};
-  const code = main(['--repo', dir, '--stack', 'backend', '--tracker', 'youtrack', '--project-key', 'PROOF', '--no-color']);
+  const code = main(['--repo', dir, '--stack', 'nestjs', '--tracker', 'youtrack', '--project-key', 'PROOF', '--no-color']);
   console.log = log;
 
   assert.strictEqual(code, 0);

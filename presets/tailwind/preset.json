@@ -1,0 +1,4 @@
+{
+  "kind": "styling",
+  "description": "Tailwind @theme tokens, no tailwind.config.ts, dark mode via token re-map"
+}

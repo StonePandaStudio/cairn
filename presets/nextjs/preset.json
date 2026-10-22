@@ -1,0 +1,4 @@
+{
+  "kind": "framework",
+  "description": "Next.js App Router layer over react: server/client boundary, actions, route handlers"
+}

@@ -7,7 +7,7 @@
       "command": "create-brief",
       "role": "architect",
       "oneLine": "creates the task brief scaffold for you to fill in",
-      "trackerAction": "create the parent issue if new; always create the child issue for this step (short description, see below); write its key into the brief frontmatter"
+      "trackerAction": "step 1: create the parent issue if new and use it as the step's issue, no child; step 2+: create a child issue under the parent (short description, see below); write the step's issue key into the brief frontmatter"
     },
     {
       "id": "describe",
@@ -15,7 +15,7 @@
       "command": "enrich-description",
       "role": "architect",
       "oneLine": "iterative discussion, then writes the enriched description",
-      "trackerAction": "child issue description ← a short digest of the enriched description, never the file (see below); a 1–2 sentence summary appended to the parent"
+      "trackerAction": "the step's issue description ← a short digest of the enriched description, never the file (see below); for a child issue, also a 1–2 sentence summary appended to the parent"
     },
     {
       "id": "plan",
@@ -23,7 +23,7 @@
       "command": "plan-task",
       "role": "architect",
       "oneLine": "produces the implementation plan and any context-doc updates",
-      "trackerAction": "parent and child issue → in-progress stage; nothing from the plan is posted"
+      "trackerAction": "the step's issue (and its parent, for a child issue) → in-progress stage; nothing from the plan is posted"
     },
     {
       "id": "execute",

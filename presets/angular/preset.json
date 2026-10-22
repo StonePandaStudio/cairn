@@ -1,0 +1,4 @@
+{
+  "kind": "framework",
+  "description": "Angular spine, SCSS theming and i18n; optional Playwright e2e agent"
+}
