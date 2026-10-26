@@ -2,10 +2,13 @@
 
 Shared AI workflow scaffolding, kept in sync across several repos.
 
-Each repo carries an `ai/` folder and a `.claude/commands/` folder holding the same
-workflow — brief → description → plan → execute → review, with the steps optionally
-mirrored into an issue tracker. Hand-copied between repos, they drift. cairn renders
-them from one set of presets and reports where existing copies disagree.
+Each repo carries an `ai/` folder and a `.claude/` folder holding the same workflow —
+brief → description → plan → execute → review, run by architect, developer and reviewer
+agents, with the steps optionally mirrored into an issue tracker. Hand-copied between
+repos, they drift. cairn renders them from one set of presets (a stack-agnostic core plus
+framework, ORM and styling presets), reports where existing copies disagree, and carries
+later preset changes into a repo without overwriting what it has customized: local
+additions live in `ai/local/`, everything else is three-way merged.
 
 A cairn is a stack of stones left to mark a trail. That is what this does: it leaves
 markers — a manifest of what it generated, and a report of where the copies stopped
@@ -27,7 +30,8 @@ npx cairn init --stack nestjs,typeorm --tracker jira-server --project-key MYPROJ
 | `/request-change` | Not a `cairn` subcommand — a slash command `render` adds to repos that share a workspace and a remote tracker. Files a `[target-repo]` issue in the shared tracker project, linked so the requesting task *depends on* it; the target repo adopts it with `/create-brief <key>` |
 | `cairn sync` | Re-renders and three-way merges preset changes into a repo that has already rendered |
 | `cairn workspace <cmd>` | Manages the repo list in a workspace `repos.json`: `init`, `add <path>` (stack read from the repo's `cairn.config.json`, or `--stack`), `remove <name>`, `list`. Edits only `repos`; the hand-written `shared` / `normalize` blocks stay as they were |
-| `cairn upgrade` | Walks the repos in a `repos.json`: updates the installed cairn through each repo's own package manager (npm / yarn / pnpm), then runs `cairn sync` with that version. Report-only unless `--apply`; never commits, pushes, or edits the pin |
+| `cairn upgrade` | Walks the repos in a `repos.json`: updates the installed cairn through each repo's own package manager (npm / yarn / pnpm), then runs `cairn sync` with that version. Report-only unless `--apply`; never commits or pushes. A repo whose pin excludes the running version (`^0.9.0` stops at 0.9.x) is reported as blocked and not synced, unless `--bump-pin` rewrites the pin through the package manager |
+| `cairn override <cmd>` | Manages `ai/local/`, a repo's own additions to the generated agent docs: `status`, `extract <agent doc>`, `ack <slot>`. See "Customizing agent docs" |
 | `cairn preset list` | The bundled presets — kind (framework / orm / styling), what each ships, and which ones this repo's `stack` uses. `render`, `sync` and `init` also check the stack: a name listed twice or `core` as an entry is refused; a name with no preset (a typo) warns with a suggestion — `cli` and `unknown` are the deliberate exceptions |
 | `cairn context <cmd>` | **Prototype.** Resolves `ai/contexts/**/*.md` across a `repos.json` workspace into a graph — declared `counterpartOf` links, inferred reverse edges, and a same-path/same-title suggest pass. `build` / `check` / `counterparts <id>`; `check` never fails CI on its own (`--strict` opts in) |
 
@@ -53,10 +57,11 @@ the second run is a quiet `MODIFIED`.
 ```bash
 cairn sync --dry-run          # show the outcome per file, write nothing
 cairn sync                    # apply; exit 3 if any file is left in conflict
+cairn sync --only <path>      # sync one file, leave the rest (and the version stamp) alone
 cairn sync --adopt-base       # for files rendered before _cairn/base/ existed
 ```
 
-## The two folders
+## What lives where
 
 ```
 repo/
@@ -65,13 +70,17 @@ repo/
     manifest.json       what was generated, from which template, at which hash
     base/               the last render of every managed file — `cairn sync`'s merge base
     scripts/jira.js     vendored tracker shim
-  .claude/commands/     rendered from the workflow — one stub per step (+ QA stubs, see below)
+  .claude/commands/     rendered from the workflow — one stub per step, plus archive-tasks,
+                        the tracker-status/assign pair (remote tracker), request-change
+                        (shared workspace) and the QA stubs (see below)
   .claude/agents/       code-scout.md — read-only code-locator subagent
   ai/
-    agents/             rendered from presets/core + your stack's slots
-                        (architect, developer, reviewer; plus qa-* if the stack ships the QA slots)
+    agents/             rendered from presets/core + your stack's slots — don't edit,
+                        use ai/local/ (architect, developer, reviewer; plus qa-* if the
+                        stack ships the QA slots)
     AGENTS.md  WORKFLOW.md   rendered
-    infrastructure/code-guidelines.md   rendered once as a seed — then it is yours
+    infrastructure/code-guidelines.md   rendered as a seed; edit freely, `cairn sync` merges
+    local/              yours: slot and agent overrides — see "Customizing agent docs"
     contexts/  tasks/   yours, never written by cairn
 ```
 
@@ -156,6 +165,22 @@ cairn tracker set-status MYPROJ-102 "In Progress"
 cairn tracker append-description MYPROJ-101 ./ai/tasks/MYPROJ-101/brief-step-1.md --markup
 cairn tracker close-story MYPROJ-42          # cascades through subtasks first
 ```
+
+The rest of the surface:
+
+| Command | |
+|---|---|
+| `list-projects [--json]` | `KEY - Name` per project the credentials can see |
+| `get <key>` | The issue as JSON; adds `epic` and `ref` only when there is one |
+| `set-fields <key> [--summary ..] [--description ..] [--description-file ..]` | Replaces the named fields; unnamed ones are left alone. Contrast `append-description`, which adds to the end |
+| `set-assignee <key> <username>` | Assigns the issue |
+| `link <key> <dependsOnKey>` | `key` *depends on* the other issue. **YouTrack only**: Jira Server throws "not implemented", `none` skips. `/request-change` uses it, and on Jira Server falls back to `append-description` notes on both issues |
+| `resolve <ref>` | Prints the tracker key behind a public ref (`CI-1-4` → `CI-79`) |
+| `check-statuses` / `check-refs` | See "Moving issues between stages" and "Epics and public refs" |
+
+`--markup` (convert markdown to Jira wiki markup) applies to any command that takes
+description text, and `--json` where a command supports it. Anywhere a key is taken, a
+public ref works too.
 
 Providers are `jira-server`, `youtrack` and `none`, chosen per repo via
 `tracker.provider`. `none` is a real provider, not an error case: a repo with no
@@ -339,6 +364,7 @@ Only agent docs work this way. Command stubs, `WORKFLOW.md`, `AGENTS.md` and
 cairn doctor                                     # full table
 cairn doctor --diff ai/WORKFLOW.md               # hunks for one file across repos
 cairn doctor --json
+cairn doctor --normalize-issue-type              # also fold Story/Task issue-type wording together
 cairn doctor --strict                            # exit 1 on drift or a hand-edited generated file
 ```
 
@@ -428,7 +454,11 @@ lib/tracker/           index (registry), cli, jira-server, youtrack, none
 lib/doctor/            index (analysis + report), scan, normalize, diff, versions
 lib/render/            engine (a small template engine), index (driver), cli
 lib/sync/              index (the 2x2 + git merge-file, outdatedRels), cli
+lib/local/             ai/local/ reader: slot and agent overrides; extract, inspect
+lib/override/          cairn override
 lib/upgrade/           cairn upgrade — update + sync across a workspace
+lib/workspace/         cairn workspace (lib/workspace.js is the renderer-side reader)
+lib/context/           cairn context (prototype)
 lib/init.js            cairn init
 templates/shims/       vendored shim source
 presets/               core/ + framework/ORM/styling presets rendered by `cairn render`
@@ -437,6 +467,6 @@ test/run.js            dependency-free test runner
 ```
 
 No runtime dependencies (`cairn sync` shells out to `git`). Node >= 18. `npm test`
-runs the whole suite, including snapshot tests: every file the presets render for four
+runs the whole suite, including snapshot tests: every file the presets render for six
 representative stacks is committed under `test/snapshots/`, so a template change shows up as
 a diff. After an intended change, `UPDATE_SNAPSHOTS=1 npm test` and review `git diff test/snapshots`.
