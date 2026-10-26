@@ -232,7 +232,7 @@ comparison is at framework granularity, where the shared contracts live; ORM and
 add-on differences are resolved by composing presets, not by the cohort.
 
 Evidence it works: reviewer contracts 85–92% same across stacks. Evidence of the
-limit: qa-developer 33% same — that one is preset-level, not core.
+limit: qa-developer 33% same — that one was preset-level, not core (superseded 0.11: now a core contract plus `qa-*` slots).
 
 The downstream agent docs are still named `node-*.md` (the preset became `nestjs`
 2026-09-09, the docs follow in the v2 regeneration pass — the same pass that renames
@@ -658,7 +658,7 @@ convenient — it is the only way sharing is possible at all:
 ```
 node-reviewer.md        92% same   → share the body, fill two slots
 architect-lead.md       73% same   → share the spine, replace a section
-node-qa-developer.md    33% same   → share the contract only, body is local
+node-qa-developer.md    33% same   → share the contract only, body is local (superseded 0.11: body moved into `qa-*` slots)
 ```
 
 The 2026-09-09 re-read (`presets/EXTRACTION.md`) found the reviewer and architect

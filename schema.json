@@ -27,7 +27,7 @@
     "model": {
       "type": "string",
       "default": "sonnet",
-      "description": "Minimum tier the reviewer and QA agents require, as a tier name (\"sonnet\", \"opus\"). Rendered as \"Sonnet or higher\", so no model version appears in generated files; a versioned id such as \"claude-sonnet-5\" is still read, with the version dropped.",
+      "description": "Recommended tier for the reviewer and QA agents, as a tier name (\"sonnet\", \"opus\"). Rendered as \"Sonnet or higher\", so no model version appears in generated files; a versioned id such as \"claude-sonnet-5\" is still read, with the version dropped.",
       "examples": ["sonnet", "opus"]
     },
     "commands": {

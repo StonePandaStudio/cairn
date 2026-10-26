@@ -777,6 +777,4 @@ history; this is what replaced them.
 
 ## Immediate small fixes (not blocking, do when convenient)
 
-- `README.md` claims `cairn init` seeds `ai/`; it does not. Either implement seeding
-  for a fresh repo or fix the line. (DESIGN command table already corrected.)
 - Tag the published release: `git tag v0.2.1 && git push --tags`

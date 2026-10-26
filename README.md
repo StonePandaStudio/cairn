@@ -87,6 +87,11 @@ Generated files are **committed**, not gitignored. Claude Code discovers
 
 ## Workflow and agents
 
+Config keys that shape the rendered agents (all in `cairn.config.json`): `model` (reviewer
+tier, default `sonnet`), `validationStack` (`zod` default, or `class-validator`; only read
+when `nestjs` is in `stack`), `tdd`, `commands.build`, `agents.<role>.name` / `.doc`, and
+`workspace` (path to `repos.json`, default `../repos.json`).
+
 Three agents, one step each, rendered from `presets/core` with the stack's slots filled in:
 
 | Step (command) | Agent | Does |
@@ -101,8 +106,8 @@ The architect and developer delegate code search to the `code-scout` subagent
 (`.claude/agents/code-scout.md`, Haiku by default; `agents.scout.model` moves it up for a
 large or unusual tree).
 
-**Models are recommendations, not gates.** Developer recommends Haiku, reviewer the tier in
-`model`. Before the first run in a session the agent states the recommendation and the
+**Models are recommendations, not gates.** Developer and `qa-developer` recommend Haiku; reviewer, `qa-architect` and the
+orchestrator the tier in `model`. Before the first run in a session the agent states the recommendation and the
 active model, then asks once: *Continue on the current model? OK / not OK*. OK proceeds for
 the rest of the session; not OK stops so you can switch.
 
@@ -191,6 +196,22 @@ Two workflow steps can move the issue, and only if the repo names the stage:
 - Nothing moves without the key: cairn's defaults (`To Do` / `In Progress` / `Done`) are not a promise your board has them. Run `cairn tracker check-statuses` to compare the configured names with the board; `list-statuses` shows the board's.
 
 **A stage the board does not have is skipped, not fatal.** The agents run `cairn tracker set-status <key> "<stage>" --if-exists`. If the board has no such stage the command prints `skipped: stage "Review" does not exist on this board, so CI-5 was not moved. Valid stages: …` and exits 0; the agent mentions it once and carries on, and never substitutes another stage. Without `--if-exists` the same call fails (exit 1) and names the valid stages. On Jira, a stage that exists but cannot be reached from the issue's current state is still the old "no transition" message (exit 0): only a stage the project never defined counts as missing.
+
+### What goes to the tracker
+
+The tracker is an index for people scanning a board; `ai/tasks/[KEY]/` is the source of
+truth and the sync is one-way, so agents post a **digest**, never the step file:
+
+- `create_brief` — title, 2–3 sentences of what and why, and the brief's path.
+- `enrich_description` — under ~600 characters: the outcome, at most 5 one-line decisions,
+  and the description's path. No tables, file lists or code.
+- `plan_task` — the stage move only; nothing from the plan is posted.
+- `/request-change` is the exception: the receiving repo has no local copy, so its issue
+  carries the full What / Why / Acceptance.
+
+**Step 1 is the parent issue itself.** A one-step task is one issue; steps 2+ get a child
+issue under it, and a step marker equal to the folder key means "do this step's tracker
+actions once, on the parent". Nothing is split off when a task grows a second step.
 
 ### Epics and public refs (both optional)
 
