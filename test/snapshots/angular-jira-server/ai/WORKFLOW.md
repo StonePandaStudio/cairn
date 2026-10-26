@@ -64,7 +64,7 @@ moment the file is edited. Post a digest, never the file:
   last line. No tables, no file lists, no code, no implementation steps.
 - **`plan_task`** — the stage move only. Nothing from the plan is posted.
 
-Later stage moves (`Review` onward) are manual — the tracker UI,
+Later stage moves are manual — the tracker UI,
 `/jira-status`, or `npx cairn tracker close` (closes the parent and
 every subtask together). Assignee changes: `/jira-assign`. Both
 commands are manual-trigger only, never called by a workflow step.

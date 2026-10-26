@@ -650,6 +650,184 @@ test('model: the required tier renders as a name, and a versioned id loses its v
   assert.ok(!/claude-/.test(reviewer('claude-sonnet-5')));
 });
 
+// ------------------------------------------------------------ stage moves
+
+const stageConfig = (statuses, extra = {}) => ({
+  stack: ['nestjs'],
+  tracker: { provider: 'youtrack', projectKey: 'CI', ...(statuses ? { statuses, statusesSet: Object.keys(statuses) } : { statusesSet: [] }) },
+  ...extra,
+});
+const doc = (config, rel) => rendered(config, rel);
+
+test('config: only the stages a repo named count as configured; defaults fill the rest', () => {
+  const dir = tmpRepo();
+  fs.writeFileSync(path.join(dir, 'cairn.config.json'), JSON.stringify({ tracker: { provider: 'youtrack', projectKey: 'CI', statuses: { review: 'Review' } } }));
+  const t = loadRepoConfig(dir).tracker;
+  assert.deepStrictEqual(t.statusesSet, ['review']);
+  assert.strictEqual(t.statuses.review, 'Review');
+  assert.strictEqual(t.statuses.inProgress, 'In Progress', 'default is filled in but not "set"');
+});
+
+test('stage moves: a repo that names no stages renders no move commands, and says "Later stage moves are manual"', () => {
+  const config = stageConfig(null);
+  const reviewer = doc(config, 'ai/agents/reviewer.md');
+  assert.ok(reviewer.includes('Does not sync to the tracker'));
+  assert.ok(!/R\.0|--if-exists/.test(reviewer));
+  assert.ok(!/--if-exists/.test(doc(config, 'ai/agents/architect.md')));
+  const wf = doc(config, 'ai/WORKFLOW.md');
+  assert.ok(wf.includes('Later stage moves are manual'));
+  assert.ok(!wf.includes('--if-exists') && !wf.includes('Stage names'));
+});
+
+test('stage moves: review is opt-in and moves the issue at the start of the review, with the missing-stage rule', () => {
+  const config = stageConfig({ review: 'Review' });
+  const reviewer = doc(config, 'ai/agents/reviewer.md');
+  assert.match(reviewer, /### R\.0 — Mark the issue as in review/);
+  assert.ok(reviewer.includes('npx cairn tracker set-status [key] "Review" --if-exists'));
+  assert.ok(reviewer.indexOf('R.0') < reviewer.indexOf('### R.1'), 'before anything else');
+  assert.match(reviewer, /skipped: stage "Review" does not exist on this board/);
+  assert.match(reviewer, /do not move the issue to any other stage/);
+  assert.ok(!reviewer.includes('Does not sync to the tracker'));
+  assert.match(reviewer, /The verdict never changes the stage/);
+
+  const wf = doc(config, 'ai/WORKFLOW.md');
+  assert.match(wf, /\| `code_review\(task, step\)` \| at the start of the review, .*`Review` with `npx cairn tracker set-status <key> "Review" --if-exists`/);
+  assert.ok(wf.includes('Stage moves after `Review` are manual'));
+  assert.ok(wf.includes('**Stage names** come from `tracker.statuses`'));
+  assert.ok(!/--if-exists/.test(doc(config, 'ai/agents/architect.md')), 'review alone does not turn on the planning move');
+});
+
+test('stage moves: plan_task moves to the configured in-progress stage, independently of review', () => {
+  const config = stageConfig({ inProgress: 'Develop' });
+  const architect = doc(config, 'ai/agents/architect.md');
+  const b5 = architect.slice(architect.indexOf('#### B.5'), architect.indexOf('#### B.6'));
+  assert.match(b5, /^#### B\.5 — Sync to the tracker/, 'the existing tracker step carries the move; no second B.5');
+  assert.strictEqual((architect.match(/#### B\.5/g) || []).length, 1);
+  assert.ok(b5.includes('npx cairn tracker set-status [key] "Develop" --if-exists'));
+  assert.match(b5, /skipped: stage "Develop" does not exist on this board/);
+  assert.match(doc(config, 'ai/WORKFLOW.md'), /\| `plan_task\(task, step\)` \| .*`Develop` with `npx cairn tracker set-status <key> "Develop" --if-exists`/);
+  assert.ok(doc(config, 'ai/agents/reviewer.md').includes('Does not sync to the tracker'));
+});
+
+test('stage moves: no tracker, or a custom workflow, is left alone', () => {
+  const none = { stack: ['nestjs'], tracker: { provider: 'none', statuses: { review: 'Review' }, statusesSet: ['review'] } };
+  assert.ok(!doc(none, 'ai/agents/reviewer.md').includes('--if-exists'));
+
+  const custom = stageConfig({ review: 'Review' }, {
+    workflow: { steps: [{ id: 'review', fn: 'code_review', command: 'code-review', role: 'reviewer', oneLine: 'x', trackerAction: 'my own wording' }] },
+  });
+  const wf = doc(custom, 'ai/WORKFLOW.md');
+  assert.ok(wf.includes('my own wording') && !/\| `code_review\(task, step\)` \|[^\n]*--if-exists/.test(wf));
+});
+
+// A fetch stub that routes on "METHOD path" prefixes; unmatched is a 404.
+async function withRoutes(routes, fn) {
+  const orig = global.fetch;
+  const calls = [];
+  global.fetch = async (url, opts = {}) => {
+    const u = String(url).replace(/^https?:\/\/[^/]+/, '');
+    const key = `${opts.method || 'GET'} ${u}`;
+    calls.push(key);
+    const hit = Object.entries(routes).find(([k]) => key.startsWith(k));
+    const [status, body] = hit ? (Array.isArray(hit[1]) && typeof hit[1][0] === 'number' ? hit[1] : [200, hit[1]]) : [404, { error: 'not routed' }];
+    return { ok: status < 400, status, text: async () => JSON.stringify(body) };
+  };
+  try {
+    await fn(calls);
+  } finally {
+    global.fetch = orig;
+  }
+}
+
+const YT_STAGES = {
+  'GET /api/admin/projects/CI/customFields': [{ field: { name: 'Stage' }, bundle: { id: 'b1' } }],
+  'GET /api/admin/customFieldSettings/bundles/state/b1': { values: [{ name: 'Backlog' }, { name: 'Develop' }, { name: 'Done' }] },
+  'GET /api/issues/CI-1': { customFields: [{ name: 'Stage', value: { name: 'Develop' } }] },
+};
+
+atest('stage moves: youtrack names the board\'s stages when asked for one it does not have; other failures stay plain errors', async () => {
+  const { UnknownStatusError, TrackerError } = require('../lib/tracker');
+  await withRoutes({ ...YT_STAGES, 'POST /api/issues/CI-1': [400, { error: 'bad value' }] }, async () => {
+    const t = createYouTrack({}, ytEnv);
+    await assert.rejects(() => t.setStatus('CI-1', 'Review'), (e) => {
+      assert.ok(e instanceof UnknownStatusError);
+      assert.deepStrictEqual(e.available, ['Backlog', 'Develop', 'Done']);
+      assert.match(e.message, /valid: Backlog, Develop, Done/);
+      return true;
+    });
+    // A stage that does exist but whose POST failed is a real error, not "skip me".
+    await assert.rejects(() => t.setStatus('CI-1', 'Done'), (e) => e instanceof TrackerError && !(e instanceof UnknownStatusError));
+    assert.deepStrictEqual(await t.setStatus('CI-1', 'Develop'), { key: 'CI-1', from: 'Develop', to: 'Develop', changed: false });
+  });
+});
+
+atest('stage moves: jira tells a stage the board lacks from one it has but cannot reach', async () => {
+  const { UnknownStatusError, NoTransitionError } = require('../lib/tracker');
+  const env = { JIRA_BASE_URL: 'https://j.example', JIRA_USER: 'u', JIRA_PASSWORD: 'p' };
+  const routes = {
+    'GET /rest/api/2/issue/TEST-1/transitions': { transitions: [] },
+    'GET /rest/api/2/issue/TEST-1?fields=status': { fields: { status: { name: 'To Do' } } },
+    'GET /rest/api/2/project/TEST/statuses': [{ name: 'Task', statuses: [{ name: 'To Do' }, { name: 'Done' }] }],
+  };
+  await withRoutes(routes, async () => {
+    const j = createJiraServer({ projectKey: 'TEST' }, env);
+    await assert.rejects(() => j.setStatus('TEST-1', 'Review'), (e) => e instanceof UnknownStatusError && e.available.includes('Done'));
+    await assert.rejects(() => j.setStatus('TEST-1', 'Done'), (e) => e instanceof NoTransitionError);
+  });
+});
+
+function trackerRepo(statuses) {
+  const dir = tmpRepo();
+  fs.writeFileSync(path.join(dir, 'cairn.config.json'), JSON.stringify({ tracker: { provider: 'youtrack', projectKey: 'CI', ...(statuses ? { statuses } : {}) } }));
+  return dir;
+}
+
+async function runCli(dir, argv) {
+  const lines = { out: [], err: [] };
+  const saved = { ...process.env };
+  Object.assign(process.env, { YOUTRACK_URL: 'https://yt.example', YOUTRACK_TOKEN: 't', YOUTRACK_PROJECT: 'CI' });
+  try {
+    const code = await cli.run(argv, { cwd: dir, out: (l) => lines.out.push(l), err: (l) => lines.err.push(l) });
+    return { code, out: lines.out.join('\n'), err: lines.err.join('\n') };
+  } finally {
+    process.env = saved;
+  }
+}
+
+atest('stage moves: set-status --if-exists skips a missing stage with a message and exit 0; without the flag it fails', async () => {
+  const dir = trackerRepo();
+  await withRoutes({ ...YT_STAGES, 'POST /api/issues/CI-1': [400, { error: 'bad value' }] }, async (calls) => {
+    const soft = await runCli(dir, ['set-status', 'CI-1', 'Review', '--if-exists']);
+    assert.strictEqual(soft.code, 0);
+    assert.match(soft.err, /^skipped: stage "Review" does not exist on this board, so CI-1 was not moved\. Valid stages: Backlog, Develop, Done\./);
+    assert.strictEqual(soft.out, '', 'nothing on stdout that reads as "moved"');
+
+    const hard = await runCli(dir, ['set-status', 'CI-1', 'Review']);
+    assert.strictEqual(hard.code, 1);
+    assert.match(hard.err, /valid: Backlog, Develop, Done/);
+
+    const ok = await runCli(dir, ['set-status', 'CI-1', 'Develop', '--if-exists']);
+    assert.strictEqual(ok.code, 0);
+    assert.strictEqual(ok.out, 'CI-1 already Develop');
+  });
+});
+
+atest('stage moves: check-statuses reports each configured stage against the board and fails on a missing one', async () => {
+  await withRoutes(YT_STAGES, async () => {
+    const good = await runCli(trackerRepo({ inProgress: 'Develop' }), ['check-statuses']);
+    assert.strictEqual(good.code, 0);
+    assert.match(good.out, /inProgress\s+"Develop"\s+ok/);
+    assert.match(good.out, /review\s+not configured/);
+    assert.match(good.out, /todo\s+"To Do"\s+not on the board \(cairn's default; unused/);
+    assert.match(good.out, /board stages: Backlog, Develop, Done/);
+
+    const bad = await runCli(trackerRepo({ inProgress: 'Develop', review: 'Review' }), ['check-statuses']);
+    assert.strictEqual(bad.code, 1);
+    assert.match(bad.out, /review\s+"Review"\s+MISSING from the board/);
+    assert.match(bad.err, /1 configured stage\(s\) do not exist/);
+  });
+});
+
 test('scout: model defaults to haiku and follows agents.scout.model', () => {
   const render = require('../lib/render');
   const model = (agents) => {
@@ -2478,6 +2656,10 @@ const SNAPSHOT_CASES = {
   'nestjs-youtrack-public-refs': {
     stack: ['nestjs'],
     tracker: { provider: 'youtrack', projectKey: 'CI', publicRefs: true },
+  },
+  'nestjs-youtrack-stage-moves': {
+    stack: ['nestjs'],
+    tracker: { provider: 'youtrack', projectKey: 'CI', statuses: { inProgress: 'Develop', review: 'Review' } },
   },
   'nextjs-drizzle-youtrack': { stack: ['nextjs', 'drizzle'], tracker: { provider: 'youtrack', projectKey: 'CI' } },
 };

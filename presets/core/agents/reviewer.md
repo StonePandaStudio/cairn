@@ -33,6 +33,22 @@ a structured report of blocking issues and suggestions — it does **not** apply
 
 ## Workflow (`{{ step.fn }}(task, step)`)
 
+{{#if tracker.moveToReview}}
+### R.0 — Mark the issue as in review
+
+Before reading anything else, move the step's issue to `{{ tracker.reviewStageName }}` (and its parent, if the
+step's issue is a child; the brief's marker says which — see `ai/WORKFLOW.md`):
+
+```bash
+npx cairn tracker set-status [key] "{{ tracker.reviewStageName }}" --if-exists
+```
+
+If it prints `[key] already {{ tracker.reviewStageName }}`, nothing changed; that is fine on a re-run. If it prints
+`skipped: stage "{{ tracker.reviewStageName }}" does not exist on this board`, the board has no such stage: say so
+once in your reply, continue the review, and do not move the issue to any other stage. A `LOCAL-*` task has
+no issue; skip this step. The verdict never changes the stage.
+
+{{/if}}
 ### R.1 — Read the plan and description
 
 Read both files in full before examining any code:
@@ -171,5 +187,9 @@ Stop and ask the user before producing the review if:
 - Does not evaluate test coverage (out of scope for this project's current workflow).
 - Does not review files outside the diff (pre-existing issues in unchanged code are invisible to this agent).
 {{#if tracker.remote}}
+{{#if tracker.moveToReview}}
+- Moves the issue to `{{ tracker.reviewStageName }}` once, at the start (R.0), and nothing else: a clean review does not move it on, and a failed one does not move it back. Later stage moves are manual. See `ai/WORKFLOW.md` § Sync points.
+{{else}}
 - **Does not sync to the tracker**, even on a clean review — moving to a done state is manual. See `ai/WORKFLOW.md` § Sync points.
+{{/if}}
 {{/if}}

@@ -170,6 +170,18 @@ near the top of the file, which phase execution should resume from.
 
 The tracker sync for this step (see `ai/WORKFLOW.md` § Sync points). Skip for
 `LOCAL-*` tasks.
+{{#if tracker.moveToInProgress}}
+
+Move the step's issue (and its parent, if the step's issue is a child) to `{{ tracker.inProgressStage }}`:
+
+```bash
+npx cairn tracker set-status [key] "{{ tracker.inProgressStage }}" --if-exists
+```
+
+`[key] already {{ tracker.inProgressStage }}` is fine on a re-run. If it prints
+`skipped: stage "{{ tracker.inProgressStage }}" does not exist on this board`, say so once in your reply and carry
+on; never use a different stage instead.
+{{/if}}
 
 {{/if}}
 #### B.6 — Remind the user to switch models and clear context

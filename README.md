@@ -119,6 +119,21 @@ environment wins over the file. If the repo's own app reads those same names, se
 `tracker.envPrefix` (`cairn init --env-prefix CAIRN_`) so cairn reads
 `CAIRN_YOUTRACK_TOKEN` instead — or point `tracker.env` at a separate file.
 
+### Moving issues between stages
+
+Two workflow steps can move the issue, and only if the repo names the stage:
+
+```json
+"tracker": { "provider": "youtrack", "projectKey": "CI",
+  "statuses": { "inProgress": "Develop", "review": "Review" } }
+```
+
+- `plan_task` moves the step's issue (and its parent, for a child issue) to `inProgress` at the end of the plan (the architect's B.5).
+- `code_review` moves it to `review` **at the start** of the review (R.0). The verdict never changes the stage; later moves stay manual.
+- Nothing moves without the key: cairn's defaults (`To Do` / `In Progress` / `Done`) are not a promise your board has them. Run `cairn tracker check-statuses` to compare the configured names with the board; `list-statuses` shows the board's.
+
+**A stage the board does not have is skipped, not fatal.** The agents run `cairn tracker set-status <key> "<stage>" --if-exists`. If the board has no such stage the command prints `skipped: stage "Review" does not exist on this board, so CI-5 was not moved. Valid stages: …` and exits 0; the agent mentions it once and carries on, and never substitutes another stage. Without `--if-exists` the same call fails (exit 1) and names the valid stages. On Jira, a stage that exists but cannot be reached from the issue's current state is still the old "no transition" message (exit 0): only a stage the project never defined counts as missing.
+
 ### Epics and public refs (both optional)
 
 Nothing here changes a repo that doesn't use it: no config, no extra requests, and

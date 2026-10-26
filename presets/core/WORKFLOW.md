@@ -101,11 +101,19 @@ moment the file is edited. Post a digest, never the file:
   so its issue carries the full What / Why / Acceptance. Keep them tight anyway.
 {{/if}}
 
-Later stage moves (`{{ tracker.reviewStage }}` onward) are manual — the tracker UI,
+{{#if tracker.moveToReview}}Stage moves after `{{ tracker.reviewStageName }}` are manual{{else}}Later stage moves are manual{{/if}} — the tracker UI,
 `/{{ tracker.slug }}-status`, or `npx cairn tracker close` (closes the parent and
 every subtask together). Assignee changes: `/{{ tracker.slug }}-assign`. Both
 commands are manual-trigger only, never called by a workflow step.
 
+{{#if tracker.movesStage}}
+**Stage names** come from `tracker.statuses` in `cairn.config.json`; a step moves an issue
+only to a stage named there. Every move uses `--if-exists`: if the board has no such
+stage, the command prints `skipped: stage "…" does not exist on this board` and exits 0.
+Say so once in your reply and carry on; never move the issue to a different stage in its
+place. `npx cairn tracker check-statuses` compares the configured names with the board.
+
+{{/if}}
 Everything goes through `npx cairn tracker <command> …` — `cairn` is a
 devDependency, not a global install, so `npx` (or `node_modules/.bin/cairn`) is
 what actually resolves it; a bare `cairn tracker …` only works if something else
