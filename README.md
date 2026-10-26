@@ -21,11 +21,13 @@ npx cairn init --stack nestjs,typeorm --tracker jira-server --project-key MYPROJ
 | Command | |
 |---|---|
 | `cairn tracker <cmd>` | Issue tracker client (`jira-server` / `youtrack` / `none`). Replaces the copied `ai/scripts/*.js` clients |
-| `cairn doctor` | Cross-repo drift report, plus per-repo generated-file state |
+| `cairn doctor` | Cross-repo drift report, per-repo generated-file state (incl. `OUTDATED`), and which cairn version each repo pins, has installed, and was last rendered with |
 | `cairn init` | Makes a repo cairn-managed: writes `cairn.config.json`, `_cairn/`, and the shim |
 | `cairn render` | Scaffolds `ai/` + `.claude/commands/` from the bundled presets, from the repo's stack + workflow |
 | `/request-change` | Not a `cairn` subcommand — a slash command `render` adds to repos that share a workspace and a remote tracker. Files a `[target-repo]` issue in the shared tracker project, linked so the requesting task *depends on* it; the target repo adopts it with `/create-brief <key>` |
 | `cairn sync` | Re-renders and three-way merges preset changes into a repo that has already rendered |
+| `cairn workspace <cmd>` | Manages the repo list in a workspace `repos.json`: `init`, `add <path>` (stack read from the repo's `cairn.config.json`, or `--stack`), `remove <name>`, `list`. Edits only `repos`; the hand-written `shared` / `normalize` blocks stay as they were |
+| `cairn upgrade` | Walks the repos in a `repos.json`: updates the installed cairn through each repo's own package manager (npm / yarn / pnpm), then runs `cairn sync` with that version. Report-only unless `--apply`; never commits, pushes, or edits the pin |
 | `cairn preset list` | The bundled presets — kind (framework / orm / styling), what each ships, and which ones this repo's `stack` uses. `render`, `sync` and `init` also check the stack: a name listed twice or `core` as an entry is refused; a name with no preset (a typo) warns with a suggestion — `cli` and `unknown` are the deliberate exceptions |
 | `cairn context <cmd>` | **Prototype.** Resolves `ai/contexts/**/*.md` across a `repos.json` workspace into a graph — declared `counterpartOf` links, inferred reverse edges, and a same-path/same-title suggest pass. `build` / `check` / `counterparts <id>`; `check` never fails CI on its own (`--strict` opts in) |
 
@@ -117,6 +119,48 @@ environment wins over the file. If the repo's own app reads those same names, se
 `tracker.envPrefix` (`cairn init --env-prefix CAIRN_`) so cairn reads
 `CAIRN_YOUTRACK_TOKEN` instead — or point `tracker.env` at a separate file.
 
+### Epics and public refs (both optional)
+
+Nothing here changes a repo that doesn't use it: no config, no extra requests, and
+`get` prints the same JSON as before.
+
+```bash
+cairn tracker create-epic "Onboarding rework"
+cairn tracker create-story "Invite flow" ./brief.md --epic MYPROJ-50
+cairn tracker set-epic MYPROJ-61 MYPROJ-50      # or `none` to detach
+cairn tracker epic-children MYPROJ-50
+cairn tracker close-epic MYPROJ-50              # refuses while stories are open; --force cascades
+```
+
+Jira Server stores the link in the "Epic Link" custom field (id differs per instance,
+looked up by name the first time an epic command needs it; set `tracker.epicLinkField`
+to skip the lookup and let `get` report `epic`). YouTrack uses Type = Epic and the same
+`Subtask` link stories use for their subtasks. `none` skips every epic command.
+
+**Public refs** (`tracker.publicRefs: true`): the tracker's own key stays the internal
+one (`CI-79`); epics also get `CI-E1` and stories created or moved under an epic get
+`CI-<epic>-<n>` (`CI-1-4` = story 4 of epic 1). The ref is a `ref-CI-1-4` label (Jira)
+or tag (YouTrack), so it is searchable in the tracker and needs no custom field. Every
+tracker command accepts either form (`cairn tracker get CI-1-4`). Rules:
+
+- Steps get refs too. `CI-1-4.2` is step 2 of story 4 in epic 1; step 1 is the story
+  itself, so `CI-1-4.1` resolves to `CI-1-4`. To add a step by ref:
+
+  ```bash
+  cairn tracker create-step CI-1-4 "Add the rollback path" ./brief-step-2.md          # next free number
+  cairn tracker create-step CI-1-4 "Add the rollback path" ./brief-step-2.md --step 2 # match brief-step-2.md
+  ```
+
+  Pass `--step` to keep the ref in line with the workflow's `brief-step-N` file. A number
+  a sibling step already holds is refused; step numbers start at 2.
+- Refs are immutable: a story moved to another epic keeps the ref it was born with.
+- Only new issues are numbered. An epic created before `publicRefs` has no ref, and
+  stories added to it get none.
+- Numbers are max+1, so two people creating at the same moment can collide.
+  `cairn tracker check-refs` lists any ref carried by more than one issue; nothing is
+  renumbered automatically, since refs get quoted in commits.
+- The ref is printed on stderr (`public ref: CI-1-4`); stdout stays the bare tracker key.
+
 ### Legacy command names
 
 `create-task`, `create-story`, `close-story` and friends are all still accepted, and
@@ -162,9 +206,16 @@ match what is on disk?
 | `DELETED` | it is gone; `cairn sync` restores it from the current render |
 | `CONFLICT` | `cairn sync` left git merge markers in it — resolve, then sync again |
 
-Today the doctor reports `MANAGED`, `MODIFIED`, `DELETED` and `CONFLICT`. `OUTDATED`
-(needs the template hashes threaded through) is still to come. Acting on drift
-between the render and the working tree is `cairn sync`.
+The doctor reports all five. `OUTDATED` means the current presets render something
+different from the last render stored in `_cairn/base/` — `cairn sync` would move it.
+A `MODIFIED` file whose template also moved stays `MODIFIED`. Acting on drift between
+the render and the working tree is `cairn sync`.
+
+A separate **cairn versions** table lists, per repo, the `package.json` pin, the version
+in `node_modules`, and the cairn that last wrote `_cairn/manifest.json`. It flags a repo
+whose install is behind the running cairn, one whose files were rendered by an older cairn
+than it now has installed (update done, `cairn sync` not), and one whose cairn is a link
+to a checkout rather than a published version. Not part of `--strict`.
 
 A file can be perfectly in sync across repos while being hand-edited away from its
 template, and vice versa. `MODIFIED` outranks `OUTDATED` in the report because
@@ -209,9 +260,10 @@ lib/presets.js         preset catalogue + stack validation; lib/preset/ is `cair
 lib/manifest.js        generated-file hashing and state
 lib/paint.js           ANSI + table rendering
 lib/tracker/           index (registry), cli, jira-server, youtrack, none
-lib/doctor/            index (analysis + report), scan, normalize, diff
+lib/doctor/            index (analysis + report), scan, normalize, diff, versions
 lib/render/            engine (a small template engine), index (driver), cli
-lib/sync/              index (the 2x2 + git merge-file), cli
+lib/sync/              index (the 2x2 + git merge-file, outdatedRels), cli
+lib/upgrade/           cairn upgrade — update + sync across a workspace
 lib/init.js            cairn init
 templates/shims/       vendored shim source
 presets/               core/ + framework/ORM/styling presets rendered by `cairn render`
@@ -220,4 +272,6 @@ test/run.js            dependency-free test runner
 ```
 
 No runtime dependencies (`cairn sync` shells out to `git`). Node >= 18. `npm test`
-runs the whole suite.
+runs the whole suite, including snapshot tests: every file the presets render for four
+representative stacks is committed under `test/snapshots/`, so a template change shows up as
+a diff. After an intended change, `UPDATE_SNAPSHOTS=1 npm test` and review `git diff test/snapshots`.

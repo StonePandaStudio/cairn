@@ -4,6 +4,46 @@ Execution order for what comes after v1. The *why* is in `DESIGN.md`
 ("The cross-repo context layer", "### Sequencing"); this is the running order and
 where we are in it.
 
+## Scope split — core vs. the context layer (decided 2026-10-22)
+
+Two products had grown into one roadmap. Splitting them so the second cannot pull
+the first around.
+
+**Core — the original job: keep the `ai/` rules the same across repos.** Shipped and
+in daily use across 6 repos (`0.9.1` on npm): `init`, `render`, `sync` (three-way
+merge), `doctor` (drift + managed state), the tracker client, `/request-change`.
+Propagation is **`npm update` then `cairn sync`** — a version bump in `package.json`
+is the only way prompt changes reach a repo. The hub is not a propagator: it never
+pushes content or config down (DESIGN.md: "analysis lens, not a config layer").
+
+Core work still open, small and in this order:
+
+1. ✅ `doctor` reports `OUTDATED` (current render ≠ the last render in `_cairn/base/`).
+2. ✅ `doctor` shows pin / installed / rendered cairn version per repo and flags a stale
+   install, a render behind the install, and a link to a checkout.
+3. ✅ Snapshot tests of rendered output (`test/snapshots/`, four stacks) — the "no prompt
+   tests" risk from DESIGN.md.
+4. ✅ `cairn upgrade [--apply]` — the manual loop (update the installed cairn, then
+   `sync` with it) across a `repos.json`. Never commits, pushes, or edits the pin.
+5. Not built: a named dev mode for linking a repo to a local checkout (`cairn dev
+   link`). Today `doctor` only *warns* about a link; the junction is made by hand.
+   Local linking is for developing cairn itself and must never reach `package.json`.
+6. Not built: `doctor --strict` does not fail on version skew or `OUTDATED` — a release
+   would turn every CI red until each repo syncs. Revisit if repos get CI.
+
+**Context layer — a second product: cross-repo knowledge for agents.** `cairn context`
+(build/check/counterparts prototype), the planned `adopt`, `serve` (MCP, one server per
+workspace, registered in each repo by `sync`), the `local` tracker provider, the hub
+(`projects.json`, `context add`), and any propagation agent. Real idea, different user,
+no usage yet. **Parked until core has run for a sprint** with the items above, then judge
+it on whether architects actually use the answers. If it proceeds it gets its own
+namespace — and ideally its own package/preset (`presets/context/`) — so its roadmap
+does not sit inside core's. Design for it lives in DESIGN.md ("The cross-repo context
+layer", "Serve it", "The index lives in the hub"); nothing there changes.
+
+Last updated 2026-10-22 (scope split above; core items 1–4 built, unpublished). The
+rest of this section is the 2026-09-15 log and is older than the split.
+
 Last updated 2026-09-15 — `0.7.0` through `0.8.2` published, synced into all 6
 repos, all clean. `0.8.3` (review-feedback-loop) and `0.9.0` (below — nestjs
 validation-stack is now a real per-repo choice, Zod by default; a silent-render bug

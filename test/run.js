@@ -390,6 +390,193 @@ atest('tracker: link is a skip on none and an explicit error on jira-server', as
   );
 });
 
+// ------------------------------------------------------------------- epics
+
+const epics = require('../lib/tracker/epics');
+
+test('epics: public refs parse; internal keys and junk do not', () => {
+  assert.deepStrictEqual(epics.parseRef('CI-E1'), { kind: 'epic', project: 'CI', epic: 1 });
+  assert.deepStrictEqual(epics.parseRef('ci-e12'), { kind: 'epic', project: 'CI', epic: 12 });
+  assert.deepStrictEqual(epics.parseRef('CI-1-4'), { kind: 'story', project: 'CI', epic: 1, story: 4 });
+  assert.strictEqual(epics.parseRef('CI-79'), null);
+  assert.strictEqual(epics.parseRef('none'), null);
+  assert.strictEqual(epics.parseRef(undefined), null);
+});
+
+test('epics: only well-formed ref- labels count as a public ref', () => {
+  assert.strictEqual(epics.refFromLabels(['bug', 'ref-needed', 'ref-CI-1-4']), 'CI-1-4');
+  assert.strictEqual(epics.refFromLabels(['ref-needed']), null);
+  assert.strictEqual(epics.refFromLabels(), null);
+});
+
+// An in-memory tracker with just the primitives epics.js uses.
+function fakeTracker(issues) {
+  const byKey = new Map(issues.map((i) => [i.key, { labels: [], status: 'To Do', epic: null, ...i }]));
+  return {
+    name: 'fake',
+    projectKey: 'CI',
+    byKey,
+    async get(key) { return byKey.get(key); },
+    async addLabel(key, label) { byKey.get(key).labels.push(label); },
+    async listEpics() { return [...byKey.values()].filter((i) => i.isEpic); },
+    async epicChildren(epic) { return [...byKey.values()].filter((i) => i.epic === epic); },
+    async findByLabel(label) {
+      const hit = [...byKey.values()].find((i) => i.labels.includes(label));
+      return hit ? hit.key : null;
+    },
+    async closeIssue(key, status) { byKey.get(key).status = status; return { key, results: [{ key, to: status, ok: true }], failed: 0 }; },
+    async setStatus(key, status) { byKey.get(key).status = status; return { key, to: status, changed: true }; },
+  };
+}
+
+atest('epics: epic refs number per project, stories number per epic, refs never change', async () => {
+  const t = fakeTracker([
+    { key: 'CI-10', isEpic: true },
+    { key: 'CI-11', isEpic: true },
+    { key: 'CI-20', epic: 'CI-10' },
+    { key: 'CI-21', epic: 'CI-10' },
+    { key: 'CI-22', epic: 'CI-11' },
+  ]);
+  assert.strictEqual(await epics.assignEpicRef(t, 'CI-10'), 'CI-E1');
+  assert.strictEqual(await epics.assignEpicRef(t, 'CI-11'), 'CI-E2');
+  assert.strictEqual(await epics.assignEpicRef(t, 'CI-10'), 'CI-E1', 'second call keeps the ref');
+  assert.strictEqual(await epics.assignStoryRef(t, 'CI-20', 'CI-10'), 'CI-1-1');
+  assert.strictEqual(await epics.assignStoryRef(t, 'CI-21', 'CI-10'), 'CI-1-2');
+  assert.strictEqual(await epics.assignStoryRef(t, 'CI-22', 'CI-11'), 'CI-2-1');
+  t.byKey.get('CI-20').epic = 'CI-11'; // moved: keeps CI-1-1
+  assert.strictEqual(await epics.assignStoryRef(t, 'CI-20', 'CI-11'), 'CI-1-1');
+});
+
+atest('epics: a story under an epic with no public ref gets none', async () => {
+  const t = fakeTracker([{ key: 'CI-10', isEpic: true }, { key: 'CI-20', epic: 'CI-10' }]);
+  assert.strictEqual(await epics.assignStoryRef(t, 'CI-20', 'CI-10'), null);
+  assert.deepStrictEqual(t.byKey.get('CI-20').labels, []);
+});
+
+atest('epics: resolveKey maps public refs to tracker keys and leaves internal keys alone', async () => {
+  const t = fakeTracker([{ key: 'CI-79', labels: ['ref-CI-1-4'] }]);
+  assert.strictEqual(await epics.resolveKey(t, 'CI-1-4'), 'CI-79');
+  assert.strictEqual(await epics.resolveKey(t, 'CI-79'), 'CI-79');
+  await assert.rejects(() => epics.resolveKey(t, 'CI-9-9'), /No issue has public ref CI-9-9/);
+});
+
+test('epics: step refs parse as <story ref>.<n>', () => {
+  assert.deepStrictEqual(epics.parseRef('CI-1-4.2'), { kind: 'step', project: 'CI', epic: 1, story: 4, step: 2 });
+  assert.strictEqual(epics.refFromLabels(['ref-CI-1-4.2']), 'CI-1-4.2');
+});
+
+atest('epics: step 2 of story 4 in epic 1 resolves, and step 1 is the story itself', async () => {
+  const t = fakeTracker([
+    { key: 'CI-79', labels: ['ref-CI-1-4'] },
+    { key: 'CI-90', labels: ['ref-CI-1-4.2'] },
+  ]);
+  assert.strictEqual(await epics.resolveKey(t, 'CI-1-4.2'), 'CI-90');
+  assert.strictEqual(await epics.resolveKey(t, 'CI-1-4.1'), 'CI-79');
+});
+
+atest('epics: a new step takes the next free number from 2, or the one asked for', async () => {
+  const t = fakeTracker([
+    { key: 'CI-79', labels: ['ref-CI-1-4'] },
+    { key: 'CI-90', parent: 'CI-79' },
+    { key: 'CI-91', parent: 'CI-79' },
+    { key: 'CI-92', parent: 'CI-79' },
+  ]);
+  t.subtaskList = async (p) => [...t.byKey.values()].filter((i) => i.parent === p);
+  assert.strictEqual(await epics.assignStepRef(t, 'CI-90', 'CI-79'), 'CI-1-4.2');
+  assert.strictEqual(await epics.assignStepRef(t, 'CI-91', 'CI-79'), 'CI-1-4.3');
+  assert.strictEqual(await epics.assignStepRef(t, 'CI-92', 'CI-79', 5), 'CI-1-4.5');
+  t.byKey.set('CI-93', { key: 'CI-93', parent: 'CI-79', labels: [] });
+  await assert.rejects(() => epics.assignStepRef(t, 'CI-93', 'CI-79', 3), /already taken/);
+  await assert.rejects(() => epics.assignStepRef(t, 'CI-93', 'CI-79', 1), /from 2/);
+});
+
+atest('epics: a step under a story with no public ref gets none', async () => {
+  const t = fakeTracker([{ key: 'CI-79' }, { key: 'CI-90', parent: 'CI-79' }]);
+  t.subtaskList = async () => [];
+  assert.strictEqual(await epics.assignStepRef(t, 'CI-90', 'CI-79'), null);
+});
+
+test('epics: findDuplicateRefs reports a ref carried twice', () => {
+  const dupes = epics.findDuplicateRefs([
+    { key: 'CI-1', labels: ['ref-CI-E1'] },
+    { key: 'CI-2', labels: ['ref-CI-E1'] },
+    { key: 'CI-3', labels: ['ref-CI-E2'] },
+  ]);
+  assert.deepStrictEqual(dupes, [{ ref: 'CI-E1', keys: ['CI-1', 'CI-2'] }]);
+});
+
+atest('epics: closeEpic refuses over open stories, --force cascades', async () => {
+  const mk = () => fakeTracker([
+    { key: 'CI-10', isEpic: true },
+    { key: 'CI-20', epic: 'CI-10', status: 'Done' },
+    { key: 'CI-21', epic: 'CI-10', status: 'In Progress' },
+  ]);
+  const t = mk();
+  const refused = await epics.closeEpic(t, 'CI-10', 'Done');
+  assert.deepStrictEqual(refused.blocked, ['CI-21']);
+  assert.strictEqual(t.byKey.get('CI-10').status, 'To Do');
+  const forced = await epics.closeEpic(mk(), 'CI-10', 'Done', { force: true });
+  assert.deepStrictEqual(forced.blocked, []);
+  assert.strictEqual(forced.failed, 0);
+});
+
+atest('epics: jira makes no extra request unless an epic is involved', async () => {
+  const env = { JIRA_BASE_URL: 'https://j.example', JIRA_USER: 'u', JIRA_PASSWORD: 'p' };
+  await withFetch({ '/rest/api/2/issue': { key: 'TEST-1' } }, async (calls) => {
+    await createJiraServer({ projectKey: 'TEST' }, env).createIssue({ summary: 's' });
+    assert.strictEqual(calls.length, 1);
+    assert.strictEqual(Object.keys(calls[0].body.fields).some((f) => f.startsWith('customfield')), false);
+  });
+});
+
+atest('epics: jira looks up Epic Link once and links the story on create', async () => {
+  const env = { JIRA_BASE_URL: 'https://j.example', JIRA_USER: 'u', JIRA_PASSWORD: 'p' };
+  const fields = [{ id: 'customfield_10008', name: 'Epic Link' }];
+  await withFetch({ '/rest/api/2/field': fields, '/rest/api/2/issue': { key: 'TEST-2' } }, async (calls) => {
+    const j = createJiraServer({ projectKey: 'TEST' }, env);
+    await j.createIssue({ summary: 's', epicKey: 'TEST-1' });
+    await j.createIssue({ summary: 's', epicKey: 'TEST-1' });
+    assert.strictEqual(calls.filter((c) => c.url === '/rest/api/2/field').length, 1);
+    assert.strictEqual(calls.find((c) => c.method === 'POST').body.fields.customfield_10008, 'TEST-1');
+  });
+});
+
+atest('epics: jira without an Epic Link field says so instead of guessing', async () => {
+  const env = { JIRA_BASE_URL: 'https://j.example', JIRA_USER: 'u', JIRA_PASSWORD: 'p' };
+  await withFetch({ '/rest/api/2/field': [] }, async () => {
+    await assert.rejects(
+      () => createJiraServer({ projectKey: 'TEST' }, env).setEpic('TEST-2', 'TEST-1'),
+      /no "Epic Link" field/,
+    );
+  });
+});
+
+atest('epics: none provider treats every epic operation as a no-op', async () => {
+  const t = createNone();
+  assert.strictEqual(await t.createEpic({ summary: 'x' }), null);
+  assert.deepStrictEqual(await t.epicChildren('X-1'), []);
+  assert.strictEqual((await t.setEpic('X-1', 'X-2')).skipped, true);
+});
+
+atest('epics: youtrack get reports an epic parent only when the parent is an Epic', async () => {
+  const link = (type) => [{
+    direction: 'INWARD',
+    linkType: { name: 'Subtask' },
+    issues: [{ idReadable: 'CI-1', customFields: [{ name: 'Type', value: { name: type } }] }],
+  }];
+  for (const [type, epic] of [['Epic', 'CI-1'], ['Task', null]]) {
+    await withFetch(
+      { '/api/issues/CI-2/links': link(type), '/api/issues/CI-2': { idReadable: 'CI-2', summary: 's', customFields: [], tags: [{ name: 'ref-CI-1-4' }] } },
+      async () => {
+        const issue = await createYouTrack({}, ytEnv).get('CI-2');
+        assert.strictEqual(issue.parent, 'CI-1');
+        assert.strictEqual(issue.epic, epic);
+        assert.deepStrictEqual(issue.labels, ['ref-CI-1-4']);
+      },
+    );
+  }
+});
+
 test('render: request-change exists only with both a workspace and a remote tracker', () => {
   const render = require('../lib/render');
   const root = workspaceFixture(
@@ -1792,6 +1979,211 @@ test('workspace: render emits the Workspace section and architect checks only in
   const outside = render.renderTargets({ config, presetsDir: 'presets' }).targets;
   assert.ok(!/Workspace/.test(pick(outside, 'ai/AGENTS.md')), 'no repoPath -> no section');
   assert.ok(!/sibling repo/.test(pick(outside, 'ai/agents/architect.md')));
+});
+
+// ---------------------------------------------------------------- snapshots
+//
+// The real fix for "no prompt tests": every file a preset renders, for a handful of
+// representative stacks, is committed under test/snapshots/. A template change then
+// shows up as a reviewable diff here instead of silently reaching every repo.
+// Regenerate with `UPDATE_SNAPSHOTS=1 npm test` and review `git diff test/snapshots`.
+
+const SNAPSHOT_CASES = {
+  'nestjs-typeorm-youtrack': { stack: ['nestjs', 'typeorm'], tracker: { provider: 'youtrack', projectKey: 'CI' } },
+  'react-tailwind-none': { stack: ['react', 'tailwind'], tracker: { provider: 'none' } },
+  'angular-jira-server': {
+    stack: ['angular'],
+    tracker: { provider: 'jira-server', projectKey: 'PROOF', issueTypes: { story: 'Task', subtask: 'Sub-task' } },
+  },
+  'nestjs-youtrack-public-refs': {
+    stack: ['nestjs'],
+    tracker: { provider: 'youtrack', projectKey: 'CI', publicRefs: true },
+  },
+  'nextjs-drizzle-youtrack': { stack: ['nextjs', 'drizzle'], tracker: { provider: 'youtrack', projectKey: 'CI' } },
+};
+
+function snapshotFiles(dir, base = dir) {
+  if (!fs.existsSync(dir)) return [];
+  return fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
+    const abs = path.join(dir, e.name);
+    return e.isDirectory() ? snapshotFiles(abs, base) : [path.relative(base, abs).replace(/\\/g, '/')];
+  });
+}
+
+for (const [name, config] of Object.entries(SNAPSHOT_CASES)) {
+  test(`snapshot: ${name} renders exactly the committed files`, () => {
+    const render = require('../lib/render');
+    const targets = render.renderTargets({ config, presetsDir: 'presets', repoPath: null }).targets;
+    const dir = path.join(__dirname, 'snapshots', name);
+    const norm = (t) => String(t).replace(/\r\n?/g, '\n');
+
+    if (process.env.UPDATE_SNAPSHOTS) {
+      fs.rmSync(dir, { recursive: true, force: true });
+      for (const [rel, content] of targets) {
+        const file = path.join(dir, rel);
+        fs.mkdirSync(path.dirname(file), { recursive: true });
+        fs.writeFileSync(file, norm(content), 'utf8');
+      }
+      return;
+    }
+
+    const rendered = new Set(targets.map((t) => t[0]));
+    const committed = new Set(snapshotFiles(dir));
+    const added = [...rendered].filter((r) => !committed.has(r));
+    const removed = [...committed].filter((r) => !rendered.has(r));
+    assert.deepStrictEqual(
+      { added, removed },
+      { added: [], removed: [] },
+      'the set of rendered files changed — review, then UPDATE_SNAPSHOTS=1 npm test',
+    );
+
+    const changed = targets
+      .filter(([rel, content]) => norm(content) !== norm(fs.readFileSync(path.join(dir, rel), 'utf8')))
+      .map((t) => t[0]);
+    assert.deepStrictEqual(
+      changed,
+      [],
+      `rendered output changed for: ${changed.join(', ')} — review, then UPDATE_SNAPSHOTS=1 npm test`,
+    );
+  });
+}
+
+// ------------------------------------------------------- versions and upgrade
+
+test('doctor: compareVersions orders on the numeric core', () => {
+  const { compareVersions } = require('../lib/doctor/versions');
+  assert.strictEqual(compareVersions('0.9.0', '0.9.1'), -1);
+  assert.strictEqual(compareVersions('0.10.0', '0.9.9'), 1);
+  assert.strictEqual(compareVersions('1.0.0', '1.0.0'), 0);
+});
+
+test('doctor: version rows flag a stale install, a render behind the install, and skew', () => {
+  const { collectVersions, hasSkew } = require('../lib/doctor/versions');
+  const mk = (name, installed, rendered) => {
+    const dir = tmpRepo();
+    if (installed) {
+      const pkgDir = path.join(dir, 'node_modules', '@stonepandastudio', 'cairn');
+      fs.mkdirSync(pkgDir, { recursive: true });
+      fs.writeFileSync(path.join(pkgDir, 'package.json'), JSON.stringify({ version: installed }));
+    }
+    if (rendered) {
+      manifest.writeManifest(dir, manifest.emptyManifest());
+      const file = manifest.manifestPath(dir);
+      fs.writeFileSync(file, JSON.stringify({ ...JSON.parse(fs.readFileSync(file, 'utf8')), cairnVersion: rendered }));
+    }
+    return { name, path: dir };
+  };
+  const rows = collectVersions(
+    [mk('a', '0.9.1', '0.9.1'), mk('b', '0.8.2', '0.8.2'), mk('c', '0.9.1', '0.9.0'), mk('d', null, null)],
+    '0.9.1',
+  );
+  const by = Object.fromEntries(rows.map((r) => [r.repo, r]));
+  assert.deepStrictEqual(by.a.notes, []);
+  assert.ok(by.b.notes.some((n) => /BEHIND/.test(n)));
+  assert.ok(by.c.notes.some((n) => /run cairn sync/.test(n)));
+  assert.ok(by.d.notes.some((n) => /not installed/.test(n)));
+  assert.strictEqual(hasSkew(rows), true);
+  assert.strictEqual(hasSkew(rows.filter((r) => r.repo !== 'b')), false);
+});
+
+test('manifest: OUTDATED via outdatedRels, and writeManifest stamps the cairn version', () => {
+  const dir = tmpRepo();
+  const m = manifest.emptyManifest();
+  fs.writeFileSync(path.join(dir, 'x.md'), 'v1\n');
+  manifest.record(m, 'x.md', 'tpl/x.md', 'v1\n');
+  const written = manifest.writeManifest(dir, m);
+  assert.strictEqual(written.cairnVersion, require('../package.json').version);
+
+  const read = manifest.readManifest(dir);
+  assert.strictEqual(manifest.statusFor(dir, read, null, new Set())[0].state, 'MANAGED');
+  assert.strictEqual(manifest.statusFor(dir, read, null, new Set(['x.md']))[0].state, 'OUTDATED');
+
+  fs.writeFileSync(path.join(dir, 'x.md'), 'edited\n');
+  assert.strictEqual(manifest.statusFor(dir, read, null, new Set(['x.md']))[0].state, 'MODIFIED', 'a hand edit still wins');
+});
+
+test('sync: outdatedRels flags only files whose template moved since the base', () => {
+  const render = require('../lib/render');
+  const { outdatedRels } = require('../lib/sync');
+  const config = { stack: ['react'], tracker: { provider: 'none' } };
+  const dir = tmpRepo();
+  const m = manifest.emptyManifest();
+  for (const [rel, content, source] of render.renderTargets({ config, presetsDir: 'presets' }).targets) {
+    fs.mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true });
+    fs.writeFileSync(path.join(dir, rel), content);
+    manifest.record(m, rel, source, content);
+    manifest.writeBase(dir, rel, content);
+  }
+  manifest.writeManifest(dir, m);
+  const read = manifest.readManifest(dir);
+  assert.strictEqual(outdatedRels({ config, presetsDir: 'presets', manifest: read, repoPath: dir }).size, 0);
+
+  manifest.writeBase(dir, 'ai/WORKFLOW.md', 'an older template render\n');
+  const out = outdatedRels({ config, presetsDir: 'presets', manifest: read, repoPath: dir });
+  assert.deepStrictEqual([...out], ['ai/WORKFLOW.md']);
+});
+
+test('upgrade: picks the package manager from the lockfile and builds the update command', () => {
+  const { packageManager, updateCommand, parseArgs } = require('../lib/upgrade/cli');
+  const dir = tmpRepo();
+  assert.strictEqual(packageManager(dir), 'npm');
+  fs.writeFileSync(path.join(dir, 'yarn.lock'), '');
+  assert.strictEqual(packageManager(dir), 'yarn');
+  assert.deepStrictEqual(updateCommand('yarn'), ['yarn', ['upgrade', '@stonepandastudio/cairn']]);
+  assert.strictEqual(updateCommand('npm')[1][0], 'update');
+  assert.strictEqual(parseArgs(['--apply', '--repo', 'a', '--repo', 'b']).only.length, 2);
+  assert.strictEqual(parseArgs(['--nope']).error, 2);
+});
+
+test('workspace cmd: add / remove / list edit only the repos list and keep the rest of repos.json', () => {
+  const { main } = require('../lib/workspace/cli');
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'cairn-wscmd-'));
+  const a = path.join(root, 'api');
+  const b = path.join(root, 'web');
+  fs.mkdirSync(a);
+  fs.mkdirSync(b);
+  fs.writeFileSync(path.join(b, 'cairn.config.json'), JSON.stringify({ stack: ['react'], tracker: { provider: 'none' } }));
+  const file = path.join(root, 'repos.json');
+  const quiet = (fn) => {
+    const log = console.log;
+    const err = console.error;
+    console.log = console.error = () => {};
+    try {
+      return fn();
+    } finally {
+      console.log = log;
+      console.error = err;
+    }
+  };
+  const run = (...argv) => quiet(() => main([...argv, '--config', file]));
+
+  assert.strictEqual(run('add', a), 2, 'no cairn.config.json and no --stack');
+  assert.strictEqual(run('add', a, '--stack', 'nestjs,typeorm', '--role', 'REST API'), 0, 'creates the file');
+  assert.strictEqual(run('add', b), 0, 'stack read from the repo config');
+  assert.strictEqual(run('add', b), 2, 'duplicate');
+  assert.strictEqual(run('add', path.join(root, 'nope'), '--stack', 'react'), 2, 'missing dir');
+  assert.strictEqual(run('add', a, '--name', 'x', '--stack', 'not-a-preset'), 2, 'unknown stack');
+
+  let cfg = JSON.parse(fs.readFileSync(file, 'utf8'));
+  assert.deepStrictEqual(cfg.repos, [
+    { name: 'api', path: 'api', stack: ['nestjs', 'typeorm'], role: 'REST API' },
+    { name: 'web', path: 'web', stack: ['react'] },
+  ]);
+
+  cfg.shared = [{ glob: 'ai/*.md', cohort: 'all' }];
+  cfg.$comment = 'hand written';
+  fs.writeFileSync(file, JSON.stringify(cfg));
+  assert.strictEqual(run('remove', 'api'), 0);
+  assert.strictEqual(run('remove', 'api'), 2, 'already gone');
+  cfg = JSON.parse(fs.readFileSync(file, 'utf8'));
+  assert.deepStrictEqual(cfg.repos.map((r) => r.name), ['web']);
+  assert.deepStrictEqual(cfg.shared, [{ glob: 'ai/*.md', cohort: 'all' }]);
+  assert.strictEqual(cfg.$comment, 'hand written');
+  assert.strictEqual(run('list'), 0);
+
+  // the result is still a file doctor can resolve
+  const { resolveRepos } = require('../lib/doctor');
+  assert.strictEqual(resolveRepos(cfg, root)[0].name, 'web');
 });
 
 // ------------------------------------------------------------------- runner

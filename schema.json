@@ -46,12 +46,28 @@
         },
         "issueTypes": {
           "type": "object",
-          "description": "jira-server only. YouTrack has no Task/Sub-task type split.",
+          "description": "jira-server only, except `epic`, which youtrack also reads (the Type value of an epic). YouTrack has no Task/Sub-task type split.",
           "additionalProperties": false,
           "properties": {
             "story": { "type": "string", "default": "Story" },
-            "subtask": { "type": "string", "default": "Sub-task" }
+            "subtask": { "type": "string", "default": "Sub-task" },
+            "epic": { "type": "string", "default": "Epic", "description": "Only used by epic commands. Optional." }
           }
+        },
+        "publicRefs": {
+          "type": "boolean",
+          "default": false,
+          "description": "Opt in to public refs: epics get CI-E1, stories created or moved under an epic get CI-<epic>-<n>. Stored as a `ref-<ref>` label/tag; the tracker's own key (CI-79) is unchanged and every tracker command accepts either form."
+        },
+        "epicLinkField": {
+          "type": "string",
+          "description": "jira-server only. Custom field id of \"Epic Link\" (e.g. customfield_10008). Optional: looked up by name the first time an epic command needs it. Set it so `get` can also report a story's epic.",
+          "examples": ["customfield_10008"]
+        },
+        "epicNameField": {
+          "type": "string",
+          "description": "jira-server only. Custom field id of \"Epic Name\". Optional; looked up by name when creating an epic.",
+          "examples": ["customfield_10009"]
         },
         "statuses": {
           "type": "object",

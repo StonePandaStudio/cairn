@@ -44,7 +44,36 @@ unrelated numbers is normal. The parent link is the tracker's own link, not the 
 `{{ tracker.subtaskMarker }}` frontmatter. **Not in scope:** a `LOCAL-` folder — work
 it locally, mention that once, never sync it.
 
+{{#if tracker.publicRefs}}
+### Epics and public refs
+
+Every issue has two names. The **tracker key** (`{{ tracker.exampleKey }}-79`) is what the
+folder name, the markers and every API call use. The **public ref** shows where the issue
+sits:
+
+| Ref | Means |
+|---|---|
+| `{{ tracker.exampleKey }}-E1` | epic 1 |
+| `{{ tracker.exampleKey }}-1-4` | story 4 of epic 1 |
+| `{{ tracker.exampleKey }}-1-4.2` | step 2 of that story (step 1 is the story itself, so `…-1-4.1` is `…-1-4`) |
+
+Every `npx cairn tracker` command and every workflow command accepts either form. A new
+issue's ref is printed on stderr (`public ref: …`).
+
+- **The folder and the marker stay the tracker key.** `ai/tasks/{{ tracker.exampleKey }}-79/`,
+  never `…-1-4`. A step ref in a command resolves to its story's folder plus a step number.
+- **Step 2+ keeps its number.** Create the child with
+  `npx cairn tracker create-step <story key or ref> "<title>" <brief path> --step <N>` so
+  the ref's `.N` matches `brief-step-<N>.md`.
+- **A story in an epic** is created with `--epic <epic key or ref>`. An epic is tracker-only:
+  no folder, no step files.
+- **Refs never change.** A story moved to another epic keeps its ref; an issue that predates
+  `publicRefs` has none.
+
 ### Sync points (one-way: local → tracker)
+{{else}}
+### Sync points (one-way: local → tracker)
+{{/if}}
 
 | Command | Tracker actions |
 |---|---|

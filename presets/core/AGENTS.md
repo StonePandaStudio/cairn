@@ -22,6 +22,11 @@ transitions. Dispatch table: `ai/INITIAL_PROMPT.md`.
 {{/each}}
 
 Informal engagement on a task defaults to the first step.
+{{#if tracker.publicRefs}}
+
+The task can also be given as a public ref: `/plan-task {{ tracker.exampleKey }}-1-4.2` is step 2 of
+story 4 in epic 1. Details: `ai/WORKFLOW.md`.
+{{/if}}
 
 ---
 
