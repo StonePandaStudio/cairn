@@ -115,6 +115,29 @@ and mirror it.
 
 ---
 
+## Code discovery
+
+To locate code without loading it into your context — the analog to mirror, every caller
+of a symbol you are about to change, whether a file the plan names exists — spawn the
+`code-scout` subagent (`.claude/agents/code-scout.md`, read-only) with the Agent tool:
+
+```
+Agent(
+  subagent_type: "code-scout",
+  description:   "Find callers of X",
+  prompt:        "Task [task] step [step]: <what the plan changes>.
+                  Find: <what to locate>. Return file:line for each and say which do not exist."
+)
+```
+
+- **Self-contained prompt.** The scout has not seen the plan or this session.
+- **Independent questions in parallel** — several `Agent` calls in one message.
+- **It locates; it does not decide.** Open the files that matter before editing them. A scout
+  report that contradicts what the plan assumes is a mismatch: stop and ask (see below),
+  don't adapt the plan to it.
+
+---
+
 ## Implementation reference
 
 The authoritative source is `ai/infrastructure/code-guidelines.md`; the base-class
@@ -170,5 +193,5 @@ Write, Edit, Grep, Bash, and similar low-level operations.
 - `read_file(path)` — read file contents.
 - `write_file(path, content)` — create or overwrite files.
 - `run_shell_command(command)` — run shell commands for builds, migrations, tests.
-- `use_codebase_searcher(query)` — find related code or pattern examples in the project.
+- `use_codebase_searcher(query)` — find related code or pattern examples in the project. Spawns the `code-scout` subagent; see **Code discovery** above.
 - `execute_plan(task, step)` — the main invocation. Read `ai/tasks/[task]/plan-step-[step].md`, execute the steps precisely, update the `ai/contexts/**` files the plan flagged, and report the list of changed files.

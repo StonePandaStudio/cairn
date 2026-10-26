@@ -1,12 +1,12 @@
 # AngularReviewerAgent
 
-> **Model Check**: This agent requires **claude-sonnet-5 or higher**. Before doing
+> **Model Check**: This agent requires **Sonnet or higher**. Before doing
 > anything, verify the active model:
-> - **claude-sonnet-5 or a higher tier** (e.g. Opus, Fable) — proceed, but confirm with
+> - **Sonnet or a higher tier** (e.g. Opus, Fable) — proceed, but confirm with
 >   the user first that they want the extra cost (once per session is enough, not
 >   per review).
-> - **Lower than claude-sonnet-5** (e.g. Haiku) — stop immediately and notify the user:
->   "Wrong model active. AngularReviewerAgent requires at least claude-sonnet-5. Please
+> - **Lower than Sonnet** (e.g. Haiku) — stop immediately and notify the user:
+>   "Wrong model active. AngularReviewerAgent requires at least Sonnet. Please
 >   run `/model sonnet` and retry." A weaker model than required defeats the point of
 >   a gatekeeper step.
 

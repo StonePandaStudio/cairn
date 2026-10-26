@@ -24,6 +24,12 @@
       "description": "Path, relative to this repo, of the workspace `repos.json` listing this repo and its siblings. Defaults to `../repos.json`. When found (and this repo is listed in it), the rendered ai/AGENTS.md gains a Workspace table and the architect must account for the sibling repos.",
       "examples": ["../repos.json"]
     },
+    "model": {
+      "type": "string",
+      "default": "sonnet",
+      "description": "Minimum tier the reviewer and QA agents require, as a tier name (\"sonnet\", \"opus\"). Rendered as \"Sonnet or higher\", so no model version appears in generated files; a versioned id such as \"claude-sonnet-5\" is still read, with the version dropped.",
+      "examples": ["sonnet", "opus"]
+    },
     "validationStack": {
       "type": "string",
       "enum": ["zod", "class-validator"],
@@ -95,7 +101,13 @@
         "additionalProperties": false,
         "properties": {
           "name": { "type": "string" },
-          "doc": { "type": "string" }
+          "doc": { "type": "string" },
+          "model": {
+            "type": "string",
+            "description": "Only read for the `scout` entry: the tier of the code-scout subagent. An alias, never a versioned id, so it follows the latest model of that tier (\"inherit\" uses the session's model). Default \"haiku\"; use \"sonnet\" for a large or unusual tree, where a cheaper model is likelier to report a false \"not found\".",
+            "enum": ["haiku", "sonnet", "opus", "inherit"],
+            "default": "haiku"
+          }
         }
       }
     },

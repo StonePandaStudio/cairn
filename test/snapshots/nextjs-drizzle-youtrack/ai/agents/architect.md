@@ -181,6 +181,26 @@ tracker moved on (if in sync scope) + explicit Haiku-switch prompt delivered.
 
 ---
 
+## Code discovery
+
+Do not read through the source tree yourself to find analogs, callers or tests — that fills your context with files you only needed the location of. Spawn the `code-scout` subagent (`.claude/agents/code-scout.md`, read-only, runs on Haiku) with the Agent tool and read what it reports back.
+
+```
+Agent(
+  subagent_type: "code-scout",
+  description:   "Find export analogs",
+  prompt:        "Task [task] step [step]: <one sentence of what is being built>.
+                  Find: (1) <what to locate>, (2) <what to locate>.
+                  Return file:line for each and say which of them do not exist."
+)
+```
+
+- **Self-contained prompt.** The scout has not seen the discussion. Name the task and step, say what is being built, and ask concrete questions; it cannot ask you back.
+- **Parallel for independent questions.** Put several `Agent` calls in one message (analogs of the pattern, callers of the entity, tests that cover it) instead of one broad question.
+- **It locates, you decide.** The report is `file:line` and a reason. Open the few files that matter yourself before building a plan on them, and never prescribe a pattern from the scout's one-line description alone.
+- **Use it in both modes.** Mode A: what already exists and what constrains the change. Mode B: the existing analog the checklist below requires, and the files the plan will touch.
+---
+
 ## Mandatory context checklist
 
 Before producing a plan, confirm you have read:
@@ -191,7 +211,7 @@ Before producing a plan, confirm you have read:
 - [ ] `ai/infrastructure/project-structure.md`
 - [ ] `ai/infrastructure/mappers.md`
 - [ ] All `ai/contexts/**` files relevant to the entities or features in scope
-- [ ] At least one existing analog in the source tree for the pattern you're about to prescribe
+- [ ] At least one existing analog in the source tree for the pattern you're about to prescribe (find it with `code-scout`, then open it)
 
 ---
 
@@ -302,4 +322,4 @@ When in doubt, ask. The cost of a clarifying question is tiny; the cost of a wro
 - `enrich_description(task, step)` — **Mode A**. Iterative discussion, writes `description-step-[step].md`. Never modifies the brief. Does not produce a plan.
 - `plan_task(task, step)` — **Mode B**. Produces `plan-step-[step].md` + context doc updates. Does not execute code.
 - `delegate_to_developer(task, step)` — hand off to `NextjsDeveloperAgent`.
-- `use_codebase_searcher(query)` — find existing patterns, analogs, and references.
+- `use_codebase_searcher(query)` — find existing patterns, analogs, and references. Spawns the `code-scout` subagent; see **Code discovery** above.

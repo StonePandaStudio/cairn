@@ -30,6 +30,6 @@ Placeholders the renderer substitutes per repo, from `workspace.json` + the repo
 `cairn.config.json`:
 
 - `{{ architectAgent }}` / `{{ developerAgent }}` / `{{ reviewerAgent }}` — the persona names
-- `{{ model }}` — the model the reviewer/QA agents require (`claude-sonnet-5`)
+- `{{ model }}` — the tier the reviewer/QA agents require, by name (`Sonnet`) — never a versioned id
 - `{{ step.fn }}` / `{{ step.command }}` — the workflow verb for a step (`code_review` vs `review_plan` is drift to be removed, not a variant)
 - `{{ tracker.* }}` — provider, stage names, example issue key — for the sync sub-steps and `WORKFLOW.md`

@@ -390,6 +390,53 @@ atest('tracker: link is a skip on none and an explicit error on jira-server', as
   );
 });
 
+// ------------------------------------------------------------------- scout
+
+test('model: the required tier renders as a name, and a versioned id loses its version', () => {
+  const render = require('../lib/render');
+  const reviewer = (model) => {
+    const config = { stack: ['react'], tracker: { provider: 'none' }, ...(model ? { model } : {}) };
+    return render.renderTargets({ config, presetsDir: 'presets' }).targets.find((t) => t[0] === 'ai/agents/reviewer.md')[1];
+  };
+  assert.match(reviewer(), /requires \*\*Sonnet or higher\*\*/);
+  assert.match(reviewer('opus'), /requires \*\*Opus or higher\*\*/);
+  assert.match(reviewer('claude-sonnet-5'), /requires \*\*Sonnet or higher\*\*/);
+  assert.ok(!/claude-/.test(reviewer('claude-sonnet-5')));
+});
+
+test('scout: model defaults to haiku and follows agents.scout.model', () => {
+  const render = require('../lib/render');
+  const model = (agents) => {
+    const config = { stack: ['react'], tracker: { provider: 'none' }, ...(agents ? { agents } : {}) };
+    const scout = render.renderTargets({ config, presetsDir: 'presets' }).targets.find((t) => t[0] === '.claude/agents/code-scout.md');
+    return scout[1].match(/^model: (.*)$/m)[1];
+  };
+  assert.strictEqual(model(), 'haiku');
+  assert.strictEqual(model({ scout: { model: 'sonnet' } }), 'sonnet');
+  assert.strictEqual(model({ architect: { name: 'Arch' } }), 'haiku');
+});
+
+test('scout: only tier aliases are accepted, never a versioned id or anything that could break the frontmatter', () => {
+  const dir = tmpRepo();
+  const load = (model) => {
+    fs.writeFileSync(path.join(dir, 'cairn.config.json'), JSON.stringify({ agents: { scout: { model } } }));
+    return loadRepoConfig(dir);
+  };
+  for (const ok of ['haiku', 'sonnet', 'opus', 'inherit']) assert.strictEqual(load(ok).agents.scout.model, ok);
+  assert.throws(() => load('claude-sonnet-5-5'), /must be one of: haiku, sonnet, opus, inherit/);
+  assert.throws(() => load('haiku\ntools: Bash'), /must be one of/);
+  assert.throws(() => load(''), /must be one of/);
+});
+
+test('scout: the prompt demands evidence for locations and for absences', () => {
+  const render = require('../lib/render');
+  const config = { stack: ['react'], tracker: { provider: 'none' } };
+  const text = render.renderTargets({ config, presetsDir: 'presets' }).targets.find((t) => t[0] === '.claude/agents/code-scout.md')[1];
+  assert.ok(/Cite only what you saw/.test(text));
+  assert.ok(/at least two different terms/.test(text));
+  assert.ok(/tried: <term>/.test(text));
+});
+
 // ------------------------------------------------------------------- epics
 
 const epics = require('../lib/tracker/epics');
@@ -1421,7 +1468,7 @@ atest('render: stack-owned QA agents/commands render only for the stack that shi
     }
     assert.ok(!fs.existsSync(path.join(nest, 'ai/agents/qa.md')), 'no angular-only qa.md on nestjs');
     const qaArchitect = fs.readFileSync(path.join(nest, 'ai/agents/qa-architect.md'), 'utf8');
-    assert.match(qaArchitect, /requires \*\*claude-sonnet-5 or higher\*\*/, '{{ model }} resolves the same as reviewer.md');
+    assert.match(qaArchitect, /requires \*\*Sonnet or higher\*\*/, '{{ model }} resolves the same as reviewer.md');
     const qaDeveloper = fs.readFileSync(path.join(nest, 'ai/agents/qa-developer.md'), 'utf8');
     assert.match(qaDeveloper, /\*\*Model:\*\* Haiku/, 'qa-developer states Haiku as plain text, like developer.md');
 
@@ -1689,6 +1736,38 @@ atest('sync: CLI applies a fast-forward, updates the manifest, exits 0', async (
     );
   } finally {
     console.log = log;
+  }
+});
+
+atest('sync: --only restores one file, leaves the rest alone, and rejects a path it does not know', async () => {
+  const { main: init } = require('../lib/init');
+  const syncCli = require('../lib/sync/cli');
+  const dir = tmpRepo();
+  const log = console.log;
+  const errLog = console.error;
+  console.log = () => {};
+  try {
+    init(['--repo', dir, '--stack', 'react', '--tracker', 'none', '--render', '--no-color']);
+    const scout = path.join(dir, '.claude/agents/code-scout.md');
+    const reviewer = path.join(dir, 'ai/agents/reviewer.md');
+    fs.rmSync(scout);
+    fs.rmSync(reviewer);
+    // Pretend an older cairn rendered this repo, so a stamp would be visible.
+    const old = manifest.readManifest(dir);
+    old.cairnVersion = '0.0.1';
+    fs.writeFileSync(manifest.manifestPath(dir), JSON.stringify(old, null, 2));
+
+    assert.strictEqual(syncCli.main(['--repo', dir, '--no-color', '--only', '.claude\\agents\\code-scout.md']), 0);
+    assert.ok(fs.existsSync(scout), 'the named file is restored');
+    assert.ok(!fs.existsSync(reviewer), 'every other file is untouched');
+    assert.strictEqual(manifest.readManifest(dir).cairnVersion, '0.0.1', 'a partial sync does not stamp the version');
+
+    console.error = () => {};
+    assert.strictEqual(syncCli.main(['--repo', dir, '--no-color', '--only', 'ai/agents/nope.md']), 2);
+    assert.ok(!fs.existsSync(reviewer));
+  } finally {
+    console.log = log;
+    console.error = errLog;
   }
 });
 
