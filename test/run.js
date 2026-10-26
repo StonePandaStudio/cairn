@@ -2202,6 +2202,86 @@ test('sync: outdatedRels flags only files whose template moved since the base', 
   assert.deepStrictEqual([...out], ['ai/WORKFLOW.md']);
 });
 
+test('versions: pinAllows reads exact, caret, tilde and >= ranges, and admits when it cannot tell', () => {
+  const { pinAllows } = require('../lib/doctor/versions');
+  const cases = [
+    ['^0.9.0', '0.9.1', true],
+    ['^0.9.0', '0.10.0', false], // on 0.x a caret stops at the next minor
+    ['^0.9.0', '0.8.9', false],
+    ['^1.2.3', '1.9.0', true],
+    ['^1.2.3', '2.0.0', false],
+    ['^0.0.3', '0.0.4', false],
+    ['~0.9.0', '0.9.5', true],
+    ['~0.9.0', '0.10.0', false],
+    ['>=0.9.0', '0.10.0', true],
+    ['0.9.1', '0.9.1', true],
+    ['0.9.1', '0.9.2', false],
+    ['latest', '0.10.0', true],
+    ['*', '0.10.0', true],
+    ['^0.9.0 || ^0.10.0', '0.10.0', null],
+    ['file:../cairn', '0.10.0', null],
+    [null, '0.10.0', null],
+  ];
+  for (const [pin, version, want] of cases) assert.strictEqual(pinAllows(pin, version), want, `${pin} vs ${version}`);
+});
+
+test('upgrade: a pin rewrite quotes the caret, and goes in the section the pin was in', () => {
+  const { bumpCommand, shellQuote } = require('../lib/upgrade/cli');
+  assert.deepStrictEqual(bumpCommand('npm', '0.10.0'), [
+    'npm', ['install', '-D', '@stonepandastudio/cairn@^0.10.0', '--no-audit', '--no-fund'],
+  ]);
+  assert.deepStrictEqual(bumpCommand('pnpm', '0.10.0', false), ['pnpm', ['add', '@stonepandastudio/cairn@^0.10.0']]);
+  assert.deepStrictEqual(bumpCommand('yarn', '0.10.0'), ['yarn', ['add', '-D', '@stonepandastudio/cairn@^0.10.0']]);
+  assert.strictEqual(shellQuote('@stonepandastudio/cairn@^0.10.0'), '"@stonepandastudio/cairn@^0.10.0"');
+  assert.strictEqual(shellQuote('--no-audit'), '--no-audit');
+});
+
+// A one-repo workspace whose pin (^0.9.0) cannot reach the running cairn, with a
+// fake install so no package manager is ever invoked on the blocked path.
+function pinnedWorkspace() {
+  const root = tmpRepo();
+  const repo = path.join(root, 'backend');
+  const pkgDir = path.join(repo, 'node_modules/@stonepandastudio/cairn');
+  fs.mkdirSync(pkgDir, { recursive: true });
+  fs.writeFileSync(path.join(pkgDir, 'package.json'), JSON.stringify({ name: '@stonepandastudio/cairn', version: '0.9.1' }));
+  fs.writeFileSync(path.join(repo, 'package.json'), JSON.stringify({ devDependencies: { '@stonepandastudio/cairn': '^0.9.0' } }));
+  fs.writeFileSync(path.join(root, 'repos.json'), JSON.stringify({ repos: [{ name: 'backend', path: 'backend' }] }));
+  return { root, repo, config: path.join(root, 'repos.json') };
+}
+
+function captureLog(fn) {
+  const lines = [];
+  const log = console.log;
+  const write = process.stdout.write;
+  console.log = (...a) => lines.push(a.join(' '));
+  process.stdout.write = (s) => { lines.push(String(s)); return true; };
+  try {
+    return { result: fn(), out: lines.join('\n') };
+  } finally {
+    console.log = log;
+    process.stdout.write = write;
+  }
+}
+
+test('upgrade: a repo whose pin excludes the running cairn is blocked, not reported as clean', () => {
+  const { main } = require('../lib/upgrade/cli');
+  const ws = pinnedWorkspace();
+  const before = fs.readFileSync(path.join(ws.repo, 'package.json'), 'utf8');
+
+  const report = captureLog(() => main(['--config', ws.config, '--no-color']));
+  assert.strictEqual(report.result, 0);
+  assert.match(report.out, /pin blocks/);
+  assert.match(report.out, /--bump-pin/);
+
+  const applied = captureLog(() => main(['--config', ws.config, '--no-color', '--apply']));
+  assert.strictEqual(applied.result, 1, 'a blocked repo is a failed upgrade, not a clean one');
+  assert.match(applied.out, /blocked/);
+  assert.match(applied.out, /does not allow/);
+  assert.ok(!/clean/.test(applied.out), 'no reassuring "clean" for a sync that never ran');
+  assert.ok(!/\(current\)/.test(applied.out));
+  assert.strictEqual(fs.readFileSync(path.join(ws.repo, 'package.json'), 'utf8'), before, 'the pin is untouched without --bump-pin');
+});
+
 test('upgrade: picks the package manager from the lockfile and builds the update command', () => {
   const { packageManager, updateCommand, parseArgs } = require('../lib/upgrade/cli');
   const dir = tmpRepo();
