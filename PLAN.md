@@ -753,6 +753,28 @@ Turns `cairn render` from one-shot greenfield into an upgrade path. Full spec in
 (`.copier-answers.yml`, three-way update), cruft, RN `rn-diff-purge`, k8s
 server-side apply (per-section provenance).
 
+## Superseded since 0.11 (2026-10-26)
+
+Several earlier entries above describe behaviour that has since changed. They stay as
+history; this is what replaced them.
+
+- **Model gates are recommendations.** Developer, reviewer and every QA agent state a
+  recommended tier and ask one "Continue on the current model? OK / not OK"; none
+  stops on a lower tier. The "lower tier hard-blocks" wording in the model-check
+  entries no longer holds.
+- **QA is a core contract, not stack-owned agents.** `core/agents/qa-{architect,
+  developer,orchestrator}.md` and the `plan-tests` / `execute-test-plan` / `run-qa`
+  commands render for any stack that ships a `qa-target` slot; nestjs (Jest) and
+  angular (Playwright) fill seven `qa-*` slots. `presets/{nestjs,angular}/agents/`,
+  the standalone `qa.md` and `/add-e2e-tests` are gone. The glob-per-stack render loop
+  stays for a preset that wants its own files.
+- **One mandatory-docs list.** `architect-mandatory-docs` is now `mandatory-docs`,
+  read by the architect, developer and reviewer. An `ai/local/slots/` override under the
+  old name still applies; rename it.
+- **Tests live in the plan.** The plan has a **Tests** section, the developer writes
+  and runs those cases, the reviewer checks them. `tdd: true` makes it test-first
+  (red then green per unit file). `commands.build` names the build command.
+
 ## Immediate small fixes (not blocking, do when convenient)
 
 - `README.md` claims `cairn init` seeds `ai/`; it does not. Either implement seeding

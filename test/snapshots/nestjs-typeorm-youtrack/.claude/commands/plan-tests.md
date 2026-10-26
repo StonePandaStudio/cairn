@@ -1,10 +1,9 @@
 ---
-description: Plan named unit/integration test cases for one feature
-argument-hint: "[task] [feature]"
+description: Plan named test cases for one existing target
+argument-hint: "[task] [target]"
 ---
-You are acting as **NestjsQAArchitectAgent**. Read `ai/agents/qa-architect.md` for
-your full role, workflow, and instructions.
+You are acting as **NestjsQAArchitectAgent**. Read `ai/agents/qa-architect.md` for your
+full role, workflow, and instructions.
 
-Run `plan_tests($ARGUMENTS)` — treat the first token as the task ID and the second
-as the feature name (e.g. `CI-210 invoice`). One feature per
-invocation.
+Run `plan_tests($ARGUMENTS)` — treat the first token as the task ID and the second as
+the target (e.g. `CI-210 invoice`). One target per invocation.

@@ -177,7 +177,7 @@ are the project's constitution, not shareable scaffolding.
 ### The nestjs slots were split nestjs / typeorm — 2026-09-09
 
 The first cut of `presets/nestjs/slots/*` (review-checklist, implementation-reference,
-key-patterns, architect-mandatory-docs, architect-discussion-topics) mixed framework
+key-patterns, architect-mandatory-docs (since renamed mandatory-docs), architect-discussion-topics) mixed framework
 rules with TypeORM rules. Split: the framework half stays in `nestjs/slots/`, the ORM
 half moved to `presets/typeorm/slots/` under the same filenames. The renderer appends
 one from each `stack[]` entry, so `--stack nestjs,typeorm` reconstitutes the original
@@ -208,3 +208,8 @@ There is no renderer. Nothing consumes `{{> slot: … }}` or `{{> stack/… }}`,
 repo reads these files. They are the input for the agent-preset roadmap step
 (`DESIGN.md`, "### Sequencing" step 4), and are already useful as the canonical
 version of scaffolding that currently exists as two drifting copies.
+
+**Update 2026-10-26.** Superseded: the QA docs are now one core contract
+(`core/agents/qa-*.md`) with the stack-specific content in seven `qa-*` slots filled by
+`nestjs` (Jest) and `angular` (Playwright). What stayed project-owned is the testing
+conventions doc each stack's `qa-mandatory-docs` slot names; cairn does not generate it.

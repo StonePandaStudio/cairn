@@ -41,6 +41,19 @@ Read `{{ this.doc }}` for the full role, workflow, tools, and instructions.{{#if
 
 ---
 
+{{#if qa}}
+## QA for existing code
+
+Separate from the workflow above, which gets its tests from the plan's **Tests**
+section. These add tests to code that already exists:
+
+- `/plan-tests [task] [target]` — `{{ qaArchitectAgent }}` (`ai/agents/qa-architect.md`) writes `ai/tasks/[task]/test-plan-[target].md`
+- `/execute-test-plan [task] [target]` — `{{ qaDeveloperAgent }}` (`ai/agents/qa-developer.md`) writes and verifies the tests
+- `/run-qa [task] [target|all]` — `{{ qaOrchestratorAgent }}` (`ai/agents/qa-orchestrator.md`) runs both
+
+---
+
+{{/if}}
 {{#if workspace}}
 ## Workspace
 

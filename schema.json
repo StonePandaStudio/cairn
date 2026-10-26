@@ -30,6 +30,24 @@
       "description": "Minimum tier the reviewer and QA agents require, as a tier name (\"sonnet\", \"opus\"). Rendered as \"Sonnet or higher\", so no model version appears in generated files; a versioned id such as \"claude-sonnet-5\" is still read, with the version dropped.",
       "examples": ["sonnet", "opus"]
     },
+    "commands": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Commands the agents run, when the repo's own differ from what they would look up. Each is optional; an agent that has none finds the command itself in package.json or the README.",
+      "properties": {
+        "build": {
+          "type": "string",
+          "description": "The build command the developer runs before reporting completion, e.g. \"npm run build\" or \"yarn build\".",
+          "examples": ["npm run build", "yarn build"]
+        }
+      }
+    },
+    "tdd": {
+      "type": "boolean",
+      "default": false,
+      "description": "Test-first execution in the main workflow. When true, the architect orders each step's test files before the code and marks every test file unit or integration, and the developer runs red, then green, for each unit file and reports both. The QA backfill agents are unaffected: they write tests for code that already exists.",
+      "examples": [true]
+    },
     "validationStack": {
       "type": "string",
       "enum": ["zod", "class-validator"],

@@ -39,7 +39,7 @@ whole basis for the design, so they are recorded here rather than re-derived:
 | `ai/WORKFLOW.md` | 4 variants, 43% same | generic state machine tangled with project trivia |
 | `ai/INITIAL_PROMPT.md` | 4 variants, **0% same** | not one document. Do not unify |
 | `ai/agents/*reviewer.md` | 92% / 85% same | role contract genuinely is shared |
-| `ai/agents/*qa-developer.md` | 33% same, 367 ln | not shared; don't pretend |
+| `ai/agents/*qa-developer.md` | 33% same, 367 ln | was "not shared"; since 0.11 a core contract plus `qa-*` slots, with the stack content in the slots |
 | `ai/infrastructure/code-guidelines.md` | backend 43% same, 520 ln | drift here is *correct* — different codebases |
 | `glossr-cli` | absent from the workspace entirely | 5th repo, own command vocabulary |
 

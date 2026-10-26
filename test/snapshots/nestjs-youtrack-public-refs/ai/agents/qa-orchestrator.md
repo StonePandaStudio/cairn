@@ -1,162 +1,145 @@
 # NestjsQAOrchestratorAgent
 
-> **Model Check**: This agent requires **Sonnet or higher**. Before doing
-> anything, verify the active model:
-> - **Sonnet or a higher tier** (e.g. Opus, Fable) — proceed, but confirm with
->   the user first that they want the extra cost (once per session is enough).
-> - **Lower than Sonnet** (e.g. Haiku) — stop immediately and notify the user:
->   "Wrong model active. NestjsQAOrchestratorAgent requires at least Sonnet.
->   Please run `/model sonnet` and retry."
-
 ## Role
 
 Coordinator of the QA pipeline. Spawns `NestjsQAArchitectAgent` for test plans and
-`NestjsQADeveloperAgent` to write and verify specs. Handles single-feature and
-all-feature runs. Does **not** plan tests and does **not** write specs.
+`NestjsQADeveloperAgent` to write and verify tests. Handles one target or all of
+them. Does **not** plan tests and does **not** write them.
 
-**Context:** run `run_qa` in a **fresh session** (`/clear` or a new window). Long
-conversations starve the agent of the context window it needs to spawn sub-agents
-reliably.
+**Context:** run `run_qa` in a **fresh session** (`/clear` or a new window). A long
+conversation leaves no room to spawn sub-agents reliably.
 
 ## Core principles
 
-1. **Delegate, don't improvise.** Planning belongs to the Architect, writing to
-   the Developer.
-2. **Continue on failure.** One feature failing must not halt the pipeline.
-3. **Batch fan-in.** In `all` mode, wait for every Architect before spawning any
-   Developer.
-4. **Sequential Developers.** Never two at once — two features referencing shared
-   test fixtures (a factory file, a seed helper) would race on the same file.
+1. **Delegate, don't improvise.** Planning belongs to the planner, writing to the
+   writer.
+2. **Continue on failure.** One target failing must not halt the pipeline.
+3. **Bounded fan-out.** In `all` mode, run planners in batches of at most 5 and wait
+   for every planner before spawning any writer.
+4. **Sequential writers.** Never two at once — two targets sharing a test fixture (a
+   factory file, a seed helper) would race on the same file.
 5. **Standalone.** Read all context from files.
 
 ---
 
-## Workflow (`run_qa(task, feature)`)
+## Workflow (`run_qa(task, target)`)
 
-### O.1 — Validate invocation
+### O.1 — Validate the invocation
 
-- Missing `task`: stop with "Task ID required. Usage: `run_qa(task, feature)` or
+- Missing `task`: stop with "Task ID required. Usage: `run_qa(task, target)` or
   `run_qa(task, all)`."
-- Missing `feature`: stop with "Feature name required. Provide a feature name or
-  `all`."
-- If `feature` is not `all`, verify `src/feature/[feature]/` exists. If not:
-  "Feature not found at `src/feature/[feature]/`."
+- Missing `target`: stop with "Target required. Provide a target or `all`."
+- A target that is not `all` is validated by the planner (P.1).
 
-### O.2 — Start the test database, if this project needs one
+### O.2 — Confirm models once
 
-If `ai/contexts/testing/conventions.md` names a command to start a shared test
-fixture (database, container, etc.), run it before spawning any Developer, and
-leave it up for the whole run. Individual Developers must not start or stop it.
-Tear it down at the very end, using the matching command from the same doc.
+The sub-agents cannot ask you anything, so ask the user here, once, for the whole
+run: **"Run the planner on Sonnet and the writer on Haiku (recommended)?
+OK / not OK."** OK — pass those as each sub-agent's `model`. Not OK — omit `model`, so
+they inherit this session's. Either way, tell them the model is confirmed (see the
+prompts below).
 
-### O.3 — Single-feature mode
+### O.3 — Start the shared test fixture, if the project needs one
 
-1. Spawn the Architect with a **blocking** Agent call:
+If the QA docs name a command that starts a shared fixture (database, container, app
+server), run it before spawning any writer and leave it up for the whole run. Writers
+must not start or stop it. Tear it down at the very end with the matching command. The
+QA docs are:
 
-   ```
-   Agent({
-     description: "QA Architect — [feature]",
-     prompt: "You are acting as NestjsQAArchitectAgent. Read
-              `ai/agents/qa-architect.md` for your full role, workflow, and
-              instructions. Run `plan_tests([task], [feature])`. Run in a fresh
-              session — do not assume prior conversation context.",
-     run_in_background: false
-   })
-   ```
+- `ai/contexts/testing/conventions.md` — layout, helpers, factories, the exact test commands (unit and integration runners, any scoped-run flag), the database/fixture lifecycle, and the traps specific to this suite. It is repo-owned: cairn does not generate it.
 
-2. Verify `ai/tasks/[task]/test-plan-[feature].md` exists. If missing, print
-   `[feature] — ARCHITECT FAILED (plan file not created)` and stop.
+### O.4 — One target
 
-3. Spawn the Developer with a **blocking** Agent call:
+1. Spawn the planner with a **blocking** call:
 
    ```
-   Agent({
-     description: "QA Developer — [feature]",
-     prompt: "You are acting as NestjsQADeveloperAgent. Read
-              `ai/agents/qa-developer.md` for your full role, workflow, and
-              instructions. Run `execute_test_plan([task], [feature])`. The test
-              database (if this project uses one) is already running — do not
-              start or stop it. Run in a fresh session — do not assume prior
-              conversation context.",
-     run_in_background: false
-   })
+   Agent(
+     description: "QA planner — [target]",
+     model:       <from O.2>,
+     prompt:      "You are acting as NestjsQAArchitectAgent. Read
+                   `ai/agents/qa-architect.md` for your full role, workflow, and
+                   instructions. Run `plan_tests([task], [target])`. The model is
+                   already confirmed — skip the model prompt, and do not ask the user
+                   anything. Report only the path of the plan and the case counts."
+   )
    ```
 
-4. Capture the Developer's report, then go to O.6.
+2. Verify `ai/tasks/[task]/test-plan-[target].md` exists. If missing, print
+   `[target] — PLANNER FAILED (plan file not created)` and stop.
 
-### O.4 — All-features mode
+3. Spawn the writer with a **blocking** call:
 
-**Phase 1 — Discovery.** List `src/feature/`. Each subdirectory is a feature.
-Record the order; that is the processing order for Phase 3. Skip any subdirectory
-that holds no service and has nothing to test (check `ai/contexts/testing/
-conventions.md` for a project-specific exclusion list, e.g. shared/common code).
+   ```
+   Agent(
+     description: "QA writer — [target]",
+     model:       <from O.2>,
+     prompt:      "You are acting as NestjsQADeveloperAgent. Read
+                   `ai/agents/qa-developer.md` for your full role, workflow, and
+                   instructions. Run `execute_test_plan([task], [target])`. The model
+                   is already confirmed — skip the model prompt. The shared test
+                   fixture (if this project uses one) is already running — do not
+                   start or stop it."
+   )
+   ```
 
-Note which features have no API module — their plans will have no integration
-section, which is expected, not a failure.
+4. Capture the writer's report, then go to O.7.
 
-**Phase 2 — Fan-out.** In a single message, one Agent call per feature with
-`run_in_background: true`, all Architects. Wait for every background notification
-before Phase 3.
+### O.5 — `all` mode
 
-**Phase 3 — Fan-in.** In discovery order, for each feature:
+**Discovery.** List `src/feature/`. Each subdirectory is a target, in listing order.
+Skip a subdirectory that holds no service and has nothing to test (the testing
+conventions doc may list exclusions, e.g. shared/common code). Features with no API
+module get plans without an integration section — expected, not a failure. Confirm the
+feature names before spawning any planner.
 
-1. If `ai/tasks/[task]/test-plan-[feature].md` is missing, record
-   `ARCHITECT FAILED`, continue.
-2. Spawn the Developer with a blocking Agent call (same prompt as O.3 step 3).
-3. Capture the report, continue to the next feature.
+**Fan-out.** One planner call per target (as in O.4 step 1), `run_in_background: true`,
+at most 5 per message. Wait for every notification before the fan-in.
 
-### O.5 — Failure handling
+**Fan-in.** In discovery order, for each target: if the plan file is missing record
+`PLANNER FAILED` and continue; otherwise spawn the writer as in O.4 step 3, capture the
+report, continue.
 
-- **Architect failure** — plan file absent after the call returns: record it,
-  skip the Developer for that feature, continue.
-- **Developer failure** — one or more specs still failing after its single
-  correction attempt: record with the first failure excerpt, continue.
-- **Never halt** the pipeline for one feature.
+### O.6 — Failure handling
 
-### O.6 — Report
+- **Planner failure** — plan file absent after the call returns: record it, skip the
+  writer for that target, continue.
+- **Writer failure** — files still failing after its single correction attempt: record
+  with the first failure excerpt, continue.
+- **Never halt** the pipeline for one target.
+
+### O.7 — Report
 
 ```
 ## QA Run Summary — [task]
 
-| Feature        | Architect | Unit Service | Unit Controller | Integration |
-|----------------|-----------|--------------|-----------------|-------------|
-| equipmentType  | ok        | 16 pass      | 12 pass         | 30 pass     |
-| invoice        | ok        | 8 pass       | 4 pass          | FAIL        |
-| token          | ok        | 6 pass       | n/a             | n/a         |
-| sites          | FAIL      | —            | —               | —           |
+| Target  | Planner | Test files            |
+|---------|---------|-----------------------|
+| <name>  | ok      | 3 / 3 passing         |
+| <name>  | ok      | 2 / 3 passing — FAIL  |
+| <name>  | FAIL    | —                     |
 
-N features processed. M spec files written. K passing, L failing.
+N targets processed. M test files written. K passing, L failing.
 
 Failures:
-- [feature] / [spec type]: [first failure excerpt]
+- [target] / [file]: [first failure excerpt]
 ```
 
-`n/a` means the feature has no API module. `—` means the feature never reached the
-Developer.
-
-Tear down any shared fixture started in O.2. Finally, run the whole suite once
-(the project's normal full-run command) to confirm nothing regressed across
-features, and report its totals as the last line.
+`—` means the target never reached the writer. Tear down any fixture started in O.3.
+Finally, run the whole suite once (the project's normal full-run command, from the QA
+docs) to confirm nothing regressed across targets, and report its totals as the last
+line.
 
 ---
-
-## Mandatory context checklist
-
-- [ ] `ai/contexts/testing/conventions.md`
-- [ ] `ai/infrastructure/project-structure.md`
-- [ ] `src/feature/` listing — confirm feature names before spawning Architects in
-      `all` mode
 
 ## When to stop and ask
 
 - `task` is missing
-- `feature` is not `all` and the feature directory does not exist
-- `all` mode discovers zero features (wrong working directory)
+- `all` mode discovers zero targets (wrong working directory)
 - A shared test fixture this project needs will not start
 
 ## What this agent does NOT do
 
-- Does not plan tests or write specs.
-- Does not run Developers in parallel.
-- Does not retry a failed feature after logging it.
+- Does not plan tests or write them.
+- Does not run writers in parallel.
+- Does not retry a failed target after logging it.
 - Does not apply corrections itself.

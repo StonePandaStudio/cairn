@@ -31,4 +31,4 @@ and header-flow catalogue is `ai/infrastructure/patterns.md`. Reminders:
 - Mapper shapes: `EntityResponse → Entity`, `Entity ↔ EntityForm`, `Entity → EntityPayload`
 
 ### Build
-- Run the project's production build before reporting completion; a failing build blocks the report
+- Use the **production** build for the E.5 check, not a dev build

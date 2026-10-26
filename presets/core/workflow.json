@@ -30,7 +30,7 @@
       "fn": "execute_plan",
       "command": "execute-plan",
       "role": "developer",
-      "oneLine": "implements the plan (switch to Haiku first)",
+      "oneLine": "implements the plan (Haiku recommended)",
       "trackerAction": "no sync"
     },
     {

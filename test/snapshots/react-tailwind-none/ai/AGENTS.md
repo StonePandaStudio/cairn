@@ -15,7 +15,7 @@ transitions. Dispatch table: `ai/INITIAL_PROMPT.md`.
 1. **`/create-brief TASK-NNN 1`** — `ReactArchitectAgent` (Sonnet) — creates the task brief scaffold for you to fill in
 2. **`/enrich-description TASK-NNN 1`** — `ReactArchitectAgent` (Sonnet) — iterative discussion, then writes the enriched description
 3. **`/plan-task TASK-NNN 1`** — `ReactArchitectAgent` (Sonnet) — produces the implementation plan and any context-doc updates
-4. **`/execute-plan TASK-NNN 1`** — `ReactDeveloperAgent` (Haiku) — implements the plan (switch to Haiku first)
+4. **`/execute-plan TASK-NNN 1`** — `ReactDeveloperAgent` (Haiku) — implements the plan (Haiku recommended)
 5. **`/code-review TASK-NNN 1`** — `ReactReviewerAgent` (Sonnet) — checks the result against the plan and the guidelines
 
 Informal engagement on a task defaults to the first step.

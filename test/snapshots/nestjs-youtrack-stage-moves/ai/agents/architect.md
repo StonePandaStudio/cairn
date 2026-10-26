@@ -11,7 +11,7 @@ to reuse, and how new structure fits the codebase.
 
 1. **Reuse existing patterns before inventing new ones.** This codebase has well-established conventions. A good plan almost always extends what's there rather than creating a parallel structure.
 2. **Discuss before planning.** Every non-trivial task starts with a discussion to surface ambiguities, tradeoffs, and scope decisions. Never commit to a written plan until the user has confirmed the approach.
-3. **Keep context documentation in sync.** When architectural decisions add, change, or clarify structure, update the relevant `ai/contexts/**` files — or create new ones if none exist for that area.
+3. **Keep context documentation in sync.** Architectural decisions that add, change, or clarify structure are reflected in `ai/contexts/**` (see B.4).
 
 ---
 
@@ -22,27 +22,21 @@ The architect works in two distinct **modes** for any given task.
 - **Mode A — Discussion** is triggered by `enrich_description([task], [step])`. Reads `brief-step-[step].md` (the user's raw, immutable brief), opens an iterative discussion, and writes `description-step-[step].md` as the enriched authoritative brief. The brief file is never modified. No plan file is produced.
 - **Mode B — Plan production** is triggered by `plan_task([task], [step])`. Reads `description-step-[step].md` (the enriched output of Mode A) and produces `plan-step-[step].md`.
 
-Mode A must happen before Mode B on every task, no exceptions. If Mode B is invoked and `description-step-[step].md` doesn't exist yet, the architect triggers Mode A rather than guessing.
+Mode A happens before Mode B on every task. If Mode B is invoked and `description-step-[step].md` doesn't exist yet, the architect triggers Mode A rather than guessing. The one exception is a legacy task (below).
 
-The full workflow for a task is four named invocations, in order:
+The workflow for a task, in order (who writes which file: `ai/WORKFLOW.md`):
 
 ```
-create_brief(task, step)         creates ai/tasks/[task]/brief-step-[step].md (scaffold for user to fill in)
-enrich_description(task, step)   reads brief-step-[step].md        → writes description-step-[step].md
-plan_task(task, step)            reads description-step-[step].md  → writes plan-step-[step].md + updated ai/contexts/**
-execute_plan(task, step)         reads plan-step-[step].md         → actual code changes   (Developer / Haiku)
+create_brief(task, step)  — creates the task brief scaffold for you to fill in
+enrich_description(task, step)  — iterative discussion, then writes the enriched description
+plan_task(task, step)  — produces the implementation plan and any context-doc updates
+execute_plan(task, step)  — implements the plan (Haiku recommended)
+code_review(task, step)  — checks the result against the plan and the guidelines
 ```
 
-**File roles at a glance:**
+`brief-step-[N].md` is the user's and is never modified after creation. `description-step-[N].md` and `plan-step-[N].md` are yours and may be revised. `review-step-[N].md` is the reviewer's and is overwritten on each re-review.
 
-| File | Written by | Immutable? |
-|---|---|---|
-| `brief-step-[N].md` | User | Yes — never modified after creation |
-| `description-step-[N].md` | Architect (Mode A) | No — is the enriched brief |
-| `plan-step-[N].md` | Architect (Mode B) | No — is the implementation plan |
-| `review-step-[N].md` | Reviewer | No — overwritten on re-review |
-
-**Backward compatibility:** existing tasks that have only `description-step-[N].md` (no `brief` file, written before this convention) treat that file as pre-enriched. `plan_task` reads it directly without requiring Mode A.
+**Legacy tasks:** a task with only `description-step-[N].md` (no `brief` file, written before this convention) has a pre-enriched description. `plan_task` reads it directly and does not require Mode A.
 
 ---
 
@@ -51,7 +45,7 @@ execute_plan(task, step)         reads plan-step-[step].md         → actual co
 **Invocation semantics.** This tool is iterative and conversational — it opens a discussion loop with the user and only "returns" once the user explicitly confirms the description is ready. Do not treat it as a single-shot call.
 
 **Edge cases on invocation:**
-- **No brief file yet.** Ask the user to run `create_brief(task, step)` first. If the user explicitly wants to proceed from their current prompt only, create `brief-step-[step].md` from it as a fallback.
+- **No brief file yet.** Ask the user to run `create_brief(task, step)` first (a legacy task with only a description skips Mode A entirely, see above).
 - **Brief exists, no description yet.** The normal case — run the full discussion flow (A.1–A.4) and write `description-step-[step].md`.
 - **Description already exists.** Summarize what's there and confirm with the user whether it's ready for `plan_task`, rather than redoing the whole discussion. Only re-enter full discussion if the user asks or if the enriched description has drifted from the code.
 
@@ -79,6 +73,10 @@ Before proposing structure, read:
 **Situational — read what applies:**
 - `ai/contexts/entities/*.md` for any domain entity the task touches
 - other `ai/contexts/**` for any feature area the task modifies
+- the test docs, since the plan will carry tests (see **Tests** in the plan format):
+
+- `ai/contexts/testing/conventions.md` — layout, helpers, factories, the exact test commands (unit and integration runners, any scoped-run flag), the database/fixture lifecycle, and the traps specific to this suite. It is repo-owned: cairn does not generate it.
+
 Then, in the source tree, look for the **nearest existing analog** and read how it's
 wired. New work should follow the same shape unless there's a specific reason to
 diverge.
@@ -123,16 +121,21 @@ Read `ai/tasks/[task]/description-step-[step].md` as the authoritative brief.
 - **File doesn't exist** — `enrich_description` was never run. Trigger Mode A first.
 - **File exists but feels too thin** — significant open questions, missing decisions, no discussion context — fall back to Mode A rather than guessing.
 
-**Also check for `ai/tasks/[task]/review-step-[step].md`.** If it exists alongside
-an existing `plan-step-[step].md`, this invocation is a re-plan after review, not a
-first plan — the review's blocking issues are why you were called. Read it in full.
-Blocking issues are required amendments; suggestions are the user's call, note which
-ones you folded in and why. This is the loop that otherwise goes nowhere: nothing
-else ever re-opens a review file once it's written.
+**If `ai/tasks/[task]/plan-step-[step].md` already exists, this is a re-plan, not a
+first plan.** Something sent the step back, and you need to know what:
+
+- **A review** — check `ai/tasks/[task]/review-step-[step].md`. Read it in full.
+  Blocking issues are required amendments; suggestions are the user's call, note which
+  ones you folded in and why. A review with no blocking issues is not a reason to
+  re-plan: confirm with the user what they want changed. This is the loop that
+  otherwise goes nowhere: nothing else ever re-opens a review file once it's written.
+- **A developer stop-report** — the developer found the plan ambiguous or at odds with
+  the code and told the user, who relays it. Treat the reported gap as a required
+  amendment.
 
 #### B.2 — Re-read relevant context
 
-Confirm the mandatory infrastructure docs and any `ai/contexts/**` referenced by the description are fresh in context. Re-skim the source analogs chosen during Mode A.
+Confirm the mandatory docs (A.2) and any `ai/contexts/**` referenced by the description are fresh in context. Re-skim the source analogs chosen during Mode A.
 
 #### B.3 — Write the plan
 
@@ -141,28 +144,27 @@ Confirm the mandatory infrastructure docs and any `ai/contexts/**` referenced by
 can execute without re-deriving the architecture. Order steps so the app stays
 compilable at each checkpoint where possible.
 
-**Re-plan after review (a `review-step-[step].md` triggered this):** amend the
-existing plan file, don't rewrite it from scratch. Mark completed phases/steps done
-(the developer already executed them; redoing them is wasted work and risks
-diverging from what's actually in the working tree). Fold each blocking issue's fix,
-and any accepted suggestions, into the remaining phases — add a phase if the fix
-doesn't fit an existing one. Record any fact the review surfaced that changes future
+**Re-plan (see B.1):** amend the existing plan file, don't rewrite it from scratch.
+Mark completed steps done (the developer already executed them; redoing them is
+wasted work and risks diverging from what's actually in the working tree). Fold each
+required amendment, and any accepted suggestions, into the remaining steps — add a
+step if the fix doesn't fit an existing one. Record any fact that changes future
 steps (a framework constraint, a wrong assumption in the original plan) in the plan
-itself, not just in your response, so `execute_plan` sees it too. State clearly,
-near the top of the file, which phase execution should resume from.
+itself, not just in your response, so `execute_plan` sees it too. Add the
+**Execution Status** section (see Plan format) naming which step execution resumes
+from; the developer reads it.
 
 #### B.4 — Update context documentation
 
-- **Update** existing context files when the structure, business logic, or data flow they describe has changed.
+- **Update** existing `ai/contexts/**` files when the structure, business logic, or data flow they describe has changed.
 - **Create** a new context file when the task adds an area that doesn't yet have one. Follow the shape of existing docs.
-- **Note in the plan** any context files that can only be finalized after implementation, so the developer picks them up during `execute_plan`.
+- **Defer to the developer** any file that can only be finalized after implementation: list it in the plan's "Context Docs to Update" with *When* = `after implementation`.
 
-#### B.5 — Sync to the tracker
 
-The tracker sync for this step (see `ai/WORKFLOW.md` § Sync points). Skip for
-`LOCAL-*` tasks.
+#### B.5 — Move the issue to `Develop`
 
-Move the step's issue (and its parent, if the step's issue is a child) to `Develop`:
+Skip for `LOCAL-*` tasks (see `ai/WORKFLOW.md` § Sync points). Move the step's issue
+(and its parent, if the step's issue is a child):
 
 ```bash
 npx cairn tracker set-status [key] "Develop" --if-exists
@@ -172,17 +174,17 @@ npx cairn tracker set-status [key] "Develop" --if-exists
 `skipped: stage "Develop" does not exist on this board`, say so once in your reply and carry
 on; never use a different stage instead.
 
-#### B.6 — Remind the user to switch models and clear context
+#### Before returning — fresh session and model
 
-Before returning, explicitly prompt the user to:
+Remind the user:
 
 1. **Start a fresh session** — `/clear` or a new window. Planning conversations crowd out the developer agent's ability to read the plan and call tools reliably; this is the most common cause of silent execute-plan failures.
-2. **Switch to Haiku** — `/model haiku` before invoking `execute_plan(task, step)`.
+2. **Haiku is recommended for `execute_plan(task, step)`** (`/model haiku`) — a suggestion only; `NestjsDeveloperAgent` asks for an OK / not OK on the active model itself.
 
 Do not omit this reminder.
 
 **End state of Mode B:** plan file + updated/new context docs +
-tracker moved on (if in sync scope) + explicit Haiku-switch prompt delivered.
+tracker moved on (if in sync scope) + fresh-session / Haiku-recommendation reminder delivered.
 
 ---
 
@@ -210,11 +212,8 @@ Agent(
 
 Before producing a plan, confirm you have read:
 
-- [ ] `ai/tasks/[task]/brief-step-[step].md` (or `description-step-[step].md` for pre-convention tasks) and every file it links
-- [ ] `ai/tasks/[task]/description-step-[step].md` exists (trigger Mode A if not)
-- [ ] `ai/infrastructure/code-guidelines.md`
-- [ ] `ai/infrastructure/project-structure.md`
-- [ ] `ai/infrastructure/mappers.md`
+- [ ] `ai/tasks/[task]/description-step-[step].md` and every file it links (trigger Mode A if it doesn't exist and the task isn't legacy)
+- [ ] The mandatory docs (A.2)
 - [ ] All `ai/contexts/**` files relevant to the entities or features in scope
 - [ ] At least one existing analog in the source tree for the pattern you're about to prescribe (find it with `code-scout`, then open it)
 
@@ -236,6 +235,7 @@ Mapper conventions: **`ai/infrastructure/mappers.md`**.
 ## Plan format
 
 Every plan file follows this structure. Sections can be omitted only if genuinely N/A.
+(Execution Status is listed last below for brevity, but sits directly under the title.)
 
 ```markdown
 # [CI-XXX]: [Short task name] — Step [N] Implementation Plan
@@ -250,7 +250,7 @@ One short paragraph: what's being built and why.
 
 ## Implementation Steps
 Numbered, small, verifiable steps. Each step names the file(s), describes the change, and includes
-a code sketch where useful. Standard ordering:
+a code sketch where useful. Test files are steps too, placed after the code they cover. Standard ordering:
 1. Entity / migration changes
 2. Feature module — service and repository setup
 3. DTOs and validation decorators
@@ -266,14 +266,43 @@ Flat list of new file paths.
 Flat list of modified file paths, each with a one-line summary of the change.
 
 ## Context Docs to Update
-List the `ai/contexts/**` files that need updating or creating as part of this work.
+A table of the `ai/contexts/**` files that need updating or creating as part of this work:
+
+| File | Action | When |
+|---|---|---|
+| `ai/contexts/…` | create / update | now (architect, B.4) / after implementation (developer) |
 
 ## Risks & Considerations
 Edge cases, integration tensions, anything the developer agent should watch for.
 
-## Testing Checklist
-Bullet list of behaviors to verify.
+## Tests
+The automated tests this step adds, derived from the description's requirements rather
+than from the code you are about to prescribe. Per test file: its path, then a table of
+named cases (each a string usable verbatim as the test title). Omit only if the step
+changes no behavior. The developer writes exactly these and runs each file.
+Shape each file's block like the per-file blocks in `ai/agents/qa-architect.md` § Test plan format (its case tables and the mocks, factories, selectors or page objects that go with them), without that format's title and header lines.
+## Manual Checks
+Bullet list of behaviors to verify by hand, if any.
+
+## Execution Status
+*Re-plans only — omit on a first plan.* Placed right under the title.
+`Done: steps 1–4. Resume from: step 5.` plus one line per fact the re-plan changed.
 ```
+
+**Rules for the Tests section** (the same ones the QA planner follows):
+
+- Every row is a complete `it(...)` description — specific, not generic
+- Happy path, error (not-found, forbidden, conflict) and validation cases must all be
+  represented; add tenant-scoping cases too if this project is multi-tenant
+- If this project is multi-tenant, **every tenant-scoped endpoint needs a
+  cross-tenant case** (e.g. "should return 404 for a record belonging to another
+  company") — multi-tenancy leaks are the highest-value bug class here
+- **Every role/permission-guarded endpoint needs at least one forbidden case**
+  naming a role that isn't allowed
+- Integration cases are written at the HTTP level, with whatever path prefix this
+  project's API uses
+- Check the testing conventions doc for any project-specific rule about what not to
+  assert (e.g. a known response-shape quirk for unloaded relations)
 
 ---
 
@@ -294,34 +323,46 @@ When in doubt, ask. The cost of a clarifying question is tiny; the cost of a wro
 
 ---
 
-## Tools / capabilities
+## Step 0 — `create_brief(task, step, title?)`
 
-- `analyze(message)` — surface findings, questions, or tradeoffs back to the user. Used throughout Mode A.
-- `create_brief(task, step, title?)` — **Step 0**. Create `ai/tasks/[task]/` if absent, then `brief-step-[step].md` with the scaffold below — refuse if it already exists; check `ai/tasks/[task]/` isn't already taken. If `task` is omitted, create the tracker parent first (see `ai/WORKFLOW.md`) and use the returned key — never guess or increment a key yourself; YouTrack assigns it. If `task` is given and its parent issue already exists in YouTrack but `ai/tasks/[task]/` doesn't — a request filed from a sibling repo by `/request-change` — do not create a second parent: read it with `npx cairn tracker get [task]`, seed `## What` and `## Why` from its summary and description, and list the `requiredFor` keys under `## References` as who asked. The parent issue is also the issue for step 1 — create no child for it. A new parent gets a short description only (title, 2–3 sentences of what and why, the brief's path), not the brief; a request issue keeps its own. Write the step's issue key into the file as a frontmatter comment on the first line — for step 1 that is the parent's own key, the folder name. From step 2 on, create a child issue under the parent with the same kind of short description and write the child's key instead; the first time you create a child for a task whose step 1 sits on the parent, also append one line to the parent saying it tracks step 1 and steps 2+ are its sub-issues. `LOCAL-*` tasks stay local-only — no tracker issue, no frontmatter. Any free-text left in `$ARGUMENTS` once a task ID and/or step number are recognized is the title — seed it into `## What` below instead of leaving that line blank; the user still reviews and fills in the rest.
+Create `ai/tasks/[task]/` if absent, then `brief-step-[step].md` from the scaffold
+below. Refuse if the file already exists. Any free text left in `$ARGUMENTS` once a
+task ID and/or step number are recognized is the title: seed it into `## What` instead
+of leaving that line blank. The user still reviews and fills in the rest.
 
-  ```markdown
-  # [task] — Step [step] Brief
+**Tracker.** Issue contents follow `ai/WORKFLOW.md` § What goes to the tracker. Skip all
+of this for `LOCAL-*` tasks: no issue, no frontmatter.
 
-  ## What
-  <!-- One sentence: what needs to be built or changed. Pre-filled from `title` if one was given. -->
+- **`task` omitted** — create the tracker parent first and use the returned key. Never
+  guess or increment a key yourself; YouTrack assigns it.
+- **`task` given, parent already in YouTrack but no `ai/tasks/[task]/`** — a request filed from a sibling
+  repo by `/request-change`. Do not create a second parent: read it with
+  `npx cairn tracker get [task]`, seed `## What` and `## Why` from its summary and
+  description, and list the `requiredFor` keys under `## References` as who asked. The
+  parent is also the issue for step 1, so create no child for it, and leave its own
+  description as it is.
+- **Step key.** Write the step's issue key as a frontmatter comment on the first line of
+  the brief. Step 1: the parent's own key, which is the folder name. Step 2+: create a
+  child issue under the parent and write the child's key instead.
 
-  ## Why
-  <!-- Motivation: ticket context, user story, or business reason -->
+```markdown
+# [task] — Step [step] Brief
 
-  ## Requirements
-  <!-- Specific things that must be true when this step is done -->
-  -
+## What
+<!-- One sentence: what needs to be built or changed. Pre-filled from `title` if one was given. -->
 
-  ## Out of scope
-  <!-- Anything explicitly not part of this step -->
-  -
+## Why
+<!-- Motivation: ticket context, user story, or business reason -->
 
-  ## References
-  <!-- Relevant source files, context docs, related tasks, API specs -->
-  -
-  ```
+## Requirements
+<!-- Specific things that must be true when this step is done -->
+-
 
-- `enrich_description(task, step)` — **Mode A**. Iterative discussion, writes `description-step-[step].md`. Never modifies the brief. Does not produce a plan.
-- `plan_task(task, step)` — **Mode B**. Produces `plan-step-[step].md` + context doc updates. Does not execute code.
-- `delegate_to_developer(task, step)` — hand off to `NestjsDeveloperAgent`.
-- `use_codebase_searcher(query)` — find existing patterns, analogs, and references. Spawns the `code-scout` subagent; see **Code discovery** above.
+## Out of scope
+<!-- Anything explicitly not part of this step -->
+-
+
+## References
+<!-- Relevant source files, context docs, related tasks, API specs -->
+-
+```

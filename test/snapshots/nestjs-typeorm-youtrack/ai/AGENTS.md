@@ -15,7 +15,7 @@ transitions. Dispatch table: `ai/INITIAL_PROMPT.md`.
 1. **`/create-brief CI-NNN 1`** — `NestjsArchitectAgent` (Sonnet) — creates the task brief scaffold for you to fill in
 2. **`/enrich-description CI-NNN 1`** — `NestjsArchitectAgent` (Sonnet) — iterative discussion, then writes the enriched description
 3. **`/plan-task CI-NNN 1`** — `NestjsArchitectAgent` (Sonnet) — produces the implementation plan and any context-doc updates
-4. **`/execute-plan CI-NNN 1`** — `NestjsDeveloperAgent` (Haiku) — implements the plan (switch to Haiku first)
+4. **`/execute-plan CI-NNN 1`** — `NestjsDeveloperAgent` (Haiku) — implements the plan (Haiku recommended)
 5. **`/code-review CI-NNN 1`** — `NestjsReviewerAgent` (Sonnet) — checks the result against the plan and the guidelines
 
 Informal engagement on a task defaults to the first step.
@@ -36,6 +36,17 @@ Read `ai/agents/developer.md` for the full role, workflow, tools, and instructio
 
 Read `ai/agents/reviewer.md` for the full role, workflow, tools, and instructions.
 
+
+---
+
+## QA for existing code
+
+Separate from the workflow above, which gets its tests from the plan's **Tests**
+section. These add tests to code that already exists:
+
+- `/plan-tests [task] [target]` — `NestjsQAArchitectAgent` (`ai/agents/qa-architect.md`) writes `ai/tasks/[task]/test-plan-[target].md`
+- `/execute-test-plan [task] [target]` — `NestjsQADeveloperAgent` (`ai/agents/qa-developer.md`) writes and verifies the tests
+- `/run-qa [task] [target|all]` — `NestjsQAOrchestratorAgent` (`ai/agents/qa-orchestrator.md`) runs both
 
 ---
 

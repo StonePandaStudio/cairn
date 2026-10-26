@@ -65,9 +65,11 @@ repo/
     manifest.json       what was generated, from which template, at which hash
     base/               the last render of every managed file — `cairn sync`'s merge base
     scripts/jira.js     vendored tracker shim
-  .claude/commands/     rendered from the workflow — one stub per step
+  .claude/commands/     rendered from the workflow — one stub per step (+ QA stubs, see below)
+  .claude/agents/       code-scout.md — read-only code-locator subagent
   ai/
     agents/             rendered from presets/core + your stack's slots
+                        (architect, developer, reviewer; plus qa-* if the stack ships the QA slots)
     AGENTS.md  WORKFLOW.md   rendered
     infrastructure/code-guidelines.md   rendered once as a seed — then it is yours
     contexts/  tasks/   yours, never written by cairn
@@ -82,6 +84,62 @@ generated directories acquire state nobody dares regenerate.
 Generated files are **committed**, not gitignored. Claude Code discovers
 `.claude/commands/` and agent docs from disk, and a prompt change should show up in
 `git diff` like any other change.
+
+## Workflow and agents
+
+Three agents, one step each, rendered from `presets/core` with the stack's slots filled in:
+
+| Step (command) | Agent | Does |
+|---|---|---|
+| `create_brief` (`/create-brief`) | architect | Scaffolds `brief-step-N.md` for you to fill in. Given a tracker key filed by `/request-change`, seeds it from that issue instead of creating a second parent |
+| `enrich_description` (`/enrich-description`) | architect | Discussion, then `description-step-N.md` |
+| `plan_task` (`/plan-task`) | architect | `plan-step-N.md` + `ai/contexts/**` updates |
+| `execute_plan` (`/execute-plan`) | developer | Implements the plan |
+| `code_review` (`/code-review`) | reviewer | Writes `review-step-N.md`; reports only, never edits source |
+
+The architect and developer delegate code search to the `code-scout` subagent
+(`.claude/agents/code-scout.md`, Haiku by default; `agents.scout.model` moves it up for a
+large or unusual tree).
+
+**Models are recommendations, not gates.** Developer recommends Haiku, reviewer the tier in
+`model`. Before the first run in a session the agent states the recommendation and the
+active model, then asks once: *Continue on the current model? OK / not OK*. OK proceeds for
+the rest of the session; not OK stops so you can switch.
+
+**The plan carries tests.** Plans have a **Tests** section: per test file, a table of named
+cases the developer writes verbatim, runs file by file, and the reviewer checks exist (the
+reviewer never runs them). "Context Docs to Update" is a table with a *When* column
+(`now` / `after implementation`), so the developer knows which docs are left for it.
+
+**Re-plans.** If `plan-step-N.md` already exists, `/plan-task` is a re-plan, sent back by a
+review's blocking issues or by a developer stop-report. The architect amends the plan
+rather than rewriting it, and adds an **Execution Status** section (`Done: steps 1–4.
+Resume from: step 5.`) that the developer and reviewer honor.
+
+**Test-first (`tdd: true`).** The architect orders each step's unit test files before the
+code and marks every test file `unit` or `integration`. The developer runs each unit file
+red (an assertion or missing symbol — not a broken test), then green, and reports
+`RED (<reason>) → GREEN (N)`; the reviewer treats a unit file without a red line as a
+blocking finding. Default `false`.
+
+**Build command.** `commands.build` (e.g. `"yarn build"`) is what the developer runs before
+reporting completion; without it the agent finds the command in `package.json` or the README.
+
+### QA pipeline for existing code
+
+Separate from the workflow: `/plan-tests [task] [target]`, `/execute-test-plan [task] [target]`
+and `/run-qa [task] [target|all]` add tests to code that already exists, via `qa-architect`,
+`qa-developer` and `qa-orchestrator`. They are a core contract; a framework preset opts in
+by shipping seven `qa-*` slots (`qa-target`, `qa-source`, `qa-plan-rules`, `qa-plan-format`,
+`qa-write-steps`, `qa-all-targets`, `qa-mandatory-docs`). `nestjs` fills them for Jest,
+`angular` for Playwright e2e; `react` and `nextjs` get no QA agents. Agent names default to
+the primary stack (`NestjsQAArchitectAgent`) and can be set with `agents.qaArchitect.name`,
+`qaDeveloper`, `qaOrchestrator`. Test-first does not apply here: there is nothing to go red
+against. See `presets/README.md` § QA.
+
+> Migrating: the old `/add-e2e-tests` command and `ai/agents/qa.md` (angular) are gone,
+> replaced by the pipeline above. Run `cairn sync`; delete the leftover files if you no
+> longer want them.
 
 ## Tracker
 
@@ -219,6 +277,9 @@ mention keeps following the preset.
 - `<!-- remove -->` as a section's body deletes that section.
 - A file with no headings is appended to the slot. A first line `<!-- replace -->` makes
   the file the whole slot; that is the one form where you restate the preset's text.
+- The `architect-mandatory-docs` slot is now `mandatory-docs`, because the developer and
+  reviewer read the same list. An `ai/local/slots/architect-mandatory-docs.md` still
+  applies, but rename it; `cairn override status` flags the old name.
 - Headings inside code fences are text. Other leading `<!-- … -->` comments are yours and
   are dropped. The files are templates, so `{{ tracker.exampleKey }}` and friends work.
 

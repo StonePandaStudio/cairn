@@ -1,4 +1,4 @@
 {
   "kind": "framework",
-  "description": "Angular spine, SCSS theming and i18n; optional Playwright e2e agent"
+  "description": "Angular spine, SCSS theming and i18n; fills the QA pipeline slots (Playwright e2e)"
 }

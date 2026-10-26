@@ -15,7 +15,7 @@ transitions. Dispatch table: `ai/INITIAL_PROMPT.md`.
 1. **`/create-brief CI-NNN 1`** — `NextjsArchitectAgent` (Sonnet) — creates the task brief scaffold for you to fill in
 2. **`/enrich-description CI-NNN 1`** — `NextjsArchitectAgent` (Sonnet) — iterative discussion, then writes the enriched description
 3. **`/plan-task CI-NNN 1`** — `NextjsArchitectAgent` (Sonnet) — produces the implementation plan and any context-doc updates
-4. **`/execute-plan CI-NNN 1`** — `NextjsDeveloperAgent` (Haiku) — implements the plan (switch to Haiku first)
+4. **`/execute-plan CI-NNN 1`** — `NextjsDeveloperAgent` (Haiku) — implements the plan (Haiku recommended)
 5. **`/code-review CI-NNN 1`** — `NextjsReviewerAgent` (Sonnet) — checks the result against the plan and the guidelines
 
 Informal engagement on a task defaults to the first step.

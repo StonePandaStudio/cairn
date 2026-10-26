@@ -12,7 +12,9 @@ A task lives in `ai/tasks/[KEY]/` as a set of step files:
 | `brief-step-[N].md` | you — the raw ask, never modified after creation |
 | `description-step-[N].md` | {{ architectAgent }} (Mode A) — the enriched brief |
 | `plan-step-[N].md` | {{ architectAgent }} (Mode B) — the implementation plan |
-
+| `review-step-[N].md` | {{ reviewerAgent }} — overwritten on each re-review |
+{{#if qa}}| `test-plan-[target].md` | {{ qaArchitectAgent }} — only for the QA pipeline on existing code |
+{{/if}}
 `[KEY]` is the task folder name. Speculative or un-tracked work uses a `LOCAL-`
 prefix so a folder name can never collide with a real issue key.
 

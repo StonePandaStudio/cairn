@@ -1,5 +1,5 @@
 ---
-description: implements the plan (switch to Haiku first)
+description: implements the plan (Haiku recommended)
 argument-hint: "[task] [step]"
 ---
 You are acting as **AngularDeveloperAgent**. Read `ai/agents/developer.md` for your full role, workflow, and instructions.

@@ -644,9 +644,9 @@ test('model: the required tier renders as a name, and a versioned id loses its v
     const config = { stack: ['react'], tracker: { provider: 'none' }, ...(model ? { model } : {}) };
     return render.renderTargets({ config, presetsDir: 'presets' }).targets.find((t) => t[0] === 'ai/agents/reviewer.md')[1];
   };
-  assert.match(reviewer(), /requires \*\*Sonnet or higher\*\*/);
-  assert.match(reviewer('opus'), /requires \*\*Opus or higher\*\*/);
-  assert.match(reviewer('claude-sonnet-5'), /requires \*\*Sonnet or higher\*\*/);
+  assert.match(reviewer(), /\*\*Sonnet\*\* is recommended/);
+  assert.match(reviewer('opus'), /\*\*Opus\*\* is recommended/);
+  assert.match(reviewer('claude-sonnet-5'), /\*\*Sonnet\*\* is recommended/);
   assert.ok(!/claude-/.test(reviewer('claude-sonnet-5')));
 });
 
@@ -700,8 +700,8 @@ test('stage moves: review is opt-in and moves the issue at the start of the revi
 test('stage moves: plan_task moves to the configured in-progress stage, independently of review', () => {
   const config = stageConfig({ inProgress: 'Develop' });
   const architect = doc(config, 'ai/agents/architect.md');
-  const b5 = architect.slice(architect.indexOf('#### B.5'), architect.indexOf('#### B.6'));
-  assert.match(b5, /^#### B\.5 — Sync to the tracker/, 'the existing tracker step carries the move; no second B.5');
+  const b5 = architect.slice(architect.indexOf('#### B.5'), architect.indexOf('#### Before returning'));
+  assert.match(b5, /^#### B\.5 — Move the issue to `Develop`/, 'the existing tracker step carries the move; no second B.5');
   assert.strictEqual((architect.match(/#### B\.5/g) || []).length, 1);
   assert.ok(b5.includes('npx cairn tracker set-status [key] "Develop" --if-exists'));
   assert.match(b5, /skipped: stage "Develop" does not exist on this board/);
@@ -1110,7 +1110,7 @@ test('render: step 1 is the parent issue, children start at step 2', () => {
 
   const arch = pick('ai/agents/architect.md');
   assert.ok(/create no child for it/.test(arch));
-  assert.ok(/From step 2 on, create a child issue/.test(arch));
+  assert.ok(/Step 2\+: create a\s+child issue/.test(arch));
 });
 
 // ------------------------------------------------------------------ presets
@@ -1123,7 +1123,7 @@ test('presets: listPresets reads every folder but core, with kind and what it sh
   for (const n of ['nestjs', 'react', 'typeorm', 'tailwind']) assert.ok(names.includes(n), n);
   const nest = all.find((p) => p.name === 'nestjs');
   assert.strictEqual(nest.kind, 'framework');
-  assert.ok(nest.ships.includes('slots') && nest.ships.includes('agents'));
+  assert.ok(nest.ships.includes('slots'));
   assert.strictEqual(all.find((p) => p.name === 'tailwind').kind, 'styling');
   assert.ok(all.every((p) => p.kind !== 'other'), 'every bundled preset carries a preset.json');
 });
@@ -1848,10 +1848,10 @@ atest('render: architect.md Mode B re-opens review-step-N.md and amends rather t
     const dir = tmpRepo();
     init(['--repo', dir, '--stack', 'nestjs', '--tracker', 'youtrack', '--project-key', 'CI', '--render', '--no-color']);
     const architect = fs.readFileSync(path.join(dir, 'ai/agents/architect.md'), 'utf8');
-    assert.match(architect, /Also check for `ai\/tasks\/\[task\]\/review-step-\[step\]\.md`/, 'B.1 checks for a review file');
+    assert.match(architect, /check `ai\/tasks\/\[task\]\/review-step-\[step\]\.md`/, 'B.1 checks for a review file');
     assert.match(architect, /Blocking issues are required amendments/);
-    assert.match(architect, /amend the\nexisting plan file, don't rewrite it from scratch/, 'B.3 amends rather than overwriting');
-    assert.match(architect, /Mark completed phases\/steps done/);
+    assert.match(architect, /amend the existing plan file, don't rewrite it from scratch/, 'B.3 amends rather than overwriting');
+    assert.match(architect, /Mark completed steps done/);
   } finally {
     console.log = log;
   }
@@ -1877,38 +1877,88 @@ atest('render: every command file has a description frontmatter block on line 1 
   }
 });
 
-atest('render: stack-owned QA agents/commands render only for the stack that ships them', async () => {
+atest('render: the QA pipeline is the core contract filled by the stack that ships qa-* slots', async () => {
   const { main: init } = require('../lib/init');
   const log = console.log;
   console.log = () => {};
+  const read = (dir, rel) => fs.readFileSync(path.join(dir, rel), 'utf8');
+  const QA_AGENTS = ['qa-architect.md', 'qa-developer.md', 'qa-orchestrator.md'];
+  const QA_COMMANDS = ['plan-tests.md', 'execute-test-plan.md', 'run-qa.md'];
   try {
     const nest = tmpRepo();
     init(['--repo', nest, '--stack', 'nestjs', '--tracker', 'none', '--render', '--no-color']);
-    for (const f of ['qa-architect.md', 'qa-developer.md', 'qa-orchestrator.md']) {
-      assert.ok(fs.existsSync(path.join(nest, 'ai/agents', f)), `nestjs ships ${f}`);
-    }
-    for (const f of ['plan-tests.md', 'execute-test-plan.md', 'run-qa.md']) {
-      assert.ok(fs.existsSync(path.join(nest, '.claude/commands', f)), `nestjs ships ${f}`);
-    }
-    assert.ok(!fs.existsSync(path.join(nest, 'ai/agents/qa.md')), 'no angular-only qa.md on nestjs');
-    const qaArchitect = fs.readFileSync(path.join(nest, 'ai/agents/qa-architect.md'), 'utf8');
-    assert.match(qaArchitect, /requires \*\*Sonnet or higher\*\*/, '{{ model }} resolves the same as reviewer.md');
-    const qaDeveloper = fs.readFileSync(path.join(nest, 'ai/agents/qa-developer.md'), 'utf8');
-    assert.match(qaDeveloper, /\*\*Model:\*\* Haiku/, 'qa-developer states Haiku as plain text, like developer.md');
+    for (const f of QA_AGENTS) assert.ok(fs.existsSync(path.join(nest, 'ai/agents', f)), `nestjs ships ${f}`);
+    for (const f of QA_COMMANDS) assert.ok(fs.existsSync(path.join(nest, '.claude/commands', f)), `nestjs ships ${f}`);
+    const nestPlanner = read(nest, 'ai/agents/qa-architect.md');
+    assert.match(nestPlanner, /\*\*Sonnet\*\* is recommended/, '{{ model }} resolves the same as reviewer.md');
+    assert.match(nestPlanner, /src\/feature\/\[target\]/, 'the nestjs target and plan format fill the slots');
+    assert.match(read(nest, 'ai/agents/qa-developer.md'), /not a requirement\):\*\* Haiku/, 'the writer recommends Haiku as plain text');
+    assert.match(read(nest, 'ai/agents/architect.md'), /conventions\.md/, 'the architect reads the test docs when the plan carries tests');
 
     const ng = tmpRepo();
     init(['--repo', ng, '--stack', 'angular', '--tracker', 'none', '--render', '--no-color']);
-    assert.ok(fs.existsSync(path.join(ng, 'ai/agents/qa.md')));
-    assert.ok(fs.existsSync(path.join(ng, '.claude/commands/add-e2e-tests.md')));
-    assert.ok(!fs.existsSync(path.join(ng, 'ai/agents/qa-architect.md')), 'no nestjs-only qa docs on angular');
+    for (const f of QA_AGENTS) assert.ok(fs.existsSync(path.join(ng, 'ai/agents', f)), `angular ships ${f} too`);
+    assert.ok(!fs.existsSync(path.join(ng, 'ai/agents/qa.md')), 'the standalone qa.md is gone');
+    const ngPlanner = read(ng, 'ai/agents/qa-architect.md');
+    assert.match(ngPlanner, /data-testid/, 'the angular plan format fills the slots');
+    assert.ok(!/src\/feature/.test(ngPlanner), 'no nestjs layout leaks into angular');
+    assert.match(read(ng, 'ai/agents/qa-orchestrator.md'), /not supported/, 'angular has no `all` mode');
+
+    // The orchestrator's sub-agents cannot ask the user anything: it asks once, and says so.
+    const orch = read(nest, 'ai/agents/qa-orchestrator.md');
+    assert.match(orch, /Confirm models once/);
+    assert.match(orch, /model is\s+already confirmed/);
 
     const react = tmpRepo();
     init(['--repo', react, '--stack', 'react', '--tracker', 'none', '--render', '--no-color']);
-    assert.ok(!fs.existsSync(path.join(react, 'ai/agents/qa.md')));
-    assert.ok(!fs.existsSync(path.join(react, 'ai/agents/qa-architect.md')));
+    for (const f of QA_AGENTS) assert.ok(!fs.existsSync(path.join(react, 'ai/agents', f)), `react ships no ${f}`);
+    for (const f of QA_COMMANDS) assert.ok(!fs.existsSync(path.join(react, '.claude/commands', f)));
+    assert.ok(!/QA for existing code/.test(read(react, 'ai/AGENTS.md')));
+    assert.match(read(nest, 'ai/AGENTS.md'), /QA for existing code/);
   } finally {
     console.log = log;
   }
+});
+
+test('tdd: off by default; on, the architect orders tests first and developer/reviewer require red then green', () => {
+  const render = require('../lib/render');
+  const agent = (role, tdd) => {
+    const config = { stack: ['nestjs'], tracker: { provider: 'none' }, ...(tdd ? { tdd: true } : {}) };
+    return render.renderTargets({ config, presetsDir: 'presets' }).targets.find((t) => t[0] === `ai/agents/${role}.md`)[1];
+  };
+  for (const role of ['architect', 'developer', 'reviewer']) {
+    assert.ok(!/test-first/i.test(agent(role, false)), role + ' is test-after without tdd');
+    assert.match(agent(role, true), /test-first/i, role + ' is test-first with tdd');
+  }
+  assert.match(agent('architect', false), /placed after the code they cover/);
+  assert.match(agent('architect', false), /§ Test plan format/, 'the architect points at the per-file test shape');
+  assert.match(agent('architect', true), /\*\*before\*\* the code that makes them pass/);
+  assert.match(agent('developer', true), /RED \(<reason>\) → GREEN/);
+  assert.match(agent('developer', true), /not red; fix the test/, 'red is defined, a compile error in the test is not red');
+  assert.match(agent('reviewer', true), /only as passing is a blocking finding/);
+  const qa = render.renderTargets({ config: { stack: ['nestjs'], tracker: { provider: 'none' }, tdd: true }, presetsDir: 'presets' })
+    .targets.find((t) => t[0] === 'ai/agents/qa-architect.md')[1];
+  assert.match(qa, /characterization tests/);
+  assert.ok(!/RED \(/.test(qa), 'the backfill agents are not test-first');
+});
+
+test('commands.build: named in the developer when set, looked up when not', () => {
+  const render = require('../lib/render');
+  const dev = (extra) =>
+    render.renderTargets({ config: { stack: ['nestjs'], tracker: { provider: 'none' }, ...extra }, presetsDir: 'presets' })
+      .targets.find((t) => t[0] === 'ai/agents/developer.md')[1];
+  assert.match(dev({ commands: { build: 'yarn build' } }), /Run `yarn build` to ensure/);
+  assert.match(dev(), /the `build` script in `package.json`/);
+});
+
+test('local: an override under the pre-rename slot name still applies', () => {
+  const { createLocalReader } = require('../lib/local');
+  const dir = tmpRepo();
+  fs.mkdirSync(path.join(dir, 'ai/local/slots'), { recursive: true });
+  fs.writeFileSync(path.join(dir, 'ai/local/slots/architect-mandatory-docs.md'), '- `docs/extra.md`\n');
+  assert.ok(createLocalReader(dir).slot('mandatory-docs'), 'old file name is read for the renamed slot');
+  fs.writeFileSync(path.join(dir, 'ai/local/slots/mandatory-docs.md'), '- `docs/new.md`\n');
+  assert.match(createLocalReader(dir).slot('mandatory-docs').text, /docs\/new\.md/, 'the new name wins');
 });
 
 // --------------------------------------------------------------------- sync
