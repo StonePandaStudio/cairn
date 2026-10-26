@@ -168,6 +168,74 @@ output formats are byte-for-byte what the old scripts printed. Existing prose
 references name these strings and the agents parse the output, so they are kept
 until a render pass regenerates those documents from the presets.
 
+## Customizing agent docs: `ai/local/`
+
+`ai/agents/*.md` are generated. Don't edit them: a project's changes live next to them
+in `ai/local/`, which cairn reads and never writes, and `cairn sync` rebuilds the agent
+from the template plus those files. There is nothing to merge, so a template update
+can't conflict with your edits.
+
+```
+ai/local/
+├── slots/<slot>.md      change one stack slot (implementation-reference, review-checklist, …)
+└── agents/<name>.md     add to the end of one agent doc
+```
+
+**A slot file holds only the sections that differ.** A heading the preset also has
+replaces that section (and anything nested under it); every section the file doesn't
+mention keeps following the preset.
+
+```markdown
+<!-- ai/local/slots/implementation-reference.md -->
+
+### Controllers
+- Bind inputs with `@Body({ schema })`, `@Param({ schema })`, `@Query({ schema })`
+- Return the response DTO class; there is no `@ZodResponse`
+
+### Billing
+- Money is integer minor units. Use `Ledger`, never a raw repository.
+
+### Testing
+<!-- remove -->
+```
+
+- `### Controllers` replaces the preset's Controllers section.
+- `### Billing` isn't in the preset, so it is added at the end of the slot.
+- `<!-- remove -->` as a section's body deletes that section.
+- A file with no headings is appended to the slot. A first line `<!-- replace -->` makes
+  the file the whole slot; that is the one form where you restate the preset's text.
+- Headings inside code fences are text. Other leading `<!-- … -->` comments are yours and
+  are dropped. The files are templates, so `{{ tracker.exampleKey }}` and friends work.
+
+`ai/local/agents/<name>.md` is appended to `ai/agents/<name>.md` under a "Project-specific"
+heading, for rules that belong to no slot. `key-patterns` feeds both the architect and the
+developer, so overriding it changes both.
+
+```bash
+cairn sync                                   # rebuilds the agents from template + ai/local
+cairn override status                        # what is in ai/local, and what needs a look
+cairn override extract ai/agents/developer.md   # turn a hand-edited agent doc into overrides
+cairn sync --reset ai/agents/developer.md    # then take the generated file
+cairn override ack implementation-reference  # "I've reviewed the preset's change"
+```
+
+**If an agent doc was edited by hand** while the template moved, `cairn sync` leaves it
+alone, prints your edit as a diff, and exits 3. `cairn override extract` writes that diff
+out as override files (only the changed sections), checks that they reproduce your edit,
+and leaves what it can't place for you to decide. Then `--reset` takes the generated file.
+If the template didn't move, a hand edit is only noted.
+
+**Staying current.** An override replaces a section for good, so the preset's later
+improvements to it won't reach you. Sync records each override the first time it sees it
+and says so when the preset's slot changes underneath it, or when a section you replaced
+no longer exists in the preset (it would otherwise be added as a second section).
+`cairn doctor` lists the same warnings across the workspace; `cairn override ack` clears
+one once you've looked.
+
+Only agent docs work this way. Command stubs, `WORKFLOW.md`, `AGENTS.md` and
+`code-guidelines.md` keep the three-way merge on `cairn sync`, since they have no
+`ai/local/` hook.
+
 ## Doctor
 
 ```bash

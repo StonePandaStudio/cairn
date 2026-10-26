@@ -10,6 +10,7 @@
 //   cairn render          scaffold ai/ from the bundled presets (greenfield)
 //   cairn sync            three-way merge of preset changes into a rendered repo
 //   cairn upgrade         update cairn in every workspace repo, then sync each
+//   cairn override        manage ai/local/, a repo's own additions to generated files
 //   cairn workspace       add / remove / list the repos in repos.json
 //   cairn context         cross-repo authored context layer (prototype)
 //   cairn preset          what the bundled presets offer
@@ -24,6 +25,7 @@ Usage: cairn <command> [options]
   render [options]      scaffold ai/ from the bundled presets (cairn render --help)
   sync [options]        merge preset changes into an already-rendered repo (cairn sync --help)
   upgrade [options]     update cairn in every workspace repo, then sync (cairn upgrade --help)
+  override <cmd> [...]  manage ai/local/, a repo's own additions to generated files (cairn override --help)
   workspace <cmd> [...] manage the repo list in repos.json (cairn workspace --help)
   context <cmd> [...]   cross-repo authored context layer (cairn context --help)
   preset <cmd> [...]    what the bundled presets offer (cairn preset --help)
@@ -58,6 +60,10 @@ function main() {
 
     case 'upgrade':
       process.exitCode = require('../lib/upgrade/cli').main(rest);
+      return;
+
+    case 'override':
+      process.exitCode = require('../lib/override/cli').main(rest);
       return;
 
     case 'workspace':

@@ -390,6 +390,252 @@ atest('tracker: link is a skip on none and an explicit error on jira-server', as
   );
 });
 
+// ---------------------------------------------------------------- overrides
+
+const localMod = require('../lib/local');
+
+const SLOT = [
+  '### Controllers',
+  '- thin controllers',
+  '- bind inputs plainly',
+  '',
+  '### Services',
+  '- one service per feature',
+  '#### Transactions',
+  '- wrap writes',
+  '',
+  '### DTOs',
+  '- one file per DTO',
+].join('\n');
+
+const ov = (text, replace = false) => ({ replace, text });
+
+test('overrides: a section replaces the preset section of the same heading; the rest is untouched', () => {
+  const { text, matched } = localMod.applySlotOverride(SLOT, ov('### Controllers\n- bind with a schema\n- add guards'));
+  assert.ok(text.includes('- bind with a schema'));
+  assert.ok(!text.includes('- bind inputs plainly') && !text.includes('- thin controllers'));
+  assert.ok(text.includes('### Services') && text.includes('- one file per DTO'), 'other sections kept');
+  assert.ok(text.includes('### Controllers\n- bind with a schema\n- add guards\n\n### Services'), 'spacing between sections is preserved');
+  assert.deepStrictEqual(matched, ['3|controllers']);
+});
+
+test('overrides: replacing a section replaces what is nested under it; a deeper heading can be overridden alone', () => {
+  const parent = localMod.applySlotOverride(SLOT, ov('### Services\n- services are stateless')).text;
+  assert.ok(!parent.includes('#### Transactions') && !parent.includes('- wrap writes'), 'nested section goes with its parent');
+  const child = localMod.applySlotOverride(SLOT, ov('#### Transactions\n- wrap writes and reads')).text;
+  assert.ok(child.includes('- wrap writes and reads') && child.includes('- one service per feature'));
+});
+
+test('overrides: a new heading is appended; <!-- remove --> deletes a section; no headings appends text; replace is the whole slot', () => {
+  const added = localMod.applySlotOverride(SLOT, ov('### Billing\n- use the ledger')).text;
+  assert.ok(added.endsWith('### Billing\n- use the ledger'));
+  assert.ok(added.includes('- one file per DTO\n\n### Billing'));
+
+  const removed = localMod.applySlotOverride(SLOT, ov('### DTOs\n<!-- remove -->')).text;
+  assert.ok(!removed.includes('DTOs') && !removed.includes('one file per DTO'));
+  assert.ok(removed.includes('### Services'));
+
+  assert.strictEqual(localMod.applySlotOverride('- a\n- b', ov('- c')).text, '- a\n- b\n\n- c');
+  assert.strictEqual(localMod.applySlotOverride(SLOT, ov('only this', true)).text, 'only this');
+  assert.strictEqual(localMod.applySlotOverride('- a', ov('')).text, '- a');
+});
+
+test('overrides: a heading inside a fenced code block is not a section', () => {
+  const upstream = '### A\n```\n### not a heading\n```\n- keep\n\n### B\n- b';
+  const { text } = localMod.applySlotOverride(upstream, ov('### B\n- changed'));
+  assert.ok(text.includes('### not a heading') && text.includes('- keep') && text.includes('- changed'));
+});
+
+test('overrides: file parsing drops author comments, honours the replace marker', () => {
+  assert.deepStrictEqual(localMod.parseOverrideFile('<!-- my note -->\n### A\n- x\n'), { replace: false, text: '### A\n- x' });
+  assert.deepStrictEqual(localMod.parseOverrideFile('<!-- replace -->\n- all\n'), { replace: true, text: '- all' });
+  assert.deepStrictEqual(localMod.parseOverrideFile('\r\n### A\r\n- x\r\n'), { replace: false, text: '### A\n- x' });
+});
+
+function rendered(config, rel, extra = {}) {
+  const render = require('../lib/render');
+  return render.renderTargets({ config, presetsDir: 'presets', ...extra }).targets.find((t) => t[0] === rel)[1];
+}
+
+test('overrides: a repo\'s ai/local/slots/ changes the rendered agent; no overrides renders exactly as before', () => {
+  const config = { stack: ['nestjs', 'typeorm'], tracker: { provider: 'none' } };
+  const dir = tmpRepo();
+  const plain = rendered(config, 'ai/agents/developer.md', { repoPath: dir });
+  assert.strictEqual(plain, rendered(config, 'ai/agents/developer.md'), 'an empty ai/local changes nothing');
+
+  fs.mkdirSync(path.join(dir, 'ai/local/slots'), { recursive: true });
+  fs.writeFileSync(
+    path.join(dir, 'ai/local/slots/implementation-reference.md'),
+    '<!-- project rules -->\n### Controllers\n- Bind inputs with `@Body({ schema })`\n',
+  );
+  const out = rendered(config, 'ai/agents/developer.md', { repoPath: dir });
+  assert.ok(out.includes('- Bind inputs with `@Body({ schema })`'));
+  assert.ok(!out.includes('Thin controllers'), 'preset Controllers section replaced');
+  assert.ok(out.includes('### Services') && out.includes('### DTOs'), 'every other preset section is still there');
+  assert.ok(!out.includes('project rules'), 'author comment not rendered');
+  // The same slot feeds the architect only if its template uses it.
+  assert.strictEqual(rendered(config, 'ai/agents/reviewer.md', { repoPath: dir }), rendered(config, 'ai/agents/reviewer.md'));
+});
+
+test('overrides: ai/local/agents/<name>.md is appended under "Project-specific"; the template engine runs on it', () => {
+  const config = { stack: ['react'], tracker: { provider: 'youtrack', projectKey: 'CI' } };
+  const dir = tmpRepo();
+  fs.mkdirSync(path.join(dir, 'ai/local/agents'), { recursive: true });
+  fs.writeFileSync(path.join(dir, 'ai/local/agents/developer.md'), 'Run `npm run lint` before reporting. Tracker: {{ tracker.exampleKey }}.\n');
+  const out = rendered(config, 'ai/agents/developer.md', { repoPath: dir });
+  assert.match(out, /\n---\n\n## Project-specific\n\nRun `npm run lint` before reporting\. Tracker: CI\.\n$/);
+  assert.ok(!rendered(config, 'ai/agents/architect.md', { repoPath: dir }).includes('Project-specific'));
+});
+
+test('overrides: an in-memory overlay previews overrides that are not on disk', () => {
+  const config = { stack: ['nestjs'], tracker: { provider: 'none' } };
+  const out = rendered(config, 'ai/agents/developer.md', {
+    localOverrides: { slots: { 'implementation-reference': '### Testing\n- jest only' } },
+  });
+  assert.ok(out.includes('- jest only'));
+});
+
+// ----------------------------------------------------- override inspection
+
+test('overrides: inspect reports unknown slots and agents, new overrides, upstream drift and sections that stopped matching', () => {
+  const { inspectOverrides, needsAttention, recordOverrides } = require('../lib/local/inspect');
+  const { hashContent } = manifest;
+  const config = { stack: ['nestjs'], tracker: { provider: 'none' } };
+  const dir = tmpRepo();
+  const put = (rel, text) => {
+    fs.mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true });
+    fs.writeFileSync(path.join(dir, rel), text);
+  };
+  put('ai/local/slots/implementation-reference.md', '### Controllers\n- x\n');
+  put('ai/local/slots/not-a-slot.md', '- y\n');
+  put('ai/local/agents/developer.md', 'rule\n');
+  put('ai/local/agents/ghost.md', 'rule\n');
+
+  const find = (items, name, kind) => items.find((i) => i.name === name && i.kind === kind);
+  let items = inspectOverrides({ repoPath: dir, config, presetsDir: 'presets', manifest: { files: {} } });
+  assert.strictEqual(find(items, 'implementation-reference', 'slot').state, 'new');
+  assert.strictEqual(find(items, 'not-a-slot', 'slot').state, 'unknown-slot');
+  assert.strictEqual(find(items, 'developer', 'agent').state, 'ok');
+  assert.strictEqual(find(items, 'ghost', 'agent').state, 'unknown-agent');
+  assert.deepStrictEqual(items.filter(needsAttention).map((i) => i.name).sort(), ['ghost', 'not-a-slot']);
+
+  // Sync records the new one; afterwards it is ok.
+  const m = { files: {} };
+  assert.ok(recordOverrides(m, items));
+  assert.deepStrictEqual(Object.keys(m.overrides), ['slots/implementation-reference']);
+  items = inspectOverrides({ repoPath: dir, config, presetsDir: 'presets', manifest: m });
+  assert.strictEqual(find(items, 'implementation-reference', 'slot').state, 'ok');
+
+  // The preset moves under it.
+  const drifted = { files: {}, overrides: { 'slots/implementation-reference': { ...m.overrides['slots/implementation-reference'], upstream: hashContent('older preset text') } } };
+  const d = find(inspectOverrides({ repoPath: dir, config, presetsDir: 'presets', manifest: drifted }), 'implementation-reference', 'slot');
+  assert.strictEqual(d.state, 'upstream-changed');
+  assert.match(d.message, /cairn override ack implementation-reference/);
+
+  // A section the override replaced no longer exists in the preset.
+  const gone = { files: {}, overrides: { 'slots/implementation-reference': { upstream: m.overrides['slots/implementation-reference'].upstream, matched: ['3|controllers', '3|renamed away'] } } };
+  const g = find(inspectOverrides({ repoPath: dir, config, presetsDir: 'presets', manifest: gone }), 'implementation-reference', 'slot');
+  assert.strictEqual(g.state, 'section-gone');
+  assert.match(g.message, /"renamed away"/);
+});
+
+// --------------------------------------------------------------- extract
+
+const extractFx = () => {
+  const render = require('../lib/render');
+  const config = { stack: ['nestjs'], tracker: { provider: 'none' } };
+  const base = render.renderTargets({ config, presetsDir: 'presets' }).targets.find((t) => t[0] === 'ai/agents/developer.md')[1];
+  return { config, base, extract: (ours) => require('../lib/local/extract').extractOverrides({ rel: 'ai/agents/developer.md', ours, base, config, presetsDir: 'presets', repoPath: null }) };
+};
+
+test('extract: an edit inside a slot section becomes a one-section override that reproduces the edit', () => {
+  const { base, extract } = extractFx();
+  const ours = base.replace('- Thin controllers: delegate all business logic to services', '- Thin controllers: delegate everything');
+  const r = extract(ours);
+  assert.deepStrictEqual(Object.keys(r.slots), ['implementation-reference']);
+  assert.match(r.slots['implementation-reference'], /^### Controllers\n/);
+  assert.ok(r.slots['implementation-reference'].includes('delegate everything'));
+  assert.ok(!r.slots['implementation-reference'].includes('### Services'), 'only the changed section is written');
+  assert.strictEqual(r.unplaced.length, 0);
+  assert.strictEqual(r.verified, true);
+});
+
+test('extract: text added at the very end becomes the agent append; an edit outside any slot is reported, not guessed', () => {
+  const { base, extract } = extractFx();
+  const appended = extract(base.trimEnd() + '\n\n- Always run the linter.\n');
+  assert.strictEqual(appended.agent, '- Always run the linter.');
+  assert.deepStrictEqual(appended.slots, {});
+
+  const outside = extract(base.replace('Hands-on coder.', 'Hands-on, careful coder.'));
+  assert.deepStrictEqual(outside.slots, {});
+  assert.strictEqual(outside.agent, null);
+  assert.strictEqual(outside.unplaced.length, 1);
+  assert.match(outside.unplaced[0], /\+Hands-on, careful coder\./);
+  assert.strictEqual(outside.verified, false);
+
+  assert.strictEqual(extract(base).verified, true, 'no edit, nothing to extract');
+});
+
+test('extract: derived overrides cover list slots, added sections and removed sections', () => {
+  const { deriveSlotOverride, } = require('../lib/local/extract');
+  const apply = (oldT, newT) => localMod.applySlotOverride(oldT, localMod.parseOverrideFile(deriveSlotOverride(oldT, newT))).text;
+  assert.strictEqual(deriveSlotOverride('- a\n- b', '- a\n- b\n- c'), '- c', 'an addition to a list is an append');
+  assert.match(deriveSlotOverride('- a\n- b', '- a\n- B'), /^<!-- replace -->\n- a\n- B$/, 'any other change to a list is a replace');
+  assert.strictEqual(deriveSlotOverride('- a', '- a'), null);
+
+  const old = '### One\n- 1\n\n### Two\n- 2\n\n### Three\n- 3';
+  for (const next of [
+    '### One\n- 1\n\n### Two\n- changed\n\n### Three\n- 3',
+    '### One\n- 1\n\n### Three\n- 3',
+    '### One\n- 1\n\n### Two\n- 2\n\n### Three\n- 3\n\n### Four\n- 4',
+  ]) {
+    assert.strictEqual(apply(old, next), next, `round trip: ${JSON.stringify(next)}`);
+  }
+});
+
+atest('override: status, ack and extract work end to end through the command', async () => {
+  const { main: init } = require('../lib/init');
+  const cli = require('../lib/override/cli');
+  const syncCli = require('../lib/sync/cli');
+  const dir = tmpRepo();
+  const err = console.error;
+  console.error = () => {};
+  try {
+    captureLog(() => init(['--repo', dir, '--stack', 'nestjs', '--tracker', 'none', '--render', '--no-color']));
+    assert.match(captureLog(() => cli.main(['status', '--repo', dir, '--no-color'])).out, /No overrides/);
+
+    // Hand edit a generated file, then extract it into ai/local/.
+    const dev = path.join(dir, 'ai/agents/developer.md');
+    fs.writeFileSync(dev, fs.readFileSync(dev, 'utf8').replace('- Thin controllers: delegate all business logic to services', '- Thin controllers: delegate everything'));
+    const dry = captureLog(() => cli.main(['extract', 'ai/agents/developer.md', '--repo', dir, '--dry-run', '--no-color']));
+    assert.strictEqual(dry.result, 0);
+    assert.match(dry.out, /would write\s+ai\/local\/slots\/implementation-reference\.md/);
+    assert.ok(!fs.existsSync(path.join(dir, 'ai/local')), 'dry run writes nothing');
+
+    const real = captureLog(() => cli.main(['extract', 'ai/agents/developer.md', '--repo', dir, '--no-color']));
+    assert.strictEqual(real.result, 0);
+    assert.match(real.out, /Verified/);
+    const written = fs.readFileSync(path.join(dir, 'ai/local/slots/implementation-reference.md'), 'utf8');
+    assert.ok(written.startsWith('### Controllers') && written.includes('delegate everything'));
+
+    // A second extract will not clobber what it just wrote.
+    assert.strictEqual(captureLog(() => cli.main(['extract', 'ai/agents/developer.md', '--repo', dir, '--no-color'])).result, 3);
+
+    // The recovery path: with the override in place, --reset regenerates the file
+    // and it ends up byte-for-byte what the hand edit was.
+    const edited = fs.readFileSync(dev, 'utf8');
+    assert.strictEqual(captureLog(() => syncCli.main(['--repo', dir, '--no-color', '--reset', 'ai/agents/developer.md'])).result, 0);
+    assert.strictEqual(fs.readFileSync(dev, 'utf8').replace(/\r\n/g, '\n'), edited.replace(/\r\n/g, '\n'));
+
+    // status sees it; ack accepts an unknown slot only if it is a real override.
+    assert.match(captureLog(() => cli.main(['status', '--repo', dir, '--no-color'])).out, /ok\s+ai\/local\/slots\/implementation-reference\.md/);
+    assert.strictEqual(cli.main(['ack', 'nope', '--repo', dir, '--no-color']), 2);
+    assert.strictEqual(captureLog(() => cli.main(['ack', 'implementation-reference', '--repo', dir, '--no-color'])).result, 0);
+  } finally {
+    console.error = err;
+  }
+});
+
 // ------------------------------------------------------------------- scout
 
 test('model: the required tier renders as a name, and a versioned id loses its version', () => {
@@ -1506,6 +1752,10 @@ function syncFixture(rel, { base, ours, writtenHash, source = 'core/agents/x.md'
   return { dir, entry: m.files[rel], manifest: m };
 }
 
+// A seed (project-owned after the first write, merged on sync) versus the default
+// `core/agents/x.md`, which is cairn-owned and regenerated.
+const SEED_SOURCE = 'presets:x/code-guidelines.md';
+
 function plan1(rel, fixtureOpts, theirs, opts = {}) {
   const { dir, entry } = syncFixture(rel, fixtureOpts);
   const targets = new Map([[rel, { content: theirs, source: entry.source }]]);
@@ -1532,7 +1782,7 @@ test('sync: only the template moved -> fast-forward', () => {
 test('sync: local edit, steady template -> kept as MODIFIED, not written', () => {
   const { action } = plan1(
     'ai/x.md',
-    { base: 'a\nb\nc\n', ours: 'a\nB\nc\n' },
+    { base: 'a\nb\nc\n', ours: 'a\nB\nc\n', writtenHash: manifest.hashContent('a\nb\nc\n') },
     'a\nb\nc\n',
   );
   assert.strictEqual(action.outcome, sync.OUTCOME.MODIFIED);
@@ -1544,7 +1794,7 @@ test('sync: non-overlapping edits three-way merge cleanly', () => {
   const base = 'l1\nl2\nl3\nl4\nl5\n';
   const ours = 'top\nl1\nl2\nl3\nl4\nl5\n';
   const theirs = 'l1\nl2\nl3\nl4\nl5\nbottom\n';
-  const { action } = plan1('ai/x.md', { base, ours }, theirs);
+  const { action } = plan1('ai/x.md', { base, ours, source: SEED_SOURCE }, theirs);
   assert.strictEqual(action.outcome, sync.OUTCOME.MERGED);
   assert.strictEqual(action.write, 'top\nl1\nl2\nl3\nl4\nl5\nbottom\n');
   assert.strictEqual(action.base, theirs);
@@ -1555,7 +1805,7 @@ test('sync: overlapping edits leave conflict markers, exit non-zero, converge ne
   const base = 'l1\nl2\nl3\n';
   const ours = 'l1\nOURS\nl3\n';
   const theirs = 'l1\nTHEIRS\nl3\n';
-  const { action } = plan1('ai/x.md', { base, ours }, theirs);
+  const { action } = plan1('ai/x.md', { base, ours, source: SEED_SOURCE }, theirs);
   assert.strictEqual(action.outcome, sync.OUTCOME.CONFLICT);
   assert.ok(action.conflict, 'flagged as a conflict');
   assert.match(action.write, /<<<<<<< /);
@@ -1568,15 +1818,15 @@ test('sync: overlapping edits leave conflict markers, exit non-zero, converge ne
   // the conflict flag clears.
   const resolved = plan1(
     'ai/x.md',
-    { base: theirs, ours: 'l1\nRESOLVED\nl3\n', source: action.source },
+    { base: theirs, ours: 'l1\nRESOLVED\nl3\n', source: SEED_SOURCE },
     theirs,
   );
   // simulate the flag being set from the previous run
   resolved.action = sync.planFile(
     'ai/x.md',
-    { hash: manifest.hashContent('l1\nRESOLVED\nl3\n'), source: 'core/agents/x.md', conflict: true },
+    { hash: manifest.hashContent('l1\nRESOLVED\nl3\n'), source: SEED_SOURCE, conflict: true },
     resolved.dir,
-    new Map([['ai/x.md', { content: theirs, source: 'core/agents/x.md' }]]),
+    new Map([['ai/x.md', { content: theirs, source: SEED_SOURCE }]]),
     { adoptBase: false },
   );
   assert.strictEqual(resolved.action.outcome, sync.OUTCOME.MODIFIED);
@@ -1675,12 +1925,12 @@ test('sync: a path the presets no longer emit is ORPHANED, never touched', () =>
 });
 
 test('sync: no base + hand-edited needs --adopt-base', () => {
-  const noBase = plan1('ai/x.md', { base: undefined, ours: 'edited\n', writtenHash: manifest.hashContent('orig\n') }, 'orig2\n');
+  const noBase = plan1('ai/x.md', { base: undefined, ours: 'edited\n', writtenHash: manifest.hashContent('orig\n'), source: SEED_SOURCE }, 'orig2\n');
   assert.strictEqual(noBase.action.outcome, sync.OUTCOME.NO_BASE);
 
   const adopted = plan1(
     'ai/x.md',
-    { base: undefined, ours: 'edited\n', writtenHash: manifest.hashContent('orig\n') },
+    { base: undefined, ours: 'edited\n', writtenHash: manifest.hashContent('orig\n'), source: SEED_SOURCE },
     'orig\n',
     { adoptBase: true },
   );
@@ -1696,6 +1946,126 @@ test('sync: no base but untouched since render seeds the base and fast-forwards'
   );
   assert.strictEqual(action.outcome, sync.OUTCOME.FAST_FORWARD);
   assert.strictEqual(action.write, 'v2\n');
+});
+
+// Agent docs are regenerated from the template plus ai/local/, never merged.
+
+// Agent docs are regenerated; everything else is merged.
+const OWNED = 'core/agents/x.md';
+const planOwned = (fixture, theirs, opts = {}) => plan1('ai/agents/x.md', { source: OWNED, ...fixture }, theirs, opts);
+
+test('sync: an agent doc edited by hand while the template moved is HAND_EDITED, with a diff, and is not written', () => {
+  const base = 'a\nb\nc\n';
+  const { action } = planOwned(
+    { base, ours: 'a\nB\nc\n', writtenHash: manifest.hashContent(base) },
+    'a\nb\nc\nd\n',
+  );
+  assert.strictEqual(action.outcome, sync.OUTCOME.HAND_EDITED);
+  assert.strictEqual(action.write, undefined);
+  assert.match(action.diff, /^--- what cairn wrote\n\+\+\+ ai\/agents\/x\.md\n@@/);
+  assert.match(action.diff, /-b\n\+B/);
+});
+
+test('sync: --reset takes the template for a hand-edited owned file', () => {
+  const base = 'a\nb\nc\n';
+  const { action } = planOwned(
+    { base, ours: 'a\nB\nc\n', writtenHash: manifest.hashContent(base) },
+    'a\nb\nc\nd\n',
+    { reset: new Set(['ai/agents/x.md']) },
+  );
+  assert.strictEqual(action.outcome, sync.OUTCOME.RESET);
+  assert.strictEqual(action.write, 'a\nb\nc\nd\n');
+  assert.strictEqual(action.base, 'a\nb\nc\nd\n');
+});
+
+test('sync: an agent doc is never three-way merged, even when the edits would merge cleanly', () => {
+  const base = 'l1\nl2\nl3\nl4\nl5\n';
+  const { action } = planOwned(
+    { base, ours: 'top\nl1\nl2\nl3\nl4\nl5\n', writtenHash: manifest.hashContent(base) },
+    'l1\nl2\nl3\nl4\nl5\nbottom\n',
+  );
+  assert.strictEqual(action.outcome, sync.OUTCOME.HAND_EDITED);
+});
+
+test('sync: an agent doc nobody touched fast-forwards, and one already equal to the render just refreshes the manifest', () => {
+  const ff = planOwned({ base: 'v1\n', ours: 'v1\n' }, 'v2\n').action;
+  assert.strictEqual(ff.outcome, sync.OUTCOME.FAST_FORWARD);
+  assert.strictEqual(ff.write, 'v2\n');
+
+  // Markers resolved by hand until the file equals the template: nothing to write.
+  const same = planOwned({ base: 'v1\n', ours: 'v2\n', writtenHash: manifest.hashContent('<<<<<<< junk\n') }, 'v2\n').action;
+  assert.strictEqual(same.outcome, sync.OUTCOME.UNCHANGED);
+  assert.strictEqual(same.write, undefined);
+  assert.strictEqual(same.record, 'v2\n');
+});
+
+test('sync: markers left by an earlier sync are never overwritten with the template', () => {
+  const dir = tmpRepo();
+  const rel = 'ai/agents/x.md';
+  const withMarkers = 'a\n<<<<<<< ours (your edits)\nX\n=======\nY\n>>>>>>> theirs (new template)\n';
+  fs.mkdirSync(path.join(dir, 'ai/agents'), { recursive: true });
+  fs.writeFileSync(path.join(dir, rel), withMarkers);
+  const entry = { source: OWNED, hash: manifest.hashContent(withMarkers), conflict: true };
+  const targets = new Map([[rel, { content: 'a\nY\n', source: OWNED }]]);
+  const blocked = sync.planFile(rel, entry, dir, targets, { adoptBase: false });
+  assert.strictEqual(blocked.outcome, sync.OUTCOME.CONFLICT);
+  assert.strictEqual(blocked.write, undefined);
+  const forced = sync.planFile(rel, entry, dir, targets, { adoptBase: false, reset: new Set([rel]) });
+  assert.strictEqual(forced.write, 'a\nY\n');
+});
+
+atest('sync: a change in ai/local/ reaches the generated agent on the next sync; a hand edit is reported and --reset clears it', async () => {
+  const { main: init } = require('../lib/init');
+  const syncCli = require('../lib/sync/cli');
+  const dir = tmpRepo();
+  const dev = path.join(dir, 'ai/agents/developer.md');
+  const quiet = (fn) => captureLog(fn);
+  const err = console.error;
+  console.error = () => {};
+  try {
+    quiet(() => init(['--repo', dir, '--stack', 'nestjs', '--tracker', 'none', '--render', '--no-color']));
+    const rendered = fs.readFileSync(dev, 'utf8');
+    assert.ok(rendered.includes('Thin controllers'));
+
+    // 1. An override appears; sync rebuilds the agent, records the override, exits 0.
+    fs.mkdirSync(path.join(dir, 'ai/local/slots'), { recursive: true });
+    const slotFile = path.join(dir, 'ai/local/slots/implementation-reference.md');
+    fs.writeFileSync(slotFile, '### Controllers\n- Bind inputs with a schema\n');
+    const first = quiet(() => syncCli.main(['--repo', dir, '--no-color']));
+    assert.strictEqual(first.result, 0);
+    assert.match(first.out, /fast-forward\s+ai\/agents\/developer\.md/);
+    const merged = fs.readFileSync(dev, 'utf8');
+    assert.ok(merged.includes('- Bind inputs with a schema') && !merged.includes('Thin controllers'));
+    assert.ok(merged.includes('### Services'), 'the rest of the preset is still there');
+    assert.ok(manifest.readManifest(dir).overrides['slots/implementation-reference'], 'override recorded on first sight');
+
+    // 2. Nothing changed: a second sync is quiet.
+    const second = quiet(() => syncCli.main(['--repo', dir, '--no-color']));
+    assert.strictEqual(second.result, 0);
+    assert.ok(!/fast-forward|HAND-EDITED/.test(second.out));
+
+    // 3. Someone edits the generated file, then the override changes. Sync refuses
+    // to overwrite the edit, shows it, and exits 3.
+    fs.writeFileSync(dev, merged.replace('### Services', '### Services\n- HAND EDIT'));
+    fs.writeFileSync(slotFile, '### Controllers\n- Bind inputs with a schema, always\n');
+    const third = quiet(() => syncCli.main(['--repo', dir, '--no-color']));
+    assert.strictEqual(third.result, 3);
+    assert.match(third.out, /HAND-EDITED\s+ai\/agents\/developer\.md/);
+    assert.match(third.out, /\+- HAND EDIT/, 'the edit is shown as a diff');
+    assert.ok(fs.readFileSync(dev, 'utf8').includes('- HAND EDIT'), 'the file is untouched');
+
+    // 4. --reset takes the generated file; the override is in it, the hand edit is not.
+    const fourth = quiet(() => syncCli.main(['--repo', dir, '--no-color', '--reset', 'ai/agents/developer.md']));
+    assert.strictEqual(fourth.result, 0);
+    const final = fs.readFileSync(dev, 'utf8');
+    assert.ok(final.includes('with a schema, always') && !final.includes('HAND EDIT'));
+    assert.strictEqual(quiet(() => syncCli.main(['--repo', dir, '--no-color'])).result, 0);
+
+    // 5. --reset on a path cairn does not manage is an error, not a silent no-op.
+    assert.strictEqual(syncCli.main(['--repo', dir, '--no-color', '--reset', 'ai/nope.md']), 2);
+  } finally {
+    console.error = err;
+  }
 });
 
 atest('sync: CLI applies a fast-forward, updates the manifest, exits 0', async () => {
@@ -1737,6 +2107,37 @@ atest('sync: CLI applies a fast-forward, updates the manifest, exits 0', async (
   } finally {
     console.log = log;
   }
+});
+
+test('sync: non-overlapping edits merge cleanly whatever mix of line endings the three sides use', () => {
+  const { gitMergeFile } = require('../lib/sync');
+  const lines = (n) => Array.from({ length: n }, (_, i) => `line ${i + 1}`);
+  const base = lines(30);
+  const ours = base.map((l, i) => (i === 4 ? 'line 5 (local edit)' : l));
+  const theirs = [...base.slice(0, 20), 'inserted by the template', ...base.slice(20)];
+  const join = (a, eol) => a.join(eol) + eol;
+  for (const [o, b, t] of [['\n', '\n', '\n'], ['\r\n', '\r\n', '\n'], ['\r\n', '\n', '\n'], ['\r\n', '\r\n', '\r\n'], ['\n', '\r\n', '\n']]) {
+    const r = gitMergeFile(join(ours, o), join(base, b), join(theirs, t));
+    const label = JSON.stringify([o, b, t]);
+    assert.ok(r.ok, label);
+    assert.strictEqual(r.conflicts, 0, `ours/base/theirs ${label} merges cleanly`);
+    assert.ok(r.merged.includes('line 5 (local edit)') && r.merged.includes('inserted by the template'), label);
+    // The merged file keeps the style `ours` had.
+    const expectCr = o === '\r\n';
+    assert.strictEqual(/\r\n/.test(r.merged), expectCr, `${label}: line endings follow ours`);
+    assert.ok(!/(^|[^\r])\n/.test(r.merged) || !expectCr, `${label}: no stray bare LF in a CRLF file`);
+  }
+});
+
+test('sync: a real overlap still conflicts, with markers in the file\'s own line endings', () => {
+  const { gitMergeFile } = require('../lib/sync');
+  const eol = '\r\n';
+  const doc = (mid) => ['a', 'b', mid, 'd', 'e'].join(eol) + eol;
+  const r = gitMergeFile(doc('ours'), doc('base'), doc('theirs').replace(/\r\n/g, '\n'));
+  assert.ok(r.ok);
+  assert.strictEqual(r.conflicts, 1);
+  assert.match(r.merged, /<{7} ours \(your edits\)\r\n/);
+  assert.match(r.merged, />{7} theirs \(new template\)\r\n/);
 });
 
 atest('sync: --only restores one file, leaves the rest alone, and rejects a path it does not know', async () => {
@@ -1782,24 +2183,24 @@ atest('sync: CLI writes conflict markers, exits 3, and doctor reports CONFLICT',
   console.error = () => {};
   try {
     init(['--repo', dir, '--stack', 'nextjs,react', '--tracker', 'none', '--render', '--no-color']);
-    const agents = path.join(dir, 'ai/AGENTS.md');
+    const agents = path.join(dir, 'ai/infrastructure/code-guidelines.md');
     const original = fs.readFileSync(agents, 'utf8');
 
     // Stale base differs from the render on line 1; the working file differs from
     // the base on the same line -> a genuine overlap.
     const staleBase = original.replace(/^.*\n/, 'BASE LINE ONE\n');
     const ourEdit = original.replace(/^.*\n/, 'OUR LINE ONE\n');
-    manifest.writeBase(dir, 'ai/AGENTS.md', staleBase);
+    manifest.writeBase(dir, 'ai/infrastructure/code-guidelines.md', staleBase);
     fs.writeFileSync(agents, ourEdit);
     const m = manifest.readManifest(dir);
-    m.files['ai/AGENTS.md'].hash = manifest.hashContent(ourEdit);
+    m.files['ai/infrastructure/code-guidelines.md'].hash = manifest.hashContent(ourEdit);
     manifest.writeManifest(dir, m);
 
     const code = syncCli.main(['--repo', dir, '--no-color']);
     assert.strictEqual(code, 3, 'conflict exit code');
     assert.match(fs.readFileSync(agents, 'utf8'), /<<<<<<< /, 'markers written in place');
 
-    const state = statusFor(dir, readManifest(dir)).find((f) => f.path === 'ai/AGENTS.md');
+    const state = statusFor(dir, readManifest(dir)).find((f) => f.path === 'ai/infrastructure/code-guidelines.md');
     assert.strictEqual(state.state, 'CONFLICT');
   } finally {
     console.log = log;
