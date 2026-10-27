@@ -1,7 +1,7 @@
 <!-- cairn preset: nestjs — fills {{> stack/implementation-reference }} in the core
      developer. Framework areas only. `--stack nestjs,typeorm` also appends
      presets/typeorm/slots/implementation-reference.md (entities, migrations,
-     repositories). From snap-proof/backend/ai/agents/node-developer.md. -->
+     repositories). From the source node-developer agent. -->
 
 Quick reminders for the most common implementation areas. The authoritative source
 is always `ai/infrastructure/code-guidelines.md`.

@@ -2,12 +2,12 @@
 
 <!-- cairn preset: tailwind. The styling add-on — orthogonal to the framework, the
      way an ORM add-on is. Compose it: `--stack nextjs,tailwind,drizzle`,
-     `--stack react,tailwind`. Seeded 2026-09-09 from charityiq-app (Tailwind v4).
+     `--stack react,tailwind`. Seeded 2026-09-09 from one repo (Tailwind v4).
      Single consumer; refine when a second Tailwind repo appears.
 
      Not in it: the repo's actual brand token values and font choice — those are
-     project-owned (charityiq's `app/globals.css` holds `coral`/`ink`/`paper` and
-     Geist). This preset says *where* tokens go and *how* to consume them. -->
+     project-owned (the app's `app/globals.css` holds its brand colors and
+     font). This preset says *where* tokens go and *how* to consume them. -->
 
 ## Tokens
 

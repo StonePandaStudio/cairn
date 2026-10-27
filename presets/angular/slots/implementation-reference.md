@@ -1,5 +1,5 @@
 <!-- cairn preset: angular — fills {{> stack/implementation-reference }} in the core
-     developer. snap-proof/frontend/ai/agents/angular-developer.md has no block like
+     developer. the source angular-developer agent has no block like
      the nestjs one — it points at patterns.md + code-guidelines.md and stops.
      This is a minimal synthesis from angular-developer + angular-reviewer; extend
      it when a second Angular repo shows what is actually shared. -->

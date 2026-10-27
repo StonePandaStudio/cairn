@@ -4,7 +4,7 @@
      `react` component base: `--stack nextjs,react,tailwind,drizzle`. It owns the
      server/client boundary, Server Actions, Route Handlers, and the App-Router
      file conventions — not component/hook/state basics, which stay in
-     `presets/react`. Seeded 2026-09-09 from charityiq-app (Next.js 16, Sprint 0).
+     `presets/react`. Seeded 2026-09-09 from one repo (Next.js 16, Sprint 0).
      Single consumer; refine when a second Next.js repo appears. -->
 
 ## The framework moves fast

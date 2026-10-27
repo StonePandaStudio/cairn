@@ -1,7 +1,7 @@
 # Drizzle Guidelines
 
 <!-- cairn preset: drizzle. The ORM add-on for a Postgres/Supabase stack, parallel
-     to presets/typeorm. Seeded 2026-09-09 from charityiq-app (Sprint 0 — mostly
+     to presets/typeorm. Seeded 2026-09-09 from one repo (Sprint 0 — mostly
      CLAUDE.md hard rules + ADR 0001, no battle-tested code yet). Single consumer:
      refine when a second Drizzle repo appears. Composes onto a framework preset
      (nestjs or react/nextjs) via `--stack <framework>,drizzle`. -->

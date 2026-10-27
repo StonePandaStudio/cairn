@@ -14,10 +14,114 @@ A cairn is a stack of stones left to mark a trail. That is what this does: it le
 markers — a manifest of what it generated, and a report of where the copies stopped
 agreeing.
 
+## Start on a new repo (or a group of repos)
+
+A repo with no `ai/` folder yet. For several repos that make up one project, do steps 1–2 in
+each, then step 3 once, then step 4.
+
+1. **Install and init.** `--stack` is framework first, then add-ons; `cairn preset list`
+   shows what exists (`unknown` gives the core agents with no stack rules).
+   ```bash
+   npm i -D @stonepandastudio/cairn
+   npx cairn init --stack nestjs,typeorm --tracker jira-server --project-key MYPROJ --story-type Task
+   ```
+   Use `--tracker none` for no issue tracker. For `jira-server` / `youtrack`, put the credentials
+   in the repo's `.env` (see "Tracker"). Add `--dry-run` first to see what would be written.
+2. **Edit `cairn.config.json`** if the defaults need changing: `commands.build`, `tdd`,
+   `model`, `agents.<role>.name`.
+3. **Group of repos only: declare the workspace.** Create a `repos.json` in the folder that
+   holds the repos (or point each repo's `workspace` at it):
+   ```bash
+   cairn workspace init
+   cairn workspace add ./backend --role "REST API, source of truth for the contract"
+   cairn workspace add ./frontend
+   ```
+   `add` reads each repo's stack from its `cairn.config.json`. Once a repo sits in the
+   workspace alongside others, its rendered `ai/AGENTS.md` lists the siblings and the agents
+   must say which ones a task touches.
+4. **Render, review, commit.**
+   ```bash
+   npx cairn render --dry-run      # what would be written
+   npx cairn render
+   ```
+   Commit `cairn.config.json`, `_cairn/`, `ai/` and `.claude/`. Generated files are
+   committed, not gitignored. Then run `/create-brief` in Claude Code to start a task.
+
+If you add the workspace *after* rendering, run `npx cairn sync` in each repo to carry the
+Workspace table in. From the workspace folder, `cairn doctor` reports drift across the repos.
+
+## Start on a repo that already has code
+
+The code base exists; the AI workflow and its docs do not (or only as hand-copied files).
+
+1. **Install and init**, exactly as above, naming the stack the repo really uses. If there is
+   no matching preset, `--stack unknown` still gives the core agents; add the stack's rules
+   under `ai/local/` (see "Customizing agent docs").
+   ```bash
+   npm i -D @stonepandastudio/cairn
+   npx cairn init --stack fastify,prisma --tracker none
+   ```
+2. **Render.** `cairn render` only writes files that do not exist and reports the rest,
+   so an existing `ai/`, `.claude/commands/` or `ai/scripts/*.js` is never overwritten.
+   ```bash
+   npx cairn render --dry-run
+   npx cairn render
+   ```
+   - A file cairn skipped because it was already there is **not managed**. To bring it under
+     management without losing it, run `cairn sync --adopt-base` (the current file becomes the
+     base; upstream changes made before that point cannot be merged). To take the template
+     instead, delete the file and run `cairn render`.
+   - If the repo already has its own style guide, point `ai/infrastructure/code-guidelines.md`
+     (rendered as an editable seed) at it or fold it in.
+3. **Draft the context docs.** In Claude Code, inside the repo:
+   ```
+   /discover            # whole repo
+   /discover <area>     # or one area at a time
+   ```
+   `discovery` reads `ai/contexts/`, proposes a table of docs, waits for you, then writes only
+   the confirmed ones as `status: draft` plus `ai/discovery-report.md`. Safe to re-run. Review
+   the drafts and change `status` when you accept them. See "Starting on an existing code
+   base: `/discover`".
+4. **Optional, tests for code that exists:** `/plan-tests`, `/execute-test-plan`, `/run-qa`
+   (stacks that ship the QA slots only). See "QA pipeline for existing code".
+5. **Commit** `cairn.config.json`, `_cairn/`, `ai/` and `.claude/`.
+
+For a group of repos, do this in each repo, then `cairn workspace init` / `add` as in the
+section above and `cairn sync` in each repo. `cairn doctor`, run from the workspace folder,
+shows where the copies disagree before you start reconciling them.
+
+## Update cairn in a repo that already has it
+
+`cairn sync` is the upgrade path; it never silently overwrites anything. Edits you want to
+keep belong in `ai/local/`, which an update never touches.
+
+**One repo**
 ```bash
-npm i -D @stonepandastudio/cairn
-npx cairn init --stack nestjs,typeorm --tracker jira-server --project-key MYPROJ --story-type Task
+npm i -D @stonepandastudio/cairn@latest     # or yarn / pnpm: update the package
+npx cairn sync --dry-run                    # per-file outcome, nothing written
+npx cairn sync                              # apply
 ```
+- Exit `3` means a file was left in conflict. Resolve the git markers (`<<<<<<<`), then run
+  `cairn sync` again; the second run is a quiet `MODIFIED`.
+- A hand-edited agent doc whose template moved is reported with a diff and not touched.
+  Move the edit into `ai/local/` (`cairn override extract <agent doc>`), or take the template
+  with `cairn sync --reset <path>`.
+- On a `0.x` version a pin like `^0.9.0` stops at `0.9.x`; install the new version explicitly
+  (`@latest`) or the update is a no-op.
+- `cairn sync --only <path>` syncs one file and leaves the rest alone.
+- Review `git diff`, then commit. Generated files are ordinary tracked files.
+
+**A group of repos** (from the folder holding `repos.json`)
+```bash
+cairn doctor                    # versions table: pin / installed / last rendered with
+cairn upgrade                   # report only: what would change in each repo
+cairn upgrade --apply           # update cairn in each repo, then `cairn sync` there
+cairn upgrade --apply --bump-pin   # also rewrite a pin that excludes the new version
+```
+`upgrade` uses each repo's own package manager (picked from its lockfile), never commits or
+pushes, and reports a repo with a blocked pin instead of syncing it with the old version.
+Exit `3` means conflicts in some repo, `1` an update failed or was blocked. Afterwards
+`cairn doctor --strict` should be clean.
 
 ## What it does
 
@@ -76,7 +180,7 @@ repo/
   .claude/agents/       code-scout.md — read-only code-locator subagent
   ai/
     agents/             rendered from presets/core + your stack's slots — don't edit,
-                        use ai/local/ (architect, developer, reviewer; plus qa-* if the
+                        use ai/local/ (architect, developer, reviewer, discovery; plus qa-* if the
                         stack ships the QA slots)
     AGENTS.md  WORKFLOW.md   rendered
     infrastructure/code-guidelines.md   rendered as a seed; edit freely, `cairn sync` merges
@@ -138,6 +242,24 @@ blocking finding. Default `false`.
 
 **Build command.** `commands.build` (e.g. `"yarn build"`) is what the developer runs before
 reporting completion; without it the agent finds the command in `package.json` or the README.
+
+### Starting on an existing code base: `/discover`
+
+`/discover [area]` runs the `discovery` agent, which drafts `ai/contexts/**` from the code.
+Run it once before the first task on a repo whose contexts are empty or thin. It proposes a
+table of docs and waits for you, then writes only the confirmed ones, as
+`ai/contexts/<category>/<name>.md` with `type`, `source` and `status: draft` frontmatter (the
+layout `cairn context check` expects), plus `ai/discovery-report.md`.
+
+**Safe to re-run.** It reads what is already in `ai/contexts/` first and adds only what is
+missing: it never overwrites, renames or edits an existing doc, even one on the wrong path
+or without frontmatter. Such docs are listed in the report under *Needs a human*. It is
+read-only on source and delegates searching to `code-scout`.
+
+What counts as a doc comes from each stack's `discover-targets` slot (TypeORM and Drizzle
+entities, Nest modules, Angular and React pages and features, Next.js routes and server
+actions). A stack without one still gets the command, with an empty list. Not yet built:
+`cairn context adopt`, which would move existing off-convention docs onto the layout.
 
 ### QA pipeline for existing code
 

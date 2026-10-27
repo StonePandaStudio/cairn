@@ -1773,6 +1773,34 @@ atest('render: archive-tasks is universal; tracker-status/assign only render wit
   }
 });
 
+atest('render: /discover and the discovery agent render for every stack; the stack slots say what to look for', async () => {
+  const { main: init } = require('../lib/init');
+  const log = console.log;
+  console.log = () => {};
+  try {
+    const nest = tmpRepo();
+    init(['--repo', nest, '--stack', 'nestjs,typeorm', '--tracker', 'none', '--render', '--no-color']);
+    const cmd = fs.readFileSync(path.join(nest, '.claude/commands/discover.md'), 'utf8');
+    assert.ok(cmd.startsWith('---'), 'starts with frontmatter');
+    assert.match(cmd, /description: /, 'has a picker description');
+    assert.match(cmd, /NestjsDiscoveryAgent/);
+    const doc = fs.readFileSync(path.join(nest, 'ai/agents/discovery.md'), 'utf8');
+    assert.match(doc, /@Entity\(\)/, 'typeorm slot filled');
+    assert.match(doc, /Nest module/, 'nestjs slot filled');
+    assert.match(doc, /Idempotent/);
+    assert.doesNotMatch(doc, /\{\{/, 'no unrendered template syntax');
+    assert.match(fs.readFileSync(path.join(nest, 'ai/AGENTS.md'), 'utf8'), /\/discover \[area\]/);
+
+    // A stack with no discover-targets slot still renders, with that list empty.
+    const tw = tmpRepo();
+    init(['--repo', tw, '--stack', 'tailwind', '--tracker', 'none', '--render', '--no-color']);
+    assert.ok(fs.existsSync(path.join(tw, '.claude/commands/discover.md')));
+    assert.ok(fs.existsSync(path.join(tw, 'ai/agents/discovery.md')));
+  } finally {
+    console.log = log;
+  }
+});
+
 atest('init: --validation-stack picks the nestjs validation library; rejects an unknown one', async () => {
   const { main: init, VALIDATION_STACKS } = require('../lib/init');
   const log = console.log;

@@ -1,0 +1,4 @@
+{
+  "kind": "framework",
+  "description": "Fastify 5 + TypeScript spine, ORM-agnostic; plugin-per-feature, Zod type provider, typed domain errors"
+}

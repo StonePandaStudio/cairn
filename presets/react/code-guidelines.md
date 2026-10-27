@@ -1,7 +1,7 @@
 # React Guidelines
 
 <!-- cairn preset: react. The frontend framework spine for a React app — Vite SPA
-     or the client layer of a Next.js app. Seeded 2026-09-09 from charityiq-app
+     or the client layer of a Next.js app. Seeded 2026-09-09 from one repo
      (Sprint 0: CLAUDE.md conventions + ADR 0001, no component code yet). Single
      consumer; refine when a second React repo appears.
 

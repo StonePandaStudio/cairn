@@ -1,6 +1,6 @@
 <!-- cairn variant: translation-source = external-service. Fills the
      translation-source slot in presets/angular/code-guidelines.md.
-     In use by: snap-frontend. A third-party localization vendor owns the values. -->
+     In use by: one Angular frontend. A third-party localization vendor owns the values. -->
 
 ## slot: translation-source
 

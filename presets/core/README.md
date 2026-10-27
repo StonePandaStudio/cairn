@@ -4,7 +4,7 @@ Stack-agnostic content shared by every repo, whatever the framework: the agent
 **role contracts**, the command-stub template, and the `WORKFLOW.md` / `AGENTS.md`
 skeletons.
 
-Extracted 2026-09-09 from `snap-proof/{backend,frontend}` (see `../EXTRACTION.md`).
+Extracted 2026-09-09 from two source repos.
 These are **seeds** — no renderer consumes them yet. They are the canonical version
 of scaffolding that currently exists as two hand-synced copies, already useful as a
 reference to pull the copies back together by hand.

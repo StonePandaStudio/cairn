@@ -39,6 +39,15 @@ Read `ai/agents/reviewer.md` for the full role, workflow, tools, and instruction
 
 ---
 
+## Starting on an existing code base
+
+Run once, before the first task, when `ai/contexts/` is empty or thin. Safe to re-run:
+it only adds what is missing.
+
+- `/discover [area]` — `AngularDiscoveryAgent` (`ai/agents/discovery.md`) proposes, then drafts, `ai/contexts/**` docs from the code (`status: draft` until you review them), and writes `ai/discovery-report.md`
+
+---
+
 ## QA for existing code
 
 Separate from the workflow above, which gets its tests from the plan's **Tests**

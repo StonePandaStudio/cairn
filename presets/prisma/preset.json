@@ -1,0 +1,4 @@
+{
+  "kind": "orm",
+  "description": "Prisma schema, prisma migrate, driver adapter, client as a Fastify decorator (Postgres)"
+}

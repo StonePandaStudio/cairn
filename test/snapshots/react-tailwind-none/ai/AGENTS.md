@@ -39,6 +39,15 @@ Read `ai/agents/reviewer.md` for the full role, workflow, tools, and instruction
 
 ---
 
+## Starting on an existing code base
+
+Run once, before the first task, when `ai/contexts/` is empty or thin. Safe to re-run:
+it only adds what is missing.
+
+- `/discover [area]` — `ReactDiscoveryAgent` (`ai/agents/discovery.md`) proposes, then drafts, `ai/contexts/**` docs from the code (`status: draft` until you review them), and writes `ai/discovery-report.md`
+
+---
+
 ## Tracker
 
 No remote tracker (`tracker.provider` is `none`). A task is its `ai/tasks/[KEY]/`

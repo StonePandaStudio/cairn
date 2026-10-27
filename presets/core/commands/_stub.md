@@ -1,6 +1,6 @@
 {{! cairn preset: core. The renderer emits one file per workflow.steps[] entry,
     named `<step.command>.md`, into `.claude/commands/`. Every stub in
-    snap-proof/{backend,frontend} is byte-identical to this modulo the two
+    each source repo is byte-identical to this modulo the two
     variables below (plus a stray BOM on the frontend copies).
 
     The frontmatter is what Claude Code's slash-command picker shows — without

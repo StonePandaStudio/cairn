@@ -41,6 +41,15 @@ Read `{{ this.doc }}` for the full role, workflow, tools, and instructions.{{#if
 
 ---
 
+## Starting on an existing code base
+
+Run once, before the first task, when `ai/contexts/` is empty or thin. Safe to re-run:
+it only adds what is missing.
+
+- `/discover [area]` — `{{ discoveryAgent }}` (`ai/agents/discovery.md`) proposes, then drafts, `ai/contexts/**` docs from the code (`status: draft` until you review them), and writes `ai/discovery-report.md`
+
+---
+
 {{#if qa}}
 ## QA for existing code
 

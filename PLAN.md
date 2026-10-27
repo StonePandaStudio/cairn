@@ -177,7 +177,7 @@ mechanics just work" — see "Resume here" above for the actual per-repo steps.
   each, one full slot set per choice. Zod's carried over from the first fix;
   class-validator's recovered from git history and re-split the same way (dropped
   the "In use by: glossr-api"/"In use by: snap-backend" project-attribution
-  comments when splitting either — that belongs in `EXTRACTION.md` history, not
+  comments when splitting either — that belongs in git history, not
   live template prose; kept `@ResponseMapper` verbatim in class-validator's,
   since that's a real, accurate, battle-tested project decorator, not something
   to generalize away from).
@@ -543,7 +543,7 @@ cleanly (none of the three have hand-edited it).
   quiet `MODIFIED`. `--adopt-base` for files rendered before 0.6.0.
 - **Preset library** — `core` + framework (`nestjs`, `react`, `nextjs`) + ORM
   (`typeorm`, `drizzle`) + styling (`tailwind`) + `angular`. Slots split
-  framework/ORM, concatenate per `stack[]` entry. See `presets/EXTRACTION.md`.
+  framework/ORM, concatenate per `stack[]` entry.
 - **Deferred still:** workspace layer, hub, context layer, `local` provider,
   `cairn workspace sync` (walk all repos from the hub), section-level merge (only
   if line-level `diff3` proves too noisy — not speculatively), `OUTDATED` in the
@@ -774,6 +774,16 @@ history; this is what replaced them.
 - **Tests live in the plan.** The plan has a **Tests** section, the developer writes
   and runs those cases, the reviewer checks them. `tdd: true` makes it test-first
   (red then green per unit file). `commands.build` names the build command.
+
+## `/discover` — brownfield start (2026-10-27)
+
+`core/commands/discover.md` + `core/agents/discovery.md`, rendered for every stack, with an
+optional `discover-targets` slot (nestjs, typeorm, drizzle, angular, react, nextjs). Drafts
+`ai/contexts/**` from existing code, propose-then-write, idempotent (skips anything an
+existing doc already covers, never edits one). Output follows the `cairn context` layout.
+Deliberately **not** `cairn context adopt`: that reorganizes docs that already exist and is
+still unbuilt. Order for a repo with a pile of hand-written contexts would be adopt, then
+discover; the target repos have mostly empty docs, so discover came first.
 
 ## Immediate small fixes (not blocking, do when convenient)
 

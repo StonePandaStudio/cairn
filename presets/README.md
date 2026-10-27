@@ -31,8 +31,13 @@ presets/
               code-guidelines.md, a different (working) mechanism from angular's
               still-dormant `variants/` below — see PLAN.md for why nestjs's
               needed fixing and angular's doesn't yet.
+  fastify/    Fastify 5 + TypeScript spine, ORM agnostic — plugin per feature, Zod type provider,
+              typed domain errors + one global handler, Lambda notes. No QA slots yet
+    slots/    the framework side of each {{> stack/… }} point
   typeorm/    ORM add-on — entities, queries, migrations, decomposition
     slots/    the ORM side of the same {{> stack/… }} points (appended to nestjs)
+  prisma/     ORM add-on — Prisma 7 schema, migrate, driver adapter, client as a decorator
+    slots/    the ORM side, for a Postgres stack (appended to fastify or nestjs)
   drizzle/    ORM add-on — Drizzle schema, drizzle-kit migrations, RLS in migrations
     slots/    the ORM side, for a Postgres/Supabase stack
   angular/    Angular spine + SCSS theming + i18n (styling still inline here — one system, two repos)
@@ -44,21 +49,21 @@ presets/
     slots/    the Next.js side of the same {{> stack/… }} points
   tailwind/   styling add-on — @theme tokens, no tailwind.config.ts, dark mode via token re-map
     slots/    the styling side of the same {{> stack/… }} points
-  EXTRACTION.md   what was extracted from where, and what deliberately was not
 ```
 
 Compose the slots a repo needs. Rough axes — **framework** (`nestjs`, `react`,
 `nextjs` on top of `react`), **ORM** (`typeorm` / `drizzle`), **styling** (`tailwind`):
 
 ```
---stack nestjs,typeorm                  snap-proof / glossr backend
---stack angular                         snap-proof / glossr frontend (SCSS theming inline for now)
---stack nextjs,react,tailwind,drizzle   charityiq — nextjs primary (owns plan ordering + fullstack refs)
+--stack nestjs,typeorm                  a NestJS + TypeORM API
+--stack fastify,prisma                  a Fastify + Zod + Prisma API
+--stack angular                         an Angular frontend (SCSS theming inline for now)
+--stack nextjs,react,tailwind,drizzle   a fullstack Next.js app — nextjs primary (owns plan ordering + fullstack refs)
 --stack react,tailwind                  a Vite SPA against a separate API
 ```
 
 `typeorm` and `angular` are seeded from two repos; `drizzle`, `react`, `nextjs`,
-`tailwind` from one (charityiq). A single-consumer preset is hand-judged, not
+`tailwind`, `fastify` and `prisma` from one repo each. A single-consumer preset is hand-judged, not
 measured, and gets refined when a second repo on that axis appears — the
 `preset-cli` "no peer" limit.
 
@@ -112,7 +117,6 @@ stack (`NestjsQAArchitectAgent`) and can be set with `agents.qaArchitect.name` e
 
 ## What is deliberately absent
 
-Sections that are genuinely per-project stay per-project — they are listed in
-`EXTRACTION.md` with the measurement that justified leaving them out. Extracting
+Sections that are genuinely per-project stay per-project and are not extracted. Extracting
 content that *should* differ is the failure mode this whole exercise is designed to
 avoid: it would report every legitimate project difference as drift, forever.

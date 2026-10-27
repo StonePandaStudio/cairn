@@ -226,8 +226,8 @@ core (role contracts, tracker)
 `stack` is a **list**, framework first: `["nestjs", "typeorm"]`, declared as
 `--stack nestjs,typeorm`. The renderer layers one preset per entry, in order, so a
 backend on Prisma takes `["nestjs", "prisma"]` and never touches `preset-typeorm`.
-`presets/nestjs` and `presets/typeorm` are already split on this basis
-(`presets/EXTRACTION.md`). The doctor's `cohort: "stack"` groups by the first entry —
+`presets/nestjs` and `presets/typeorm` are already split on this basis.
+The doctor's `cohort: "stack"` groups by the first entry —
 comparison is at framework granularity, where the shared contracts live; ORM and
 add-on differences are resolved by composing presets, not by the cohort.
 
@@ -661,7 +661,7 @@ architect-lead.md       73% same   → share the spine, replace a section
 node-qa-developer.md    33% same   → share the contract only, body is local (superseded 0.11: body moved into `qa-*` slots)
 ```
 
-The 2026-09-09 re-read (`presets/EXTRACTION.md`) found the reviewer and architect
+The 2026-09-09 re-read found the reviewer and architect
 contracts are structurally closer to identical than those file-level scores — the
 divergence is all in stack-specific rule tables, which are slot-shaped. `presets/core/`
 now holds the extracted contracts as seeds, with the tables in `{nestjs,angular}/slots/`.
