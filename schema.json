@@ -48,6 +48,16 @@
       "description": "Test-first execution in the main workflow. When true, the architect orders each step's test files before the code and marks every test file unit or integration, and the developer runs red, then green, for each unit file and reports both. The QA backfill agents are unaffected: they write tests for code that already exists.",
       "examples": [true]
     },
+    "sizing": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Opt-in size check. When present, the architect estimates a step's size during `enrich_description` (files touched, lines of code, from the nearest analogs), proposes a split into smaller steps if it is over a limit, and re-checks the real file list in `plan_task`. The estimate is a prediction by the agent, not a measurement; the user decides whether to split. `{}` turns it on with the defaults.",
+      "properties": {
+        "maxLoc": { "type": "integer", "minimum": 1, "default": 400, "description": "Lines of code (created plus changed) above which a step should be split." },
+        "maxFiles": { "type": "integer", "minimum": 1, "default": 12, "description": "Files created plus modified above which a step should be split." }
+      },
+      "examples": [{ "maxLoc": 400, "maxFiles": 12 }]
+    },
     "validationStack": {
       "type": "string",
       "enum": ["zod", "class-validator"],

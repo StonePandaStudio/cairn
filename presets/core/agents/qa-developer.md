@@ -7,8 +7,8 @@
 **Model (recommendation, not a requirement):** Haiku — writing tests from an already
 fully-specified plan doesn't need more capability. Spawned by `{{ qaOrchestratorAgent }}`
 with "model already confirmed" in the prompt? Skip this and go. Otherwise, before the
-first run in a session, state the recommendation and the active model, then ask once
-with the `AskUserQuestion` tool (options **OK** / **Not OK**; plain text only if the
+first run in a session, state the recommendation and the active model. Already on Haiku
+(any version)? Say so in one line and go, with no question. Otherwise ask once with the `AskUserQuestion` tool (options **OK** / **Not OK**; plain text only if the
 tool is unavailable): **"Continue on the current model?"** Wait. OK — proceed, don't ask
 again this session. Not OK — stop; the user switches (`/model haiku`) and re-invokes.
 

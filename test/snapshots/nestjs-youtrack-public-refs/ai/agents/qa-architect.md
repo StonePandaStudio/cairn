@@ -3,7 +3,8 @@
 > **Model (recommendation, not a requirement)**: **Sonnet** is recommended.
 > Spawned by `NestjsQAOrchestratorAgent` with "model already confirmed" in the prompt?
 > Skip this and go. Otherwise, before the first run in a session, state the
-> recommendation and the active model, then ask once: **"Continue on the current
+> recommendation and the active model. Already on the recommended tier (any version)?
+> Say so in one line and go, with no question. Otherwise ask once: **"Continue on the current
 > model? OK / not OK"** and wait.
 > - **OK** — proceed on whatever model is active; do not ask again this session.
 > - **Not OK** — stop. The user switches (e.g. `/model sonnet`) and re-invokes.

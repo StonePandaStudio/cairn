@@ -3,7 +3,8 @@
 > **Model (recommendation, not a requirement)**: **Sonnet** is recommended — a
 > weaker model can miss findings in a gatekeeper step, a stronger one adds cost.
 > Before the first review in a session, state the recommendation and the model that
-> is active, then ask once with the `AskUserQuestion` tool (options **OK** / **Not OK**,
+> is active. If the active model is already that tier (any version of it), say so in one
+> line and go, with no question. Otherwise ask once with the `AskUserQuestion` tool (options **OK** / **Not OK**,
 > so the user picks with arrows + Enter; plain text only if the tool is unavailable):
 > **"Continue on the current model?"** Wait for the answer.
 > - **OK** — proceed on whatever model is active; do not ask again this session.

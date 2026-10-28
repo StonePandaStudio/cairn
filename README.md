@@ -221,7 +221,7 @@ large or unusual tree).
 
 **Models are recommendations, not gates.** Developer and `qa-developer` recommend Haiku; reviewer, `qa-architect` and the
 orchestrator the tier in `model`. Before the first run in a session the agent states the recommendation and the
-active model, then asks once (an arrow-key + Enter picker): *Continue on the current model? OK / not OK*. OK proceeds for
+active model. If the active model is already the recommended tier it just says so and proceeds; otherwise it asks once (an arrow-key + Enter picker): *Continue on the current model? OK / not OK*. OK proceeds for
 the rest of the session; not OK stops so you can switch.
 
 **The plan carries tests.** Plans have a **Tests** section: per test file, a table of named
@@ -239,6 +239,14 @@ code and marks every test file `unit` or `integration`. The developer runs each 
 red (an assertion or missing symbol — not a broken test), then green, and reports
 `RED (<reason>) → GREEN (N)`; the reviewer treats a unit file without a red line as a
 blocking finding. Default `false`.
+
+**Size check (`sizing`).** Opt-in: `"sizing": { "maxLoc": 400, "maxFiles": 12 }` (`{}` takes
+those defaults). During `enrich_description` the architect estimates the step from what it
+found — files created and modified, lines from the nearest analogs — states it as a range
+with its basis, and, over either limit, proposes a split into smaller steps. The user
+decides; the description records a `## Size` section and a `## Follow-up steps` list, and
+each follow-up is a `create_brief` away. `plan_task` re-checks the real file list. It is the
+agent's estimate, not a measurement.
 
 **Build command.** `commands.build` (e.g. `"yarn build"`) is what the developer runs before
 reporting completion; without it the agent finds the command in `package.json` or the README.

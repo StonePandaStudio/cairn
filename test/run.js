@@ -1970,6 +1970,28 @@ test('tdd: off by default; on, the architect orders tests first and developer/re
   assert.ok(!/RED \(/.test(qa), 'the backfill agents are not test-first');
 });
 
+test('sizing: opt-in; on, the architect estimates, proposes a split and re-checks the plan', () => {
+  const render = require('../lib/render');
+  const architect = (extra) =>
+    render.renderTargets({ config: { stack: ['nestjs'], tracker: { provider: 'none' }, ...extra }, presetsDir: 'presets' })
+      .targets.find((t) => t[0] === 'ai/agents/architect.md')[1];
+  assert.ok(!/Size and split|Size check|## Size/.test(architect()), 'no size check without sizing');
+  const on = architect({ sizing: { maxLoc: 250 } });
+  assert.match(on, /\*\*12 files\*\* and \*\*250 lines\*\*/, 'a set limit is used, the other defaults');
+  assert.match(on, /## Follow-up steps/);
+  assert.match(on, /\*\*Size check\.\*\*/);
+  assert.match(architect({ sizing: {} }), /\*\*12 files\*\* and \*\*400 lines\*\*/);
+});
+
+test('sizing: a non-positive or non-integer limit is rejected', () => {
+  const { loadRepoConfig, ConfigError } = require('../lib/config');
+  for (const sizing of [{ maxLoc: 0 }, { maxFiles: 1.5 }, 'big']) {
+    const dir = tmpRepo();
+    fs.writeFileSync(path.join(dir, 'cairn.config.json'), JSON.stringify({ stack: ['nestjs'], sizing }));
+    assert.throws(() => loadRepoConfig(dir), ConfigError);
+  }
+});
+
 test('commands.build: named in the developer when set, looked up when not', () => {
   const render = require('../lib/render');
   const dev = (extra) =>

@@ -93,6 +93,8 @@ A good discussion turn covers:
 {{> stack/architect-discussion-topics }}
 - **Scope questions** — what's in and out of this step
 - **Integration tensions** — places where existing patterns don't cleanly cover the new requirement
+{{#if sizing}}- **Size and split** — before the discussion ends, estimate how big the step is and say so. Count from what A.1–A.2 found, not from a feeling: the files the step creates and modifies, and the lines they come to (a new file ≈ its nearest analog's length, which `code-scout` can report; a modified file ≈ the lines you expect to touch). State a range with its basis, e.g. `~6 files, ~250–350 LOC (analog: orders.service.ts, 210 lines)`. This repo's limits are **{{ sizing.maxFiles }} files** and **{{ sizing.maxLoc }} lines** per step. Over either, propose a split instead of carrying on: 2–4 smaller steps cut along a seam (data layer / API / UI, one entity or endpoint at a time, behind a flag then switch on), each under the limits and leaving the app compilable. The user decides; never split on your own. It is a prediction, not a measurement: `plan_task` checks it against the real file list (B.3).
+{{/if}}
 
 Iterate until the user confirms the approach.
 
@@ -102,7 +104,12 @@ Once alignment is reached, write the discussion outcome to
 `ai/tasks/[task]/description-step-[step].md`. This is a **new file** — never modify
 `brief-step-[step].md`. The description becomes the authoritative task brief:
 complete enough that `plan_task` can run from it alone.
-{{#if workspace}}
+{{#if sizing}}
+It must carry a `## Size` section: the estimate and its basis. If a split was agreed, the
+description covers only this step's slice, and a `## Follow-up steps` list gives one line per
+remaining step (its number and what it covers). The user creates each with `create_brief`;
+do not create them yourself.
+{{/if}}{{#if workspace}}
 It must say which sibling repos the task touches and what it needs from each (an endpoint,
 a DTO, a screen), or state `none`. A contract that does not exist yet is an open
 dependency to record, never something to invent or to build in the sibling yourself.
@@ -164,6 +171,12 @@ Confirm the mandatory docs (A.2) and any `ai/contexts/**` referenced by the desc
 "Plan format" below. The plan must be **small, verifiable steps** a developer agent
 can execute without re-deriving the architecture. Order steps so the app stays
 compilable at each checkpoint where possible.
+{{#if sizing}}
+**Size check.** Before saving, count Files to Create plus Files to Modify and add up the
+code sketches. If the plan is over {{ sizing.maxFiles }} files or {{ sizing.maxLoc }} lines, the
+description's estimate missed: stop, tell the user, and propose a split as in A.3 rather
+than handing the developer an oversize plan.
+{{/if}}
 
 **Re-plan (see B.1):** amend the existing plan file, don't rewrite it from scratch.
 Mark completed steps done (the developer already executed them; redoing them is
