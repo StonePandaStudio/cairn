@@ -95,11 +95,11 @@
         },
         "statuses": {
           "type": "object",
-          "description": "Board stage names. `inProgress` is where `plan_task` moves the issue and `review` is where `code_review` moves it (at the start of the review); a step moves an issue only if you set its stage here. A stage the board does not have is skipped with a message, not an error. Check with `cairn tracker check-statuses`; list the board's stages with `cairn tracker list-statuses`.",
+          "description": "Board stage names. `inProgress` is where `enrich_description` moves the issue and `review` is where `code_review` moves it (at the start of the review); a step moves an issue only if you set its stage here. A stage the board does not have is skipped with a message, not an error. Check with `cairn tracker check-statuses`; list the board's stages with `cairn tracker list-statuses`.",
           "additionalProperties": { "type": "string" },
           "properties": {
             "todo": { "type": "string", "default": "To Do" },
-            "inProgress": { "type": "string", "default": "In Progress", "description": "Stage `plan_task` moves the issue to. Not moved unless set." },
+            "inProgress": { "type": "string", "default": "In Progress", "description": "Stage `enrich_description` moves the issue to. Not moved unless set." },
             "review": { "type": "string", "description": "Stage `code_review` moves the issue to, at the start of the review. Not moved unless set.", "examples": ["Review"] },
             "done": { "type": "string", "default": "Done" }
           }

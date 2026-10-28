@@ -102,6 +102,7 @@ complete enough that `plan_task` can run from it alone.
 **End state of Mode A:** `description-step-[step].md` written, `brief-step-[step].md`
 untouched, **no plan file**.
 
+
 The user may invoke `plan_task` immediately or return later.
 
 ---
@@ -153,6 +154,7 @@ from; the developer reads it.
 - **Update** existing `ai/contexts/**` files when the structure, business logic, or data flow they describe has changed.
 - **Create** a new context file when the task adds an area that doesn't yet have one. Follow the shape of existing docs.
 - **Defer to the developer** any file that can only be finalized after implementation: list it in the plan's "Context Docs to Update" with *When* = `after implementation`.
+
 #### Before returning — fresh session and model
 
 Remind the user:

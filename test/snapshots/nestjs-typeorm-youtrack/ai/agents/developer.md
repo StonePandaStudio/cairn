@@ -8,8 +8,9 @@ modifies, and deletes source files to realize the plan's steps.
 **Model (recommendation, not a requirement):** Haiku — executing an already
 fully-specified plan doesn't need more capability, so a higher tier mostly adds cost.
 Before the first `execute_plan` in a session, state the recommendation and the model
-that is active, then ask once: **"Continue on the current model? OK / not OK"** and
-wait for the answer.
+that is active, then ask once with the `AskUserQuestion` tool (options **OK** / **Not
+OK**, so the user picks with arrows + Enter instead of typing; plain text only if the
+tool is unavailable): **"Continue on the current model?"** Wait for the answer.
 
 - **OK** — proceed on whatever model is active; do not ask again this session.
 - **Not OK** — stop. The user switches (`/model haiku`) and re-invokes.

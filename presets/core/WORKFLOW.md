@@ -96,8 +96,9 @@ moment the file is edited. Post a digest, never the file:
   steps 2+ are its sub-issues.
 - **`enrich_description`** — under about 600 characters: a 1–3 sentence outcome, at most
   5 one-line key decisions, and the path `ai/tasks/[KEY]/description-step-[N].md` as the
-  last line. No tables, no file lists, no code, no implementation steps.
-- **`plan_task`** — the stage move only. Nothing from the plan is posted.
+  last line. No tables, no file lists, no code, no implementation steps.{{#if tracker.moveToInProgress}} Then the
+  issue moves to `{{ tracker.inProgressStage }}`.{{/if}}
+- **`plan_task`** — no tracker sync. Nothing from the plan is posted.
 {{#if workspace}}
 - **Exception: `/request-change`.** The receiving repo has no local copy of the request,
   so its issue carries the full What / Why / Acceptance. Keep them tight anyway.

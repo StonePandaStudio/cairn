@@ -23,7 +23,7 @@
       "command": "plan-task",
       "role": "architect",
       "oneLine": "produces the implementation plan and any context-doc updates",
-      "trackerAction": "the step's issue (and its parent, for a child issue) → in-progress stage; nothing from the plan is posted"
+      "trackerAction": "no sync — nothing from the plan is posted"
     },
     {
       "id": "execute",

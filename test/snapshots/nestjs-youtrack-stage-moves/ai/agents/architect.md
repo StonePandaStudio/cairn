@@ -108,6 +108,22 @@ untouched, **no plan file**. Then the tracker sync for this step
 (see `ai/WORKFLOW.md` § Sync points) — post the short digest described under "What goes to the tracker",
 never the description file itself — skipped for `LOCAL-*` tasks.
 
+
+#### A.5 — Move the issue to `Develop`
+
+Skip for `LOCAL-*` tasks (see `ai/WORKFLOW.md` § Sync points). Once the description is
+written and the digest posted, move the step's issue (and its parent, if the step's issue
+is a child):
+
+```bash
+npx cairn tracker set-status [key] "Develop" --if-exists
+```
+
+`[key] already Develop` is fine on a re-run. If it prints
+`skipped: stage "Develop" does not exist on this board`, say so once in your reply and carry
+on; never use a different stage instead.
+
+
 The user may invoke `plan_task` immediately or return later.
 
 ---
@@ -159,20 +175,6 @@ from; the developer reads it.
 - **Update** existing `ai/contexts/**` files when the structure, business logic, or data flow they describe has changed.
 - **Create** a new context file when the task adds an area that doesn't yet have one. Follow the shape of existing docs.
 - **Defer to the developer** any file that can only be finalized after implementation: list it in the plan's "Context Docs to Update" with *When* = `after implementation`.
-
-
-#### B.5 — Move the issue to `Develop`
-
-Skip for `LOCAL-*` tasks (see `ai/WORKFLOW.md` § Sync points). Move the step's issue
-(and its parent, if the step's issue is a child):
-
-```bash
-npx cairn tracker set-status [key] "Develop" --if-exists
-```
-
-`[key] already Develop` is fine on a re-run. If it prints
-`skipped: stage "Develop" does not exist on this board`, say so once in your reply and carry
-on; never use a different stage instead.
 
 #### Before returning — fresh session and model
 

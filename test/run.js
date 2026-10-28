@@ -697,15 +697,15 @@ test('stage moves: review is opt-in and moves the issue at the start of the revi
   assert.ok(!/--if-exists/.test(doc(config, 'ai/agents/architect.md')), 'review alone does not turn on the planning move');
 });
 
-test('stage moves: plan_task moves to the configured in-progress stage, independently of review', () => {
+test('stage moves: enrich_description moves to the configured in-progress stage, independently of review', () => {
   const config = stageConfig({ inProgress: 'Develop' });
   const architect = doc(config, 'ai/agents/architect.md');
-  const b5 = architect.slice(architect.indexOf('#### B.5'), architect.indexOf('#### Before returning'));
-  assert.match(b5, /^#### B\.5 — Move the issue to `Develop`/, 'the existing tracker step carries the move; no second B.5');
-  assert.strictEqual((architect.match(/#### B\.5/g) || []).length, 1);
-  assert.ok(b5.includes('npx cairn tracker set-status [key] "Develop" --if-exists'));
-  assert.match(b5, /skipped: stage "Develop" does not exist on this board/);
-  assert.match(doc(config, 'ai/WORKFLOW.md'), /\| `plan_task\(task, step\)` \| .*`Develop` with `npx cairn tracker set-status <key> "Develop" --if-exists`/);
+  const a5 = architect.slice(architect.indexOf('#### A.5'), architect.indexOf('### Mode B'));
+  assert.match(a5, /^#### A\.5 — Move the issue to `Develop`/);
+  assert.ok(!architect.includes('#### B.5'), 'plan_task no longer moves the stage');
+  assert.ok(a5.includes('npx cairn tracker set-status [key] "Develop" --if-exists'));
+  assert.match(a5, /skipped: stage "Develop" does not exist on this board/);
+  assert.match(doc(config, 'ai/WORKFLOW.md'), /\| `enrich_description\(task, step\)` \| .*`Develop` with `npx cairn tracker set-status <key> "Develop" --if-exists`/);
   assert.ok(doc(config, 'ai/agents/reviewer.md').includes('Does not sync to the tracker'));
 });
 

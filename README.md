@@ -221,7 +221,7 @@ large or unusual tree).
 
 **Models are recommendations, not gates.** Developer and `qa-developer` recommend Haiku; reviewer, `qa-architect` and the
 orchestrator the tier in `model`. Before the first run in a session the agent states the recommendation and the
-active model, then asks once: *Continue on the current model? OK / not OK*. OK proceeds for
+active model, then asks once (an arrow-key + Enter picker): *Continue on the current model? OK / not OK*. OK proceeds for
 the rest of the session; not OK stops so you can switch.
 
 **The plan carries tests.** Plans have a **Tests** section: per test file, a table of named
@@ -338,7 +338,7 @@ Two workflow steps can move the issue, and only if the repo names the stage:
   "statuses": { "inProgress": "Develop", "review": "Review" } }
 ```
 
-- `plan_task` moves the step's issue (and its parent, for a child issue) to `inProgress` at the end of the plan (the architect's B.5).
+- `enrich_description` moves the step's issue (and its parent, for a child issue) to `inProgress` once the description is written and the digest posted (the architect's A.5).
 - `code_review` moves it to `review` **at the start** of the review (R.0). The verdict never changes the stage; later moves stay manual.
 - Nothing moves without the key: cairn's defaults (`To Do` / `In Progress` / `Done`) are not a promise your board has them. Run `cairn tracker check-statuses` to compare the configured names with the board; `list-statuses` shows the board's.
 
@@ -352,7 +352,7 @@ truth and the sync is one-way, so agents post a **digest**, never the step file:
 - `create_brief` — title, 2–3 sentences of what and why, and the brief's path.
 - `enrich_description` — under ~600 characters: the outcome, at most 5 one-line decisions,
   and the description's path. No tables, file lists or code.
-- `plan_task` — the stage move only; nothing from the plan is posted.
+- `plan_task` — no tracker sync; nothing from the plan is posted.
 - `/request-change` is the exception: the receiving repo has no local copy, so its issue
   carries the full What / Why / Acceptance.
 

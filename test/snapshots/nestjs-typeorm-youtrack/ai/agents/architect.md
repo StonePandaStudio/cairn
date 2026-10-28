@@ -113,6 +113,7 @@ untouched, **no plan file**. Then the tracker sync for this step
 (see `ai/WORKFLOW.md` § Sync points) — post the short digest described under "What goes to the tracker",
 never the description file itself — skipped for `LOCAL-*` tasks.
 
+
 The user may invoke `plan_task` immediately or return later.
 
 ---

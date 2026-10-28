@@ -45,7 +45,7 @@ it locally, mention that once, never sync it.
 |---|---|
 | `create_brief(task, step)` | step 1: create the parent issue if new and use it as the step's issue, no child; step 2+: create a child issue under the parent (short description, see below); write the step's issue key into the brief frontmatter |
 | `enrich_description(task, step)` | the step's issue description ← a short digest of the enriched description, never the file (see below); for a child issue, also a 1–2 sentence summary appended to the parent |
-| `plan_task(task, step)` | the step's issue (and its parent, for a child issue) → in-progress stage; nothing from the plan is posted |
+| `plan_task(task, step)` | no sync — nothing from the plan is posted |
 | `execute_plan(task, step)` | no sync |
 | `code_review(task, step)` | no sync — later stage moves are manual |
 
@@ -63,7 +63,7 @@ moment the file is edited. Post a digest, never the file:
 - **`enrich_description`** — under about 600 characters: a 1–3 sentence outcome, at most
   5 one-line key decisions, and the path `ai/tasks/[KEY]/description-step-[N].md` as the
   last line. No tables, no file lists, no code, no implementation steps.
-- **`plan_task`** — the stage move only. Nothing from the plan is posted.
+- **`plan_task`** — no tracker sync. Nothing from the plan is posted.
 
 Later stage moves are manual — the tracker UI,
 `/youtrack-status`, or `npx cairn tracker close` (closes the parent and
