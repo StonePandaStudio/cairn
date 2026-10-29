@@ -117,7 +117,7 @@ List any files modified that appear in the diff but are **not** in the plan's fi
 ## Report format
 
 Write the review to `ai/tasks/[task]/review-step-[step].md` **and** print the same
-content in the response — the file is the durable record (a re-run of `code_review`
+content in full as response text (not just a summary or a pointer to the file) — the file is the durable record (a re-run of `code_review`
 overwrites it; it is not immutable like `brief-step-[N].md`), the chat copy is for the
 immediate conversation. Use exactly this format:
 
@@ -164,10 +164,10 @@ If there are no blocking issues, say so clearly in the Summary. If there are no 
 
 ### R.6 — Offer the next step
 
-After the report is written and printed:
+**Print the full report as ordinary response text first** — every finding in full, exactly as written to the file. The file write is collapsed in the terminal and the dialog hides what is above it, so a report that exists only in the file is invisible to the user at the moment they have to decide. Only then continue:
 
 - **No blocking issues and no suggestions** — end here. No question.
-- **Otherwise** ask once with the `AskUserQuestion` tool (single select, so the user picks with arrows + Enter). Question: **"What next?"** Name the findings in each description (`B1, B2, S1`). The options:
+- **Otherwise** ask once with the `AskUserQuestion` tool (single select, so the user picks with arrows + Enter). Question: **"What next?"** Each option's description lists the findings it covers by ID and short title (`B1 Missing guard, S1 Stale count`), so the choice is readable without scrolling. The options:
   1. **Replan and re-review** — the architect amends the plan, the developer executes it, then this review runs again. Best when a blocker needs a design change. *Leave this option out when there are no blocking issues.*
   2. **Fix now, no replan** — the developer applies the blockers and suggestions straight from the report, then this review runs again. With no blockers, label it **Apply suggestions now**.
   3. **Stop** — nothing further.
