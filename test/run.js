@@ -1773,6 +1773,29 @@ atest('render: archive-tasks is universal; tracker-status/assign only render wit
   }
 });
 
+atest('render: /fix-review renders for every config and the reviewer hands off to it in R.6', async () => {
+  const { main: init } = require('../lib/init');
+  const log = console.log;
+  console.log = () => {};
+  try {
+    for (const [stack, tracker] of [['nestjs', 'youtrack'], ['react', 'none']]) {
+      const dir = tmpRepo();
+      init(['--repo', dir, '--stack', stack, '--tracker', tracker, '--project-key', 'CI', '--render', '--no-color']);
+      const cmd = fs.readFileSync(path.join(dir, '.claude/commands/fix-review.md'), 'utf8');
+      assert.ok(cmd.startsWith('---\ndescription:'), 'frontmatter on line 1 for the picker');
+      assert.match(cmd, /--replan/);
+      assert.match(cmd, /One round only/);
+      assert.doesNotMatch(cmd, /\{\{/, 'no unrendered template tags');
+      const reviewer = fs.readFileSync(path.join(dir, 'ai/agents/reviewer.md'), 'utf8');
+      assert.match(reviewer, /### R\.6 — Offer the next step/);
+      assert.match(reviewer, /`fix-review`/);
+      assert.match(fs.readFileSync(path.join(dir, 'ai/AGENTS.md'), 'utf8'), /\/fix-review/);
+    }
+  } finally {
+    console.log = log;
+  }
+});
+
 atest('render: /discover and the discovery agent render for every stack; the stack slots say what to look for', async () => {
   const { main: init } = require('../lib/init');
   const log = console.log;

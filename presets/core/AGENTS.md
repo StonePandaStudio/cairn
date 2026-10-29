@@ -22,6 +22,11 @@ transitions. Dispatch table: `ai/INITIAL_PROMPT.md`.
 {{/each}}
 
 Informal engagement on a task defaults to the first step.
+
+**After a review.** `{{ reviewerAgent }}` ends by offering the next step: replan and re-review,
+fix now without replanning, or stop. Either fix runs as `/fix-review [task] [step] [blockers|all|B1 S2 …] [--replan]`,
+which chains the agents as sub-agents (one fix round, then a re-review). Run it by hand to pick
+individual findings.
 {{#if tracker.publicRefs}}
 
 The task can also be given as a public ref: `/plan-task {{ tracker.exampleKey }}-1-4.2` is step 2 of

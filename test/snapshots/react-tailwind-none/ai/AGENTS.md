@@ -20,6 +20,11 @@ transitions. Dispatch table: `ai/INITIAL_PROMPT.md`.
 
 Informal engagement on a task defaults to the first step.
 
+**After a review.** `ReactReviewerAgent` ends by offering the next step: replan and re-review,
+fix now without replanning, or stop. Either fix runs as `/fix-review [task] [step] [blockers|all|B1 S2 …] [--replan]`,
+which chains the agents as sub-agents (one fix round, then a re-review). Run it by hand to pick
+individual findings.
+
 ---
 
 ## Agent Profiles

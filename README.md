@@ -175,7 +175,7 @@ repo/
     base/               the last render of every managed file — `cairn sync`'s merge base
     scripts/jira.js     vendored tracker shim
   .claude/commands/     rendered from the workflow — one stub per step, plus archive-tasks,
-                        the tracker-status/assign pair (remote tracker), request-change
+                        fix-review (chains a review's fixes), the tracker-status/assign pair (remote tracker), request-change
                         (shared workspace) and the QA stubs (see below)
   .claude/agents/       code-scout.md — read-only code-locator subagent
   ai/

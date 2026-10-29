@@ -20,6 +20,11 @@ transitions. Dispatch table: `ai/INITIAL_PROMPT.md`.
 
 Informal engagement on a task defaults to the first step.
 
+**After a review.** `NestjsReviewerAgent` ends by offering the next step: replan and re-review,
+fix now without replanning, or stop. Either fix runs as `/fix-review [task] [step] [blockers|all|B1 S2 …] [--replan]`,
+which chains the agents as sub-agents (one fix round, then a re-review). Run it by hand to pick
+individual findings.
+
 The task can also be given as a public ref: `/plan-task CI-1-4.2` is step 2 of
 story 4 in epic 1. Details: `ai/WORKFLOW.md`.
 

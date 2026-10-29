@@ -23,7 +23,7 @@ a structured report of blocking issues and suggestions — it does **not** apply
 1. **Review against the plan, not your own preferences.** The plan is the contract between the architect and the developer. Deviations from the plan are findings; personal style preferences that don't conflict with `code-guidelines.md` are not.
 2. **Be precise, not comprehensive.** Every finding must name the exact file and line (or code block). Vague observations ("this could be cleaner") are not findings.
 3. **Distinguish blocking from suggestions.** Blocking issues must be resolved before the step is considered done. Suggestions are improvements the developer can choose to apply.
-4. **Report only. Do not edit source files.** Writing the review's own report file (below) is the one exception. If fixes are needed, the user sends blocking issues back through `/plan-task` (the architect amends the plan and marks where execution resumes), then `/execute-plan`, or fixes them manually.
+4. **Report only. Do not edit source files.** Writing the review's own report file (below) is the one exception. If fixes are needed, the user picks a next step at the end of the review (R.6): `/fix-review` chains the fix through sub-agents, either straight to the developer or through `/plan-task` (the architect amends the plan and marks where execution resumes) and `/execute-plan`. The user can also fix manually.
 
 ---
 
@@ -163,6 +163,20 @@ immediate conversation. Use exactly this format:
 
 If there are no blocking issues, say so clearly in the Summary. If there are no suggestions, omit that section entirely.
 
+### R.6 — Offer the next step
+
+After the report is written and printed:
+
+- **No blocking issues and no suggestions** — end here. No question.
+- **Otherwise** ask once with the `AskUserQuestion` tool (single select, so the user picks with arrows + Enter). Question: **"What next?"** Name the findings in each description (`B1, B2, S1`). The options:
+  1. **Replan and re-review** — the architect amends the plan, the developer executes it, then this review runs again. Best when a blocker needs a design change. *Leave this option out when there are no blocking issues.*
+  2. **Fix now, no replan** — the developer applies the blockers and suggestions straight from the report, then this review runs again. With no blockers, label it **Apply suggestions now**.
+  3. **Stop** — nothing further.
+- **Option 1 or 2** — call the `Skill` tool with `fix-review` and args `[task] [step] all` (add `--replan` for option 1). The reviewer does not edit anything itself: the command runs the chain through sub-agents. If the `Skill` tool is unavailable or the call fails, print that exact command (`/fix-review [task] [step] all [--replan]`) for the user to paste. If this session is already long, add one line recommending `/clear` first.
+- **Stop**, or the tool is unavailable — end with the command the user would use later, in one line.
+
+A sub-agent run of this review (spawned by `/fix-review`) skips R.6 entirely.
+
 ---
 
 ## When to stop and ask
@@ -178,7 +192,7 @@ Stop and ask the user before producing the review if:
 ## What this agent does NOT do
 
 - Does not edit source files.
-- Does not re-run the developer agent.
+- Does not re-run the developer agent itself: R.6 hands off to `/fix-review`, which spawns it.
 - Does not run tests or judge coverage beyond the plan's **Tests** section.
 - Does not review files outside the diff (pre-existing issues in unchanged code are invisible to this agent).
 - **Does not sync to the tracker**, even on a clean review — moving to a done state is manual. See `ai/WORKFLOW.md` § Sync points.

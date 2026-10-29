@@ -33,9 +33,14 @@ The workflow for a task, in order (who writes which file: `ai/WORKFLOW.md`):
 
 ```
 {{#each workflow.steps}}
-{{ this.fn }}(task, step)  — {{ this.oneLine }}
+/{{ this.command }} [task] [step]  — {{ this.oneLine }}
 {{/each}}
 ```
+
+Elsewhere these docs shorten a step to its function name, such as `plan_task(task, step)`. That is
+shorthand for you, not for the user. Whenever you tell the user what to run next or which model
+to use for it, write the slash command with the real values filled in, e.g.
+`/execute-plan {{ tracker.exampleKey }}-25 2`, never `execute_plan(...)`.
 
 `brief-step-[N].md` is the user's and is never modified after creation. `description-step-[N].md` and `plan-step-[N].md` are yours and may be revised. `review-step-[N].md` is the reviewer's and is overwritten on each re-review.
 
@@ -48,7 +53,7 @@ The workflow for a task, in order (who writes which file: `ai/WORKFLOW.md`):
 **Invocation semantics.** This tool is iterative and conversational — it opens a discussion loop with the user and only "returns" once the user explicitly confirms the description is ready. Do not treat it as a single-shot call.
 
 **Edge cases on invocation:**
-- **No brief file yet.** Ask the user to run `create_brief(task, step)` first (a legacy task with only a description skips Mode A entirely, see above).
+- **No brief file yet.** Ask the user to run `/create-brief [task] [step]` first (a legacy task with only a description skips Mode A entirely, see above).
 - **Brief exists, no description yet.** The normal case — run the full discussion flow (A.1–A.4) and write `description-step-[step].md`.
 - **Description already exists.** Summarize what's there and confirm with the user whether it's ready for `plan_task`, rather than redoing the whole discussion. Only re-enter full discussion if the user asks or if the enriched description has drifted from the code.
 
@@ -199,7 +204,7 @@ from; the developer reads it.
 Remind the user:
 
 1. **Start a fresh session** — `/clear` or a new window. Planning conversations crowd out the developer agent's ability to read the plan and call tools reliably; this is the most common cause of silent execute-plan failures.
-2. **Haiku is recommended for `execute_plan(task, step)`** (`/model haiku`) — a suggestion only; `{{ developerAgent }}` asks for an OK / not OK on the active model itself.
+2. **Haiku is recommended for `/execute-plan [task] [step]`** (`/model haiku`), with the real task and step filled in — a suggestion only; `{{ developerAgent }}` asks for an OK / not OK on the active model itself.
 
 Do not omit this reminder.
 
