@@ -141,12 +141,14 @@ supports; only TypeScript/NestJS has been measured here. The first lookup in a n
 workspace takes about a minute while the language server installs and warms up, and later
 ones are fast. On Windows keep the workspace path short (under about 125 characters, a pip
 limit). `cairn context setup --provider codebase-memory-mcp` adds an optional architecture
-summary tool. Then register the MCP server once in your agent's config, so agents in any
-repo can ask about the others:
-```json
-{ "command": "npx", "args": ["cairn", "context", "serve", "--config", "<path>/repos.json"] }
+summary tool. Then register the MCP server, so agents in any repo can ask about the others:
+```bash
+cairn context register     # adds a "cairn" entry to each repo's .mcp.json (merge; --force to replace)
 ```
-Claude Code: `claude mcp add cairn-context -- npx cairn context serve --config <path>/repos.json`.
+Claude Code asks you to approve a project server the first time it sees it. The name must stay
+`cairn`: the agent docs refer to `mcp__cairn__*`. The entry is
+`{ "command": "npx", "args": ["cairn", "context", "serve", "--config", "../repos.json"] }`
+(`cmd /c npx …` when run on Windows), with the config path relative to each repo.
 
 **Each day**
 
@@ -210,7 +212,7 @@ cairn context code summary backend
 | `cairn upgrade` | Walks the repos in a `repos.json`: updates the installed cairn through each repo's own package manager (npm / yarn / pnpm), then runs `cairn sync` with that version. Report-only unless `--apply`; never commits or pushes. A repo whose pin excludes the running version (`^0.9.0` stops at 0.9.x) is reported as blocked and not synced, unless `--bump-pin` rewrites the pin through the package manager |
 | `cairn override <cmd>` | Manages `ai/local/`, a repo's own additions to the generated agent docs: `status`, `extract <agent doc>`, `ack <slot>`. See "Customizing agent docs" |
 | `cairn preset list` | The bundled presets — kind (framework / orm / styling), what each ships, and which ones this repo's `stack` uses. `render`, `sync` and `init` also check the stack: a name listed twice or `core` as an entry is refused; a name with no preset (a typo) warns with a suggestion — `cli` and `unknown` are the deliberate exceptions |
-| `cairn context <cmd>` | **Prototype.** Resolves `ai/contexts/**/*.md` across a `repos.json` workspace into a graph — declared `counterpartOf` links, inferred reverse edges, and a same-path/same-title suggest pass. `build` / `check` / `counterparts <id>`; `check` never fails CI on its own (`--strict` opts in). `setup` installs a pinned code provider into `<workspace>/_cairn/tools/` — per workspace, never global; Serena by default (symbols + references via the repo's language server), `--provider codebase-memory-mcp` for an optional architecture summary — and `code symbol <repo> <name>` / `code references <repo> <Class/method>` / `code summary <repo>` query it; with a provider, `check` also verifies `describes: entity Foo` anchors (`BROKEN_ANCHOR`). `serve` is an MCP stdio server over all of it (`list_contexts`, `counterparts`, `check`, `code_symbol`, `code_references`, `code_summary`): register once per workspace, `{"command":"npx","args":["cairn","context","serve","--config","<path>/repos.json"]}`. cairn ships no code parser; without the tool, code answers are `unknown` |
+| `cairn context <cmd>` | **Prototype.** Resolves `ai/contexts/**/*.md` across a `repos.json` workspace into a graph — declared `counterpartOf` links, inferred reverse edges, and a same-path/same-title suggest pass. `build` / `check` / `counterparts <id>`; `check` never fails CI on its own (`--strict` opts in). `setup` installs a pinned code provider into `<workspace>/_cairn/tools/` — per workspace, never global; Serena by default (symbols + references via the repo's language server), `--provider codebase-memory-mcp` for an optional architecture summary — and `code symbol <repo> <name>` / `code references <repo> <Class/method>` / `code summary <repo>` query it; with a provider, `check` also verifies `describes: entity Foo` anchors (`BROKEN_ANCHOR`). `register` adds the server to each repo's `.mcp.json`; `serve` is an MCP stdio server over all of it (`list_contexts`, `counterparts`, `check`, `code_symbol`, `code_references`, `code_summary`): cairn ships no code parser; without the tool, code answers are `unknown` |
 
 `cairn render` is **greenfield only**: it writes files that do not exist, records them
 in the manifest, stores the render in `_cairn/base/`, and leaves anything already on

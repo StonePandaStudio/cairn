@@ -3742,6 +3742,72 @@ test('serve: real stdio round trip — stdout carries only protocol lines', () =
   assert.strictEqual(JSON.parse(list.result.content[0].text).count, 3);
 });
 
+// ---------------------------------------------------------- context register
+
+const registerMod = require('../lib/context/register');
+
+function registerWs() {
+  const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'cairn-reg-'));
+  const repos = ['backend', 'frontend'].map((n) => {
+    fs.mkdirSync(path.join(ws, n), { recursive: true });
+    return { name: n, path: path.join(ws, n) };
+  });
+  fs.writeFileSync(path.join(ws, 'repos.json'), JSON.stringify({ repos: repos.map((r) => ({ name: r.name, path: r.name })) }));
+  return { ws, repos, config: path.join(ws, 'repos.json') };
+}
+
+test('register: creates .mcp.json with a repo-relative config path, per platform command', () => {
+  const { repos, config } = registerWs();
+  const posix = registerMod.registerAll(repos, config, { platform: 'linux' });
+  assert.deepStrictEqual(posix.map((r) => r.action), ['created', 'created']);
+  const doc = JSON.parse(fs.readFileSync(path.join(repos[0].path, '.mcp.json'), 'utf8'));
+  assert.deepStrictEqual(doc.mcpServers.cairn, { command: 'npx', args: ['cairn', 'context', 'serve', '--config', '../repos.json'] });
+  const win = registerMod.serverEntry(repos[0].path, config, 'win32');
+  assert.deepStrictEqual([win.command, win.args.slice(0, 2)], ['cmd', ['/c', 'npx']]);
+});
+
+test('register: merges next to other servers, is idempotent, and leaves a different cairn entry alone', () => {
+  const { repos, config } = registerWs();
+  const file = path.join(repos[0].path, '.mcp.json');
+  fs.writeFileSync(file, JSON.stringify({ mcpServers: { other: { command: 'x' } }, extra: 1 }));
+  assert.strictEqual(registerMod.registerRepo(repos[0], config, { platform: 'linux' }).action, 'added');
+  let doc = JSON.parse(fs.readFileSync(file, 'utf8'));
+  assert.deepStrictEqual(doc.mcpServers.other, { command: 'x' });
+  assert.strictEqual(doc.extra, 1);
+  assert.strictEqual(registerMod.registerRepo(repos[0], config, { platform: 'linux' }).action, 'unchanged');
+
+  doc.mcpServers.cairn = { command: 'mine' };
+  fs.writeFileSync(file, JSON.stringify(doc));
+  const r = registerMod.registerRepo(repos[0], config, { platform: 'linux' });
+  assert.strictEqual(r.action, 'differs');
+  assert.strictEqual(JSON.parse(fs.readFileSync(file, 'utf8')).mcpServers.cairn.command, 'mine');
+  assert.strictEqual(registerMod.registerRepo(repos[0], config, { platform: 'linux', force: true }).action, 'replaced');
+  assert.strictEqual(JSON.parse(fs.readFileSync(file, 'utf8')).mcpServers.cairn.command, 'npx');
+});
+
+test('register: a broken .mcp.json is reported and untouched; dry run writes nothing', () => {
+  const { repos, config } = registerWs();
+  const file = path.join(repos[0].path, '.mcp.json');
+  fs.writeFileSync(file, '{ not json');
+  assert.strictEqual(registerMod.registerRepo(repos[0], config).action, 'invalid');
+  assert.strictEqual(fs.readFileSync(file, 'utf8'), '{ not json');
+  assert.strictEqual(registerMod.registerRepo(repos[1], config, { dryRun: true }).action, 'created');
+  assert.ok(!fs.existsSync(path.join(repos[1].path, '.mcp.json')));
+});
+
+test('register: CLI writes every repo and exits non-zero only when something was left alone', () => {
+  const { repos, config } = registerWs();
+  const bin = path.join(__dirname, '..', 'bin', 'cairn.js');
+  const run = () => spawnSync(process.execPath, [bin, 'context', 'register', '--config', config, '--json'], { encoding: 'utf8' });
+  const first = run();
+  assert.strictEqual(first.status, 0, first.stderr);
+  assert.deepStrictEqual(JSON.parse(first.stdout).map((r) => r.action), ['created', 'created']);
+  fs.writeFileSync(path.join(repos[1].path, '.mcp.json'), JSON.stringify({ mcpServers: { cairn: { command: 'mine' } } }));
+  const second = run();
+  assert.strictEqual(second.status, 1);
+  assert.deepStrictEqual(JSON.parse(second.stdout).map((r) => r.action), ['unchanged', 'differs']);
+});
+
 // ------------------------------------------------------------------- runner
 
 (async () => {

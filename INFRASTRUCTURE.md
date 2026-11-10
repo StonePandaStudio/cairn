@@ -53,7 +53,7 @@ where files live on disk (`_cairn/tools/`, `_cairn/cache/`).
 
 ## Not built yet
 
-`cairn sync` registering the server in each repo's MCP config, a Sourcegraph (HTTP)
+`cairn sync` doing the MCP registration (for now `cairn context register` writes each repo's `.mcp.json` on demand), a Sourcegraph (HTTP)
 provider, `cairn context adopt`, the `local` tracker provider, OpenAPI contract checks.
 Pre-installing the language server during `setup` (to avoid the one-time cold start) is also
 not done.
@@ -61,7 +61,7 @@ not done.
 Agent docs: the core `code-scout` subagent (tools list includes `mcp__cairn__code_references` /
 `code_symbol`) and the architect doc tell agents to prefer `code_references` for callers of a
 named symbol, falling back to Grep on `unknown`. This assumes the MCP server is registered
-under the name `cairn`; registration is still by hand (no `cairn sync` support yet).
+under the name `cairn`, which `cairn context register` writes into each repo's `.mcp.json`.
 
 ## Language status
 
