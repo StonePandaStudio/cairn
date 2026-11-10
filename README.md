@@ -280,6 +280,20 @@ Generated files are **committed**, not gitignored. Claude Code discovers
 
 ## Workflow and agents
 
+### Use the workflow in Codex
+
+Set `"codexSkills": true` in `cairn.config.json`, then run `npx cairn sync`
+in an existing Cairn repo or `npx cairn render` for the first render. Commit
+the generated `.agents/skills/` files with the rest of the scaffold.
+
+Open Codex in the repo and invoke `$create-brief Add CSV export`. The next
+steps are `$enrich-description`, `$plan-task`, `$execute-plan`, and
+`$code-review`. Supply the task and step as you would for the Claude
+commands. Both hosts use the same role docs and task files in `ai/`.
+
+The skills cover Cairn's built-in commands, including QA and tracker
+commands when the repo's configuration enables them.
+
 Config keys that shape the rendered agents (all in `cairn.config.json`): `model` (reviewer
 tier, default `sonnet`), `validationStack` (`zod` default, or `class-validator`; only read
 when `nestjs` is in `stack`), `tdd`, `commands.build`, `agents.<role>.name` / `.doc`, and

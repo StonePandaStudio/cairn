@@ -6,6 +6,11 @@
   "type": "object",
   "additionalProperties": false,
   "properties": {
+    "codexSkills": {
+      "type": "boolean",
+      "default": false,
+      "description": "Also generate repository-local Codex skills for the built-in Cairn commands."
+    },
     "$schema": { "type": "string" },
     "cairn": {
       "type": "string",
