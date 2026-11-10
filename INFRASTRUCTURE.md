@@ -55,8 +55,12 @@ where files live on disk (`_cairn/tools/`, `_cairn/cache/`).
 
 `cairn sync` doing the MCP registration (for now `cairn context register` writes each repo's `.mcp.json` on demand), a Sourcegraph (HTTP)
 provider, `cairn context adopt`, the `local` tracker provider, OpenAPI contract checks.
-Pre-installing the language server during `setup` (to avoid the one-time cold start) is also
-not done.
+`setup` warms each repo's language server once (a throwaway lookup per repo; `--no-warm`
+skips it), so the one-time cold start does not land on an agent's first question.
+
+**Single repo:** with no `repos.json` and no `--config`, a current directory that is a git
+checkout or has `cairn.config.json` is a workspace of one (tools in `<repo>/_cairn/tools/`).
+An explicit `--config` that is missing stays an error.
 
 Agent docs: the core `code-scout` subagent (tools list includes `mcp__cairn__code_references` /
 `code_symbol`) and the architect doc tell agents to prefer `code_references` for callers of a

@@ -3808,6 +3808,47 @@ test('register: CLI writes every repo and exits non-zero only when something was
   assert.deepStrictEqual(JSON.parse(second.stdout).map((r) => r.action), ['unchanged', 'differs']);
 });
 
+atest('setup warm-up: one throwaway lookup per repo starts its language server; a missing provider is reported, not thrown', async () => {
+  const { repo, make, log } = serenaFixture();
+  const src = make();
+  try {
+    const out = await require('../lib/context/cli').warmUp(src, [repo]);
+    assert.deepStrictEqual(out.map((w) => [w.repo, w.ok]), [['backend', true]]);
+    assert.strictEqual(log().filter((e) => e.ev === 'start').length, 1);
+  } finally {
+    await src.close();
+  }
+  const none = codesource.createCodeSource({ config: {}, workspaceDir: fs.mkdtempSync(path.join(os.tmpdir(), 'cairn-nowarm-')) });
+  const out2 = await require('../lib/context/cli').warmUp(none, [repo]);
+  assert.strictEqual(out2[0].ok, false);
+  assert.ok(out2[0].reason);
+});
+
+test('single repo: with no repos.json, the current repo alone is the workspace (build, register without --config)', () => {
+  const repo = fs.mkdtempSync(path.join(os.tmpdir(), 'cairn-single-'));
+  fs.mkdirSync(path.join(repo, '.git'));
+  fs.mkdirSync(path.join(repo, 'ai', 'contexts', 'entities'), { recursive: true });
+  fs.writeFileSync(path.join(repo, 'ai', 'contexts', 'entities', 'invoice.md'), '# Invoice\n');
+  const bin = path.join(__dirname, '..', 'bin', 'cairn.js');
+  const run = (...a) => spawnSync(process.execPath, [bin, 'context', ...a], { cwd: repo, encoding: 'utf8' });
+
+  const build = run('build', '--json');
+  assert.strictEqual(build.status, 0, build.stderr);
+  assert.ok(JSON.parse(build.stdout).nodes.some((n) => n.id.endsWith('ai/contexts/entities/invoice.md')));
+
+  const reg = run('register', '--json');
+  assert.strictEqual(reg.status, 0, reg.stderr);
+  const doc = JSON.parse(fs.readFileSync(path.join(repo, '.mcp.json'), 'utf8'));
+  assert.ok(!doc.mcpServers.cairn.args.includes('--config'), 'serve finds the repo itself');
+
+  // An explicit --config that does not exist is still an error, never a silent fallback.
+  assert.strictEqual(run('build', '--config', 'nope.json').status, 2);
+
+  // Not a repo, no repos.json: still the clear error.
+  const bare = fs.mkdtempSync(path.join(os.tmpdir(), 'cairn-bare-'));
+  assert.strictEqual(spawnSync(process.execPath, [bin, 'context', 'build'], { cwd: bare, encoding: 'utf8' }).status, 2);
+});
+
 // ------------------------------------------------------------------- runner
 
 (async () => {

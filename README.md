@@ -128,6 +128,10 @@ Exit `3` means conflicts in some repo, `1` an update failed or was blocked. Afte
 Once the repos are set up (see the sections above), a normal day looks like this. Steps 1
 and 4 apply to a group of repos; the rest apply to any repo.
 
+**One repo only?** Run the same commands from inside it: with no `repos.json` and no
+`--config`, that repo alone is the workspace (tools in `<repo>/_cairn/tools/`, and
+`register` writes a `.mcp.json` whose server needs no `--config`).
+
 **One-time, per workspace** (skip if you do not want code lookups; everything else works
 without it):
 ```bash
@@ -138,8 +142,9 @@ This installs a version-pinned [Serena](https://github.com/oraios/serena) into
 read-only) and gitignores the `.serena/` folder Serena writes into each repo. Serena fronts
 the repo's language server, so symbol and reference lookups work for any language it
 supports; only TypeScript/NestJS has been measured here. The first lookup in a new
-workspace takes about a minute while the language server installs and warms up, and later
-ones are fast. On Windows keep the workspace path short (under about 125 characters, a pip
+workspace takes about a minute while the language server installs and warms up; `setup`
+does that once for you (one throwaway lookup per repo, `--no-warm` to skip), so agents
+see fast answers from the start. On Windows keep the workspace path short (under about 125 characters, a pip
 limit). `cairn context setup --provider codebase-memory-mcp` adds an optional architecture
 summary tool. Then register the MCP server, so agents in any repo can ask about the others:
 ```bash
