@@ -1,0 +1,62 @@
+flowchart TB
+    subgraph Agents["Agent sessions (Claude Code)"]
+        A1["backend agent"]
+        A2["frontend agent"]
+        A3["docs agent"]
+    end
+
+    subgraph Serve["cairn context serve — one per agent session, same workspace config"]
+        direction TB
+        MCP["MCP stdio server<br/>JSON-RPC, hand-rolled, zero-dep"]
+        TOOLS["tools:<br/>list_contexts · counterparts · check<br/>code_symbol · code_references · code_summary"]
+        RES["context resolver<br/>frontmatter → graph<br/>counterpartOf · CANDIDATE · DANGLING"]
+        CS["codeSource facade + provider registry<br/>routes by capability: symbols · references · summary<br/>no language knowledge in core<br/>lib/context/codesource.js"]
+        PROV["provider: codebase-memory-mcp<br/>symbols · summary<br/>providers/codebase-memory.js"]
+        SER["provider: Serena (default)<br/>symbols · references via LSP<br/>long-lived: 1 process per repo, queued,<br/>restarted once on crash, killed on timeout<br/>read-only (fixed_tools) · providers/serena.js"]
+        GATE{"fingerprint changed?<br/>git HEAD + dirty mtimes<br/>0.2 s"}
+        MCP --> TOOLS
+        TOOLS --> RES
+        TOOLS --> CS
+        CS --> PROV
+        CS --> SER
+        PROV --> GATE
+    end
+
+    subgraph WS["Workspace dir (holds repos.json)"]
+        CFG["repos.json<br/>repos + optional codeSource"]
+        subgraph TOOLDIR["_cairn/tools/ — gitignored, version-pinned per workspace"]
+            SBIN["serena/ venv + private home<br/>~170 MB · needs Python 3.11–3.14<br/>cairn context setup (default)"]
+            BIN["codebase-memory-mcp/ binary<br/>333 MB · optional<br/>setup --provider codebase-memory-mcp"]
+        end
+    end
+
+    subgraph R1["backend repo"]
+        D1["ai/contexts/**/*.md"]
+        S1["source code"]
+        C1[("_cairn/cache/<br/>project.db SQLite<br/>fingerprint.json<br/>gitignored")]
+    end
+
+    subgraph R2["frontend repo"]
+        D2["ai/contexts/**/*.md"]
+        S2["source code"]
+        C2[("_cairn/cache/<br/>project.db SQLite<br/>fingerprint.json<br/>gitignored")]
+    end
+
+    A1 & A2 & A3 -- "MCP stdio" --> MCP
+
+    RES -- "reads" --> CFG
+    RES -- "reads" --> D1 & D2
+    D1 <-. "counterpartOf<br/>authored link" .-> D2
+
+    GATE -- "fresh: reuse index" --> C1 & C2
+    GATE -- "stale: re-index" --> ONE
+    PROV -- "spawn one-shot per call<br/>~1.9 s startup" --> ONE["cbm cli --json &lt;tool&gt;<br/>CBM_CACHE_DIR = repo/_cairn/cache"]
+    BIN -.-> ONE
+    SBIN -.-> SER
+    SER -- "MCP stdio, kept alive per repo<br/>stdin EOF → exits" --> LS["language server per repo<br/>tsserver · JDTLS · Roslyn · …<br/>(Serena picks by language)"]
+    LS -- "reads" --> S1 & S2
+    ONE -- "parses" --> S1 & S2
+    ONE -- "writes / reads" --> C1 & C2
+
+    CLI["cairn CLI<br/>context setup · code · check"] -. "same facade" .-> CS
+    CLI -. "npm install --prefix" .-> TOOLDIR

@@ -2671,21 +2671,21 @@ atest('context: CLI build/check/counterparts against a repos.json workspace, --s
   console.log = (s) => logged.push(s);
   try {
     process.chdir(workspace);
-    const buildExit = contextCli.main(['build', '--json', '--no-color']);
+    const buildExit = await contextCli.main(['build', '--json', '--no-color']);
     assert.strictEqual(buildExit, 0);
     const built = JSON.parse(logged.pop());
     assert.strictEqual(built.nodes.length, 2);
 
-    const checkExit = contextCli.main(['check', '--json', '--no-color']);
+    const checkExit = await contextCli.main(['check', '--json', '--no-color']);
     assert.strictEqual(checkExit, 0, 'plain check never fails CI');
     const checked = JSON.parse(logged.pop());
     assert.ok(checked.findings.some((f) => f.type === 'CANDIDATE'));
 
-    const strictExit = contextCli.main(['check', '--strict', '--json', '--no-color']);
+    const strictExit = await contextCli.main(['check', '--strict', '--json', '--no-color']);
     assert.strictEqual(strictExit, 1, '--strict exits 1 when findings exist');
     logged.pop();
 
-    const cpExit = contextCli.main(['counterparts', 'backend:ai/contexts/entities/invoice.md', '--json', '--no-color']);
+    const cpExit = await contextCli.main(['counterparts', 'backend:ai/contexts/entities/invoice.md', '--json', '--no-color']);
     assert.strictEqual(cpExit, 0);
     assert.deepStrictEqual(JSON.parse(logged.pop()), []);
   } finally {
@@ -3049,6 +3049,697 @@ test('workspace cmd: add / remove / list edit only the repos list and keep the r
   // the result is still a file doctor can resolve
   const { resolveRepos } = require('../lib/doctor');
   assert.strictEqual(resolveRepos(cfg, root)[0].name, 'web');
+});
+
+// ------------------------------------------------------- context/codesource
+
+const codesource = require('../lib/context/codesource');
+const { spawnSync } = require('child_process');
+
+// A stand-in for `codebase-memory-mcp cli --json <tool>`: reads JSON args on stdin,
+// answers in the same envelope shape, and logs every call into the repo's cache dir
+// (CBM_CACHE_DIR) so tests can count spawns.
+const FAKE_CBM = `
+const fs = require('fs');
+const path = require('path');
+const tool = process.argv[process.argv.indexOf('--json') + 1];
+let input = '';
+process.stdin.on('data', (d) => (input += d));
+process.stdin.on('end', () => {
+  const args = input ? JSON.parse(input) : {};
+  fs.mkdirSync(process.env.CBM_CACHE_DIR, { recursive: true });
+  fs.appendFileSync(path.join(process.env.CBM_CACHE_DIR, 'calls.log'), tool + '\\n');
+  let out;
+  if (tool === 'index_repository') out = { project: 'fake-proj', nodes: 3 };
+  else if (tool === 'get_architecture') out = { project: args.project, total_nodes: 3 };
+  else if (tool === 'search_graph') {
+    const rows = [];
+    if (args.name_pattern === '^Invoice$') rows.push(['Invoice', 'Interface', '4-15', 2, 0]);
+    if (args.name_pattern === '^Heading$') rows.push(['Heading', 'Section', '1-2', 0, 0]);
+    out = { cols: ['name', 'label', 'lines', 'in', 'out'], groups: rows.length ? [{ file: 'src/a.ts', rows }] : [], total: rows.length };
+  } else out = { error: 'unknown tool ' + tool };
+  process.stdout.write(JSON.stringify({ content: [{ type: 'text', text: JSON.stringify(out) }], structuredContent: out, isError: false }));
+});
+`;
+
+function codeFixture() {
+  const ws = tmpRepo();
+  const repoPath = path.join(ws, 'backend');
+  fs.mkdirSync(path.join(repoPath, 'src'), { recursive: true });
+  fs.writeFileSync(path.join(repoPath, 'src', 'a.ts'), 'export interface Invoice {}\n');
+  const fake = path.join(ws, 'fake-cbm.js');
+  fs.writeFileSync(fake, FAKE_CBM);
+  const repo = { name: 'backend', path: repoPath };
+  const config = { command: process.execPath, args: [fake], version: '1.0.0' };
+  const calls = () => {
+    try {
+      return fs.readFileSync(path.join(repoPath, '_cairn', 'cache', 'calls.log'), 'utf8').split('\n').filter(Boolean);
+    } catch {
+      return [];
+    }
+  };
+  return { ws, repo, repoPath, config, calls, make: (cfg = config) => codesource.createCodeSource({ config: cfg, workspaceDir: ws }) };
+}
+
+test('codesource: runner resolution — explicit command, workspace install, opt-in PATH, else none', () => {
+  const ws = tmpRepo();
+  assert.strictEqual(codesource.resolveRunner({}, ws), null, 'nothing installed, nothing configured');
+  assert.strictEqual(codesource.resolveRunner({ allowGlobal: true }, ws).source, 'path');
+  assert.strictEqual(codesource.resolveRunner({ command: 'x', args: ['y'] }, ws).source, 'config');
+
+  const bin = path.join(codesource.toolDir(ws), 'node_modules', 'codebase-memory-mcp');
+  fs.mkdirSync(path.join(bin, 'bin'), { recursive: true });
+  fs.writeFileSync(path.join(bin, 'bin', process.platform === 'win32' ? 'codebase-memory-mcp.exe' : 'codebase-memory-mcp'), '');
+  fs.writeFileSync(path.join(bin, 'package.json'), JSON.stringify({ version: '9.9.9' }));
+  const r = codesource.resolveRunner({}, ws);
+  assert.strictEqual(r.source, 'workspace');
+  assert.strictEqual(r.version, '9.9.9');
+});
+
+atest('codesource: not installed is `unknown` with a hint — never a throw', async () => {
+  const { repo, make } = codeFixture();
+  const src = make({});
+  assert.strictEqual(src.available(), false);
+  const res = await src.symbol(repo, 'Invoice');
+  assert.strictEqual(res.status, 'unknown');
+  assert.ok(/cairn context setup/.test(res.hint));
+});
+
+atest('codesource: symbol found / missing, and a markdown Section never counts as a symbol', async () => {
+  const { repo, make } = codeFixture();
+  const src = make();
+  const found = await src.symbol(repo, 'Invoice');
+  assert.strictEqual(found.status, 'found');
+  assert.strictEqual(found.matches[0].label, 'Interface');
+  assert.strictEqual(found.matches[0].file, 'src/a.ts');
+  assert.strictEqual((await src.symbol(repo, 'Nope')).status, 'missing');
+  assert.strictEqual((await src.symbol(repo, 'Heading')).status, 'missing', 'a Section node is not code');
+});
+
+atest('codesource: the fingerprint gate indexes once, then only when the code or tool version changes', async () => {
+  const { repo, repoPath, config, calls, make } = codeFixture();
+  const indexCount = () => calls().filter((c) => c === 'index_repository').length;
+
+  await make().symbol(repo, 'Invoice');
+  assert.strictEqual(indexCount(), 1, 'first query indexes');
+
+  const again = await make().symbol(repo, 'Invoice'); // a fresh process: no in-memory memo
+  assert.strictEqual(again.reindexed, false);
+  assert.strictEqual(indexCount(), 1, 'unchanged code is not re-indexed');
+
+  const file = path.join(repoPath, 'src', 'a.ts');
+  fs.writeFileSync(file, 'export interface Invoice { id: string }\n');
+  const future = new Date(Date.now() + 5000);
+  fs.utimesSync(file, future, future);
+  await make().symbol(repo, 'Invoice');
+  assert.strictEqual(indexCount(), 2, 'an edited file triggers a re-index');
+
+  await make({ ...config, version: '2.0.0' }).symbol(repo, 'Invoice');
+  assert.strictEqual(indexCount(), 3, 'a different tool version re-indexes');
+});
+
+atest('codesource: the index folder does not invalidate its own fingerprint (git repo)', async () => {
+  const { repo, repoPath, calls, make } = codeFixture();
+  const git = (...a) => spawnSync('git', ['-C', repoPath, '-c', 'user.email=t@t', '-c', 'user.name=t', ...a], { encoding: 'utf8' });
+  if (git('init', '-q').status !== 0) return; // no git on this machine — nothing to assert
+  git('add', '-A');
+  git('commit', '-q', '-m', 'init');
+
+  await make().symbol(repo, 'Invoice'); // writes _cairn/cache/** into the working tree
+  const before = codesource.fingerprint(repoPath);
+  await make().symbol(repo, 'Invoice');
+  assert.strictEqual(codesource.fingerprint(repoPath), before, 'cache churn must not change the fingerprint');
+  assert.strictEqual(calls().filter((c) => c === 'index_repository').length, 1);
+
+  // re-editing an already-dirty file must still be noticed (status text alone would not change)
+  const file = path.join(repoPath, 'src', 'a.ts');
+  fs.writeFileSync(file, 'export interface Invoice { a: 1 }\n');
+  const f1 = codesource.fingerprint(repoPath);
+  fs.writeFileSync(file, 'export interface Invoice { a: 1; b: 2 }\n');
+  const later = new Date(Date.now() + 5000);
+  fs.utimesSync(file, later, later);
+  assert.notStrictEqual(codesource.fingerprint(repoPath), f1);
+});
+
+test('context: check computes BROKEN_ANCHOR through the resolver; unknown is listed, never a finding', () => {
+  const backend = tmpRepo();
+  writeCtx(backend, 'ai/contexts/entities/invoice.md', '---\ndescribes: entity Invoice\n---\n# Invoice\n');
+  writeCtx(backend, 'ai/contexts/entities/ghost.md', '---\ndescribes: entity Ghost\n---\n# Ghost\n');
+  writeCtx(backend, 'ai/contexts/entities/odd.md', '---\ndescribes: entity Odd\n---\n# Odd\n');
+  const graph = context.build([{ name: 'backend', path: backend }]);
+
+  const resolveAnchor = (repo, name) => (name === 'Invoice' ? { status: 'found' } : name === 'Ghost' ? { status: 'missing' } : { status: 'unknown', reason: 'tool down' });
+  const result = context.check(graph, { resolveAnchor });
+
+  const broken = result.findings.filter((f) => f.type === 'BROKEN_ANCHOR');
+  assert.strictEqual(broken.length, 1);
+  assert.ok(broken[0].id.endsWith('ghost.md'));
+  assert.strictEqual(result.unknownAnchors.length, 1);
+  assert.ok(!result.notChecked.includes('BROKEN_ANCHOR'));
+
+  const plain = context.check(graph);
+  assert.ok(plain.notChecked.includes('BROKEN_ANCHOR'), 'without a resolver it stays unchecked, as before');
+  assert.strictEqual(plain.findings.filter((f) => f.type === 'BROKEN_ANCHOR').length, 0);
+});
+
+test('codesource: setup gitignores the tool folder and each repo cache, idempotently', () => {
+  const ws = tmpRepo();
+  fs.mkdirSync(path.join(ws, '.git'));
+  const repoPath = path.join(ws, 'backend');
+  fs.mkdirSync(path.join(repoPath, '.git'), { recursive: true });
+  const plainRepo = path.join(ws, 'docs'); // not a git repo — must be left alone
+  fs.mkdirSync(plainRepo);
+
+  const repos = [{ name: 'backend', path: repoPath }, { name: 'docs', path: plainRepo }];
+  const first = codesource.setup({ workspaceDir: ws, repos, install: false });
+  assert.strictEqual(first.ignored.length, 2);
+  assert.ok(fs.readFileSync(path.join(ws, '.gitignore'), 'utf8').includes('_cairn/tools/'));
+  assert.ok(fs.readFileSync(path.join(repoPath, '.gitignore'), 'utf8').includes('_cairn/cache/'));
+  assert.ok(!fs.existsSync(path.join(plainRepo, '.gitignore')));
+
+  assert.strictEqual(codesource.setup({ workspaceDir: ws, repos, install: false }).ignored.length, 0, 'second run changes nothing');
+  assert.throws(() => codesource.setup({ workspaceDir: ws, repos, version: '^1.0.0', install: false }), /exact version/);
+});
+
+// ------------------------------------------------- context/codesource registry
+
+// A language-neutral stand-in provider: serves `references` (which the real code-graph
+// provider deliberately does not) so routing can be tested without any real tool.
+function fakeProvider(id, { caps = ['references'], available = true, answers = {} } = {}) {
+  return {
+    id,
+    capabilities: caps,
+    create: ({ config }) => ({
+      id,
+      config,
+      available: () => available,
+      symbol: (repo, name) => ({ status: 'found', via: id, name, ...answers }),
+      references: (repo, p) => ({ status: 'ok', via: id, symbolPath: p, references: [{ file: 'a.x' }] }),
+      summary: () => ({ status: 'ok', via: id }),
+    }),
+  };
+}
+
+atest('codesource registry: the default routing sends symbols/summary to the code-graph provider and leaves references unrouted', async () => {
+  const { make } = codeFixture();
+  const src = make();
+  assert.deepStrictEqual(src.describe(), { symbols: 'codebase-memory-mcp', references: null, summary: 'codebase-memory-mcp' });
+  assert.strictEqual(src.available('symbols'), true);
+  assert.strictEqual(src.available('references'), false);
+  const res = await src.references({ name: 'backend', path: '/x' }, 'Class/method');
+  assert.strictEqual(res.status, 'unknown', 'a capability with no provider is unknown, not an error');
+  assert.ok(/references/.test(res.reason));
+});
+
+atest('codesource registry: a registered provider answers its capability; routing config overrides the default', async () => {
+  const { repo, make } = codeFixture();
+  const unregister = codesource.registerProvider(fakeProvider('fake-refs'));
+  try {
+    const src = make();
+    assert.strictEqual(src.describe().references, 'fake-refs', 'only provider with the capability is picked up with no config');
+    assert.strictEqual((await src.references(repo, 'A/b')).via, 'fake-refs');
+
+    // explicit route: symbols to the fake, the rest untouched
+    const routed = codesource.createCodeSource({
+      config: { command: process.execPath, args: [], version: '1', providers: { symbols: 'fake-refs' } },
+      workspaceDir: repo.path,
+    });
+    // fake-refs declares only `references`, so routing symbols to it is a configuration error — reported, not thrown
+    const bad = await routed.symbol(repo, 'X');
+    assert.strictEqual(bad.status, 'unknown');
+    assert.ok(/does not provide symbols/.test(bad.reason));
+  } finally {
+    unregister();
+  }
+});
+
+atest('codesource registry: an unknown provider name in routing is reported as unknown with a hint', async () => {
+  const { repo } = codeFixture();
+  const src = codesource.createCodeSource({ config: { providers: { summary: 'nope' } }, workspaceDir: repo.path });
+  const res = await src.summary(repo);
+  assert.strictEqual(res.status, 'unknown');
+  assert.ok(/unknown provider "nope"/.test(res.reason));
+  assert.ok(/codeSource\.providers/.test(res.hint));
+});
+
+atest('codesource registry: provider settings come from a keyed block or, for compatibility, the flat legacy shape', async () => {
+  const ws = tmpRepo();
+  const seen = [];
+  const unregister = codesource.registerProvider({
+    id: 'probe',
+    capabilities: ['summary'],
+    create: ({ config }) => { seen.push(config); return { id: 'probe', available: () => true, summary: () => ({ status: 'ok' }) }; },
+  });
+  try {
+    await codesource.createCodeSource({ config: { providers: { summary: 'probe' }, probe: { flag: 1 } }, workspaceDir: ws }).summary({ name: 'r', path: ws });
+    assert.deepStrictEqual(seen[0], { flag: 1 }, 'keyed block reaches its provider');
+  } finally {
+    unregister();
+  }
+
+  // the flat shape still configures codebase-memory-mcp (what the earlier releases read)
+  const { repo, config, make } = codeFixture();
+  assert.strictEqual((await make(config).symbol(repo, 'Invoice')).status, 'found');
+  const keyed = make({ 'codebase-memory-mcp': config });
+  assert.strictEqual((await keyed.symbol(repo, 'Invoice')).status, 'found', 'and so does the keyed form');
+});
+
+test('codesource registry: a malformed provider is rejected at registration', () => {
+  assert.throws(() => codesource.registerProvider({ id: 'x' }), /needs a string `id` and a `create`/);
+  assert.throws(() => codesource.registerProvider({ id: 'x', create() {}, capabilities: ['telepathy'] }), /subset of/);
+  assert.throws(() => codesource.registerProvider({ id: 'x', create() {}, capabilities: [] }), /non-empty/);
+});
+
+// ----------------------------------------------------- context/serena provider
+
+// A stand-in for `serena start-mcp-server`: a newline-JSON-RPC MCP server over stdio with a
+// tiny canned project. Logs every start and tool call (FAKE_LOG) so tests can count them.
+// `Crash` makes the first call die (then behave); `Hang` never answers. It exits on stdin
+// EOF, as the real Serena does.
+const FAKE_SERENA = `
+const fs = require('fs');
+const log = (o) => fs.appendFileSync(process.env.FAKE_LOG, JSON.stringify(o) + '\\n');
+log({ ev: 'start', pid: process.pid, args: process.argv.slice(2) });
+const send = (id, result) => process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id, result }) + '\\n');
+const text = (v) => ({ content: [{ type: 'text', text: JSON.stringify(v) }] });
+const SYMS = {
+  'Invoice': [{ name_path: 'Invoice', kind: 'Class', relative_path: 'src\\\\a.ts', body_location: { start_line: 1, end_line: 5 } }],
+  'Svc/pay': [{ name_path: 'Svc/pay', kind: 'Method', relative_path: 'src\\\\svc.ts', body_location: { start_line: 3, end_line: 9 } }],
+  'Other/pay': [{ name_path: 'Other/pay', kind: 'Method', relative_path: 'src\\\\other.ts', body_location: { start_line: 1, end_line: 2 } }],
+};
+SYMS['pay'] = [...SYMS['Svc/pay'], ...SYMS['Other/pay']];
+let buf = '';
+process.stdin.on('data', (d) => {
+  buf += d;
+  let i;
+  while ((i = buf.indexOf('\\n')) >= 0) {
+    const line = buf.slice(0, i).trim();
+    buf = buf.slice(i + 1);
+    if (!line) continue;
+    const m = JSON.parse(line);
+    if (m.method === 'initialize') send(m.id, { protocolVersion: '2024-11-05', capabilities: { tools: {} }, serverInfo: { name: 'Serena' } });
+    else if (m.method === 'tools/call') {
+      const { name, arguments: a } = m.params;
+      log({ ev: 'call', name, args: a });
+      if (name === 'find_symbol') {
+        const p = a.name_path_pattern;
+        if (p === 'Crash' && !fs.existsSync(process.env.FAKE_MARKER)) { fs.writeFileSync(process.env.FAKE_MARKER, '1'); process.exit(1); }
+        if (p === 'Hang') continue;
+        let list = SYMS[p] || [];
+        if (a.relative_path) list = list.filter((s) => s.relative_path.replace(/\\\\/g, '/') === a.relative_path);
+        send(m.id, text(list));
+      } else if (name === 'find_referencing_symbols') {
+        send(m.id, text(a.name_path === 'Svc/pay' ? {
+          'src\\\\ctl.ts': { Method: [{ name_path: 'Ctl/run', body_location: { start_line: 2, end_line: 4 }, content_around_reference: '> 3: svc.pay()' }] },
+          'src\\\\svc.spec.ts': { Function: [{ name_path: 'it callback', body_location: { start_line: 1, end_line: 2 }, content_around_reference: 'x' }] },
+        } : {}));
+      } else send(m.id, { isError: true, content: [{ type: 'text', text: 'Error: unexpected tool ' + name }] });
+    }
+  }
+});
+process.stdin.on('end', () => process.exit(0));
+`;
+
+function serenaFixture(overrides = {}) {
+  const ws = tmpRepo();
+  const repoPath = path.join(ws, 'backend');
+  fs.mkdirSync(path.join(repoPath, 'src'), { recursive: true });
+  const fake = path.join(ws, 'fake-serena.js');
+  fs.writeFileSync(fake, FAKE_SERENA);
+  const logFile = path.join(ws, 'fake.log');
+  const serena = { command: process.execPath, args: [fake], version: '1', env: { FAKE_LOG: logFile, FAKE_MARKER: path.join(ws, 'crashed') }, ...overrides };
+  const repo = { name: 'backend', path: repoPath };
+  const make = () => codesource.createCodeSource({ config: { serena }, workspaceDir: ws });
+  const log = () => (fs.existsSync(logFile) ? fs.readFileSync(logFile, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l)) : []);
+  return { ws, repo, repoPath, make, log };
+}
+
+const alive = (pid) => { try { process.kill(pid, 0); return true; } catch { return false; } };
+const waitFor = async (cond, ms = 5000) => { const t0 = Date.now(); while (Date.now() - t0 < ms) { if (cond()) return true; await new Promise((r) => setTimeout(r, 25)); } return cond(); };
+
+atest('serena: starts lazily on the first question and is reused afterwards', async () => {
+  const { repo, make, log } = serenaFixture();
+  const src = make();
+  try {
+    assert.strictEqual(log().length, 0, 'nothing is spawned until something is asked');
+    assert.strictEqual(src.available('references'), true);
+    await src.symbol(repo, 'Invoice');
+    await src.symbol(repo, 'Invoice');
+    await src.references(repo, 'Svc/pay');
+    assert.strictEqual(log().filter((e) => e.ev === 'start').length, 1, 'one long-lived process for the repo');
+    assert.ok(log()[0].args.includes('start-mcp-server') && log()[0].args.includes(repo.path.replace(/\\/g, '/')), 'started on this repo');
+    assert.ok(log()[0].args.includes('tools'), 'asks for one tool per operation (--agent-interface tools)');
+  } finally {
+    await src.close();
+  }
+});
+
+atest('serena: symbol answers are language-neutral shapes (paths posix, lines, label)', async () => {
+  const { repo, make } = serenaFixture();
+  const src = make();
+  try {
+    const found = await src.symbol(repo, 'Invoice');
+    assert.strictEqual(found.status, 'found');
+    assert.deepStrictEqual(found.matches[0], { name: 'Invoice', namePath: 'Invoice', label: 'Class', file: 'src/a.ts', lines: '1-5' });
+    assert.strictEqual((await src.symbol(repo, 'Nope')).status, 'missing');
+  } finally {
+    await src.close();
+  }
+});
+
+atest('serena: references resolve the symbol first, omit test files by default, and can include them', async () => {
+  const { repo, make } = serenaFixture();
+  const src = make();
+  try {
+    const res = await src.references(repo, 'Svc/pay');
+    assert.strictEqual(res.status, 'ok');
+    assert.strictEqual(res.symbol.file, 'src/svc.ts');
+    assert.deepStrictEqual(res.references.map((r) => r.file), ['src/ctl.ts']);
+    assert.strictEqual(res.testFilesOmitted, 1);
+    assert.strictEqual(res.references[0].symbols[0].namePath, 'Ctl/run');
+    assert.strictEqual(res.references[0].symbols[0].kind, 'Method');
+
+    const all = await src.references(repo, 'Svc/pay', { includeTests: true });
+    assert.deepStrictEqual(all.references.map((r) => r.file), ['src/ctl.ts', 'src/svc.spec.ts']);
+    assert.strictEqual(all.testFilesOmitted, 0);
+
+    const limited = await src.references(repo, 'Svc/pay', { includeTests: true, limit: 1 });
+    assert.strictEqual(limited.references.length, 1);
+    assert.strictEqual(limited.truncated, true);
+  } finally {
+    await src.close();
+  }
+});
+
+atest('serena: an ambiguous name returns candidates; { file } pins one; a missing name is `missing`', async () => {
+  const { repo, make } = serenaFixture();
+  const src = make();
+  try {
+    const amb = await src.references(repo, 'pay');
+    assert.strictEqual(amb.status, 'ambiguous');
+    assert.deepStrictEqual(amb.candidates.map((c) => c.file).sort(), ['src/other.ts', 'src/svc.ts']);
+
+    const pinned = await src.references(repo, 'pay', { file: 'src/other.ts' });
+    assert.strictEqual(pinned.status, 'ok');
+    assert.strictEqual(pinned.symbol.namePath, 'Other/pay');
+
+    assert.strictEqual((await src.references(repo, 'Ghost/none')).status, 'missing');
+  } finally {
+    await src.close();
+  }
+});
+
+atest('serena: a process that dies mid-call is restarted once and the call succeeds', async () => {
+  const { repo, make, log } = serenaFixture();
+  const src = make();
+  try {
+    const res = await src.symbol(repo, 'Crash'); // the fake exits on the first Crash call
+    assert.strictEqual(res.status, 'missing', 'the retry on a fresh process was answered');
+    const starts = log().filter((e) => e.ev === 'start');
+    assert.strictEqual(starts.length, 2, 'restarted exactly once');
+    assert.notStrictEqual(starts[0].pid, starts[1].pid);
+  } finally {
+    await src.close();
+  }
+});
+
+atest('serena: a hung call times out as `unknown`, its process is killed, and the next call starts clean', async () => {
+  const { repo, make, log } = serenaFixture({ timeoutMs: 400, firstCallTimeoutMs: 400 });
+  const src = make();
+  try {
+    const res = await src.symbol(repo, 'Hang');
+    assert.strictEqual(res.status, 'unknown');
+    assert.ok(/timed out/.test(res.reason), res.reason);
+    const hungPid = log().find((e) => e.ev === 'start').pid;
+    assert.ok(await waitFor(() => !alive(hungPid)), 'the hung process was killed');
+
+    assert.strictEqual((await src.symbol(repo, 'Invoice')).status, 'found', 'a fresh process answers');
+    assert.strictEqual(log().filter((e) => e.ev === 'start').length, 2);
+  } finally {
+    await src.close();
+  }
+});
+
+atest('serena: close() stops the process (stdin EOF), and is safe to call twice', async () => {
+  const { repo, make, log } = serenaFixture();
+  const src = make();
+  await src.symbol(repo, 'Invoice');
+  const pid = log().find((e) => e.ev === 'start').pid;
+  assert.ok(alive(pid));
+  await src.close();
+  assert.ok(await waitFor(() => !alive(pid)), 'no process left behind');
+  await src.close();
+});
+
+atest('serena: read-only — only find_symbol / find_referencing_symbols are ever called', async () => {
+  const { repo, make, log } = serenaFixture();
+  const src = make();
+  try {
+    await src.symbol(repo, 'Invoice');
+    await src.references(repo, 'Svc/pay');
+    await src.references(repo, 'pay');
+    const names = new Set(log().filter((e) => e.ev === 'call').map((e) => e.name));
+    assert.deepStrictEqual([...names].sort(), ['find_referencing_symbols', 'find_symbol']);
+    const serena = require('../lib/context/providers/serena');
+    for (const n of names) assert.ok(serena.READ_ONLY_TOOLS.includes(n), `${n} is in the read-only set`);
+  } finally {
+    await src.close();
+  }
+});
+
+atest('serena: not installed is `unknown` with a hint and nothing is spawned', async () => {
+  const ws = tmpRepo();
+  const src = codesource.createCodeSource({ config: {}, workspaceDir: ws });
+  assert.strictEqual(src.available('references'), false);
+  const res = await src.references({ name: 'r', path: ws }, 'A/b');
+  assert.strictEqual(res.status, 'unknown');
+  assert.ok(/no code provider available for references/.test(res.reason));
+  assert.ok(/cairn context setup/.test(res.hint));
+});
+
+test('serena: test-file heuristic is provider-owned and covers common conventions', () => {
+  const { isTestPath } = require('../lib/context/providers/serena');
+  for (const p of ['src/a.spec.ts', 'src/a.test.tsx', 'test/x.ts', 'src/__tests__/a.ts', 'src/test/java/FooTest.java', 'Billing.Tests/InvoiceTests.cs', 'pkg/a_test.go', 'tests/test_a.py', 'e2e/login.ts']) {
+    assert.ok(isTestPath(p), `${p} is a test`);
+  }
+  for (const p of ['src/a.ts', 'src/contest.ts', 'src/main/java/Foo.java', 'src/Invoice.cs', 'src/latest/a.ts']) {
+    assert.ok(!isTestPath(p), `${p} is not a test`);
+  }
+});
+
+test('serena: setup — exact version required, Python prerequisite reported, ignores written idempotently', () => {
+  const serena = require('../lib/context/providers/serena');
+  const ws = tmpRepo();
+  fs.mkdirSync(path.join(ws, '.git'));
+  const repoPath = path.join(ws, 'backend');
+  fs.mkdirSync(path.join(repoPath, '.git'), { recursive: true });
+  const plain = path.join(ws, 'docs');
+  fs.mkdirSync(plain);
+  const repos = [{ name: 'backend', path: repoPath }, { name: 'docs', path: plain }];
+
+  assert.throws(() => serena.setup({ workspaceDir: ws, repos, version: '^2.1.0', install: false }), /exact version/);
+  try {
+    serena.setup({ workspaceDir: ws, repos, python: 'definitely-not-a-python' });
+    assert.fail('should have thrown');
+  } catch (err) {
+    assert.strictEqual(err.code, 'prerequisite');
+    assert.ok(/needs Python 3\.11–3\.14/.test(err.message), err.message);
+  }
+
+  const first = serena.setup({ workspaceDir: ws, repos, install: false });
+  assert.strictEqual(first.ignored.length, 2);
+  assert.ok(fs.readFileSync(path.join(ws, '.gitignore'), 'utf8').includes('_cairn/tools/'));
+  assert.ok(fs.readFileSync(path.join(repoPath, '.gitignore'), 'utf8').includes('.serena/'));
+  assert.ok(!fs.existsSync(path.join(plain, '.gitignore')), 'a non-git repo is left alone');
+  assert.strictEqual(serena.setup({ workspaceDir: ws, repos, install: false }).ignored.length, 0);
+});
+
+// ------------------------------------------------------- context/serve (MCP)
+
+const { createServer } = require('../lib/context/serve');
+
+function serveFixture({ withCode = true, withSerena = false } = {}) {
+  const ws = tmpRepo();
+  const backend = path.join(ws, 'backend');
+  const frontend = path.join(ws, 'frontend');
+  fs.mkdirSync(path.join(backend, 'src'), { recursive: true });
+  fs.writeFileSync(path.join(backend, 'src', 'a.ts'), 'export class Invoice {}\n');
+  writeCtx(backend, 'ai/contexts/entities/invoice.md', '---\ncounterpartOf: frontend:ai/contexts/entities/invoice.md\ndescribes: entity Invoice\n---\n# Invoice (backend)\n');
+  writeCtx(backend, 'ai/contexts/entities/ghost.md', '---\ndescribes: entity Ghost\n---\n# Ghost\n');
+  writeCtx(frontend, 'ai/contexts/entities/invoice.md', '---\n---\n# Invoice (frontend)\nfrontend body text\n');
+
+  const fake = path.join(ws, 'fake-cbm.js');
+  fs.writeFileSync(fake, FAKE_CBM);
+  const codeSource = withCode ? { command: process.execPath, args: [fake], version: '1.0.0' } : {};
+  const serenaLog = path.join(ws, 'fake-serena.log');
+  if (withSerena) {
+    const fakeSerena = path.join(ws, 'fake-serena.js');
+    fs.writeFileSync(fakeSerena, FAKE_SERENA);
+    codeSource.serena = { command: process.execPath, args: [fakeSerena], version: '1', env: { FAKE_LOG: serenaLog, FAKE_MARKER: path.join(ws, 'crashed') } };
+  }
+  const raw = { repos: [], ...(Object.keys(codeSource).length ? { codeSource } : {}) };
+  fs.writeFileSync(path.join(ws, 'repos.json'), JSON.stringify({ ...raw, repos: [{ name: 'backend', path: './backend' }, { name: 'frontend', path: './frontend' }] }));
+
+  const repos = [{ name: 'backend', path: backend }, { name: 'frontend', path: frontend }];
+  const server = createServer({ load: () => ({ raw, repos, workspaceDir: ws }) });
+  let id = 0;
+  const rpc = (method, params) => server.handle({ jsonrpc: '2.0', id: ++id, method, params });
+  const call = async (name, args = {}) => {
+    const res = (await rpc('tools/call', { name, arguments: args })).result;
+    const text = res.content[0].text;
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = text;
+    }
+    return { isError: Boolean(res.isError), data };
+  };
+  const serenaEvents = () => (fs.existsSync(serenaLog) ? fs.readFileSync(serenaLog, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l)) : []);
+  return { ws, server, rpc, call, serenaEvents };
+}
+
+atest('serve: handshake, tool list, ping, notifications, and JSON-RPC errors', async () => {
+  const { server, rpc } = serveFixture();
+  const init = await rpc('initialize', { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 't' } });
+  assert.strictEqual(init.result.protocolVersion, '2024-11-05', 'echoes a supported version');
+  assert.deepStrictEqual(init.result.capabilities, { tools: {} });
+  assert.strictEqual((await rpc('initialize', { protocolVersion: '1999-01-01' })).result.protocolVersion, '2025-06-18', 'unsupported version falls back to ours');
+
+  assert.strictEqual(await server.handle({ jsonrpc: '2.0', method: 'notifications/initialized' }), null, 'a notification gets no response');
+  assert.deepStrictEqual((await rpc('ping')).result, {});
+  assert.deepStrictEqual(
+    (await rpc('tools/list')).result.tools.map((t) => t.name),
+    ['list_contexts', 'counterparts', 'check', 'code_summary', 'code_symbol', 'code_references'],
+  );
+  assert.strictEqual((await rpc('nope')).error.code, -32601);
+  assert.strictEqual((await rpc('tools/call', { name: 'nope' })).error.code, -32602);
+  assert.strictEqual(JSON.parse(await server.handleLine('{not json')).error.code, -32700);
+  assert.strictEqual(JSON.parse(await server.handleLine('[]')).error.code, -32600, 'batching is rejected, not mishandled');
+  assert.strictEqual(await server.handleLine(JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' })), null);
+});
+
+atest('serve: counterparts returns the other repo\'s document content, so it need not be opened', async () => {
+  const { call } = serveFixture();
+  const res = await call('counterparts', { id: 'backend:ai/contexts/entities/invoice.md' });
+  assert.strictEqual(res.isError, false);
+  assert.strictEqual(res.data.counterparts.length, 1);
+  assert.strictEqual(res.data.counterparts[0].id, 'frontend:ai/contexts/entities/invoice.md');
+  assert.ok(res.data.counterparts[0].content.includes('frontend body text'));
+
+  // the reverse edge is inferred
+  const back = await call('counterparts', { id: 'frontend:ai/contexts/entities/invoice.md' });
+  assert.strictEqual(back.data.counterparts[0].inferred, true);
+
+  assert.strictEqual((await call('counterparts', { id: 'backend:ai/contexts/entities/nope.md' })).isError, true);
+  assert.strictEqual((await call('counterparts', {})).isError, true);
+});
+
+atest('serve: list_contexts lists nodes and filters by repo; an unknown repo is a tool error', async () => {
+  const { call } = serveFixture();
+  const all = await call('list_contexts');
+  assert.deepStrictEqual(all.data.repos, ['backend', 'frontend']);
+  assert.strictEqual(all.data.count, 3);
+  assert.strictEqual((await call('list_contexts', { repo: 'frontend' })).data.count, 1);
+  const bad = await call('list_contexts', { repo: 'nope' });
+  assert.strictEqual(bad.isError, true);
+  assert.ok(/Known: backend, frontend/.test(bad.data));
+});
+
+atest('serve: code_symbol / code_summary go through the codeSource; check code=true computes BROKEN_ANCHOR', async () => {
+  const { call, server } = serveFixture();
+  assert.strictEqual((await call('code_symbol', { repo: 'backend', name: 'Invoice' })).data.status, 'found');
+  assert.strictEqual((await call('code_symbol', { repo: 'backend', name: 'Nope' })).data.status, 'missing');
+  assert.strictEqual((await call('code_summary', { repo: 'backend' })).data.status, 'ok');
+  assert.strictEqual((await call('code_symbol', { repo: 'nope', name: 'X' })).isError, true);
+  assert.strictEqual((await call('code_symbol', { repo: 'backend' })).isError, true, 'name is required');
+
+  const withCode = (await call('check', { code: true })).data;
+  const broken = withCode.findings.filter((f) => f.type === 'BROKEN_ANCHOR');
+  assert.strictEqual(broken.length, 1);
+  assert.ok(broken[0].id.endsWith('ghost.md'));
+
+  const plain = (await call('check')).data;
+  assert.ok(plain.notChecked.includes('BROKEN_ANCHOR'), 'code lookups are opt-in per call');
+  await server.close();
+});
+
+atest('serve: code_references goes through Serena — test files omitted by default, ambiguity and bad input handled', async () => {
+  const { call, server } = serveFixture({ withCode: false, withSerena: true });
+  try {
+    const res = await call('code_references', { repo: 'backend', symbol: 'Svc/pay' });
+    assert.strictEqual(res.isError, false);
+    assert.strictEqual(res.data.status, 'ok');
+    assert.deepStrictEqual(res.data.references.map((r) => r.file), ['src/ctl.ts']);
+    assert.strictEqual(res.data.testFilesOmitted, 1);
+
+    const withTests = await call('code_references', { repo: 'backend', symbol: 'Svc/pay', include_tests: true });
+    assert.strictEqual(withTests.data.references.length, 2);
+
+    const limited = await call('code_references', { repo: 'backend', symbol: 'Svc/pay', include_tests: true, limit: 1 });
+    assert.strictEqual(limited.data.references.length, 1);
+    assert.strictEqual(limited.data.truncated, true);
+
+    const amb = await call('code_references', { repo: 'backend', symbol: 'pay' });
+    assert.strictEqual(amb.isError, false, 'ambiguity is an answer, not a tool error');
+    assert.strictEqual(amb.data.status, 'ambiguous');
+    assert.strictEqual(amb.data.candidates.length, 2);
+    assert.strictEqual((await call('code_references', { repo: 'backend', symbol: 'pay', file: 'src/other.ts' })).data.status, 'ok');
+
+    assert.strictEqual((await call('code_references', { repo: 'nope', symbol: 'X' })).isError, true);
+    assert.strictEqual((await call('code_references', { repo: 'backend' })).isError, true, 'symbol is required');
+  } finally {
+    await server.close();
+  }
+});
+
+atest('serve: code_symbol prefers Serena over the code-graph tool when both are installed, and close() stops Serena', async () => {
+  const { call, server, serenaEvents } = serveFixture({ withCode: true, withSerena: true });
+  const found = await call('code_symbol', { repo: 'backend', name: 'Invoice' });
+  assert.strictEqual(found.data.provider, 'serena', 'symbols are routed to Serena first');
+  assert.strictEqual((await call('code_summary', { repo: 'backend' })).data.status, 'ok', 'summary still comes from the code-graph tool');
+
+  const pid = serenaEvents().find((e) => e.ev === 'start').pid;
+  assert.ok(alive(pid));
+  await server.close();
+  assert.ok(await waitFor(() => !alive(pid)), 'closing the server leaves no Serena behind');
+});
+
+atest('serve: with no provider at all, code_references is `unknown` + hint — never read as "no references"', async () => {
+  const { call, server } = serveFixture({ withCode: false, withSerena: false });
+  const res = await call('code_references', { repo: 'backend', symbol: 'A/b' });
+  assert.strictEqual(res.isError, false);
+  assert.strictEqual(res.data.status, 'unknown');
+  assert.ok(/cairn context setup/.test(res.data.hint));
+  await server.close();
+});
+
+atest('serve: with no code tool installed, code answers are `unknown` + hint, not errors', async () => {
+  const { call, server } = serveFixture({ withCode: false });
+  const res = await call('code_symbol', { repo: 'backend', name: 'Invoice' });
+  assert.strictEqual(res.isError, false);
+  assert.strictEqual(res.data.status, 'unknown');
+  assert.ok(/cairn context setup/.test(res.data.hint));
+  assert.ok((await call('check', { code: true })).data.notChecked.includes('BROKEN_ANCHOR'));
+  await server.close();
+});
+
+test('serve: real stdio round trip — stdout carries only protocol lines', () => {
+  const { ws } = serveFixture();
+  const bin = path.join(__dirname, '..', 'bin', 'cairn.js');
+  const input = [
+    { jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 't', version: '0' } } },
+    { jsonrpc: '2.0', method: 'notifications/initialized' },
+    { jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'list_contexts', arguments: {} } },
+  ].map((m) => JSON.stringify(m)).join('\n') + '\n';
+
+  const r = spawnSync(process.execPath, [bin, 'context', 'serve', '--config', path.join(ws, 'repos.json')], { input, encoding: 'utf8', timeout: 30000 });
+  const lines = r.stdout.split('\n').filter(Boolean);
+  assert.strictEqual(lines.length, 2, `one response per request, none for the notification; got: ${r.stdout}`);
+  const [init, list] = lines.map((l) => JSON.parse(l));
+  assert.strictEqual(init.id, 1);
+  assert.strictEqual(init.result.serverInfo.name, 'cairn-context');
+  assert.strictEqual(JSON.parse(list.result.content[0].text).count, 3);
 });
 
 // ------------------------------------------------------------------- runner

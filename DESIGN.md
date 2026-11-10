@@ -1201,9 +1201,24 @@ Sources: [Riftmap on cross-repo context](https://riftmap.dev/blog/ai-coding-agen
 - **OpenAPI: which spec versions, and one contract per project or several?** The
   check needs a resolver for `$ref` and a way to name "the contract for this edge".
   Unspecified.
-- **`codeSource` MCP — a concrete first integration, or interface-only?** Ship the
-  `workspace.json` hook and leave every code anchor `unknown` until someone wires
-  Sourcegraph or Riftmap. First real integration is not scheduled.
+- **`codeSource` MCP — a concrete first integration, or interface-only?** **Decided
+  2026-11-10: pluggable providers, language-neutral core** (`lib/context/codesource.js` is a
+  capability facade — `symbols`, `references`, `summary` — over a provider registry; providers
+  own parsers and language servers, cairn core knows no languages). **Serena is the default**
+  (`providers/serena.js`): a long-lived process per repo fronting the repo's language server,
+  read-only via `fixed_tools` in a private SERENA_HOME. Measured on three NestJS repos: 99%
+  caller recall through cairn's provider stack, no references to files that never mention the
+  symbol. `codebase-memory-mcp` (`providers/codebase-memory.js`) is the **optional** second
+  provider, for the architecture `summary`; it is not used for `references` because it does not
+  resolve tsconfig `paths` aliases (20% recall, 0% on an alias-only repo). Both are installed
+  per workspace and version-pinned under `<workspace>/_cairn/tools/` (`cairn context setup`;
+  never global, never a tool's own agent-config installer). `BROKEN_ANCHOR` is computed from
+  `describes: <kind> <Symbol>`; no provider → `unknown` + hint. Only TypeScript/NestJS is
+  verified; other languages are "supported by the provider, untested here". Cross-repo links
+  stay declared (`counterpartOf`): the code-graph tool's cross-repo mode found 0 edges on snap
+  backend/frontend. Sourcegraph (Enterprise, HTTP) is a possible later provider. Still open:
+  `code_references` / `code_find` as `cairn context serve` tools, and `cairn sync` registering
+  the server. See INFRASTRUCTURE.md.
 - Rename the working directory `D:/projects/ai-kit` → `cairn`? Git remote and
   `.idea/` implications; not done.
 - Run `cairn init` against the five real repos — deletes 237 lines from each and

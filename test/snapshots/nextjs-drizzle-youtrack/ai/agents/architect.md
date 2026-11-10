@@ -199,6 +199,7 @@ Agent(
 - **Parallel for independent questions.** Put several `Agent` calls in one message (analogs of the pattern, callers of the entity, tests that cover it) instead of one broad question.
 - **It locates, you decide.** The report is `file:line` and a reason. Open the few files that matter yourself before building a plan on them, and never prescribe a pattern from the scout's one-line description alone.
 - **Use it in both modes.** Mode A: what already exists and what constrains the change. Mode B: the existing analog the checklist below requires, and the files the plan will touch.
+- **Callers of a named symbol.** The scout uses the `code_references` tool (MCP server `cairn`, language-server based) when it is registered, and Grep otherwise. If you ask "who calls `X/y`", say it is a symbol so the scout takes that route. A grep-only answer to a caller question can miss aliased imports and injected services, so treat "no callers found" from it as unproven.
 ---
 
 ## Mandatory context checklist

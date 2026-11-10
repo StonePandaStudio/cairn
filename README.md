@@ -123,6 +123,79 @@ pushes, and reports a repo with a blocked pin instead of syncing it with the old
 Exit `3` means conflicts in some repo, `1` an update failed or was blocked. Afterwards
 `cairn doctor --strict` should be clean.
 
+## Everyday workflow
+
+Once the repos are set up (see the sections above), a normal day looks like this. Steps 1
+and 4 apply to a group of repos; the rest apply to any repo.
+
+**One-time, per workspace** (skip if you do not want code lookups; everything else works
+without it):
+```bash
+cairn context setup        # from the folder holding repos.json
+```
+This installs a version-pinned [Serena](https://github.com/oraios/serena) into
+`_cairn/tools/serena/` (a Python 3.11–3.14 venv, about 170 MB, gitignored, never global,
+read-only) and gitignores the `.serena/` folder Serena writes into each repo. Serena fronts
+the repo's language server, so symbol and reference lookups work for any language it
+supports; only TypeScript/NestJS has been measured here. The first lookup in a new
+workspace takes about a minute while the language server installs and warms up, and later
+ones are fast. On Windows keep the workspace path short (under about 125 characters, a pip
+limit). `cairn context setup --provider codebase-memory-mcp` adds an optional architecture
+summary tool. Then register the MCP server once in your agent's config, so agents in any
+repo can ask about the others:
+```json
+{ "command": "npx", "args": ["cairn", "context", "serve", "--config", "<path>/repos.json"] }
+```
+Claude Code: `claude mcp add cairn-context -- npx cairn context serve --config <path>/repos.json`.
+
+**Each day**
+
+1. **Check the group is in step.** From the folder holding `repos.json`:
+   ```bash
+   cairn doctor               # drift between repos, outdated renders, stale installs
+   ```
+   If cairn itself was updated, follow "Update cairn" above (`cairn upgrade --apply`, or
+   `npm i -D …@latest` then `cairn sync` per repo).
+2. **Work a task, in the repo it belongs to.** In Claude Code:
+   ```
+   /create-brief → /enrich-description → /plan-task → /execute-plan → /code-review
+   ```
+   Fill in the brief yourself; the agents do the rest and stop for your decisions. The plan
+   step also updates `ai/contexts/**`. If the task needs a change in a sibling repo,
+   `/request-change` files it there through the tracker.
+3. **Let the agent look across repos.** With the MCP server registered, the architect can
+   ask `counterparts` for the matching doc in another repo (content included, no checkout
+   needed), `code_symbol` whether a type exists there, or `code_summary` for an overview.
+   The first question about a repo may take several seconds while it is indexed; later ones
+   re-index only if the code changed. Without the tool installed those answers are
+   `unknown` with a hint, never an error.
+4. **Keep the cross-repo docs honest.** When you add or rename a context doc, link its
+   counterpart in the other repo and name the code it describes, in the doc's frontmatter:
+   ```yaml
+   ---
+   counterpartOf: frontend:ai/contexts/entities/invoice.md
+   describes: entity Invoice
+   ---
+   ```
+   Then, from the workspace folder:
+   ```bash
+   cairn context check            # CANDIDATE / DANGLING / MISSING_FRONTMATTER / BROKEN_ANCHOR
+   cairn context check --no-code  # same, skipping the code lookups (faster)
+   ```
+   `check` reports and exits `0`; it never fails a build (`--strict` opts in). A
+   `CANDIDATE` is a suggestion, not an error: link it, or silence it with
+   `notCounterpartOf`.
+5. **Commit.** Generated files, `ai/` and `ai/contexts/` changes are ordinary tracked
+   files. `_cairn/tools/` and `_cairn/cache/` are gitignored and never committed.
+
+**Poking at it by hand** (the same calls the agents make):
+```bash
+cairn context build                          # the context graph
+cairn context counterparts backend:ai/contexts/entities/invoice.md
+cairn context code symbol backend InvoiceService
+cairn context code summary backend
+```
+
 ## What it does
 
 | Command | |
@@ -137,7 +210,7 @@ Exit `3` means conflicts in some repo, `1` an update failed or was blocked. Afte
 | `cairn upgrade` | Walks the repos in a `repos.json`: updates the installed cairn through each repo's own package manager (npm / yarn / pnpm), then runs `cairn sync` with that version. Report-only unless `--apply`; never commits or pushes. A repo whose pin excludes the running version (`^0.9.0` stops at 0.9.x) is reported as blocked and not synced, unless `--bump-pin` rewrites the pin through the package manager |
 | `cairn override <cmd>` | Manages `ai/local/`, a repo's own additions to the generated agent docs: `status`, `extract <agent doc>`, `ack <slot>`. See "Customizing agent docs" |
 | `cairn preset list` | The bundled presets — kind (framework / orm / styling), what each ships, and which ones this repo's `stack` uses. `render`, `sync` and `init` also check the stack: a name listed twice or `core` as an entry is refused; a name with no preset (a typo) warns with a suggestion — `cli` and `unknown` are the deliberate exceptions |
-| `cairn context <cmd>` | **Prototype.** Resolves `ai/contexts/**/*.md` across a `repos.json` workspace into a graph — declared `counterpartOf` links, inferred reverse edges, and a same-path/same-title suggest pass. `build` / `check` / `counterparts <id>`; `check` never fails CI on its own (`--strict` opts in) |
+| `cairn context <cmd>` | **Prototype.** Resolves `ai/contexts/**/*.md` across a `repos.json` workspace into a graph — declared `counterpartOf` links, inferred reverse edges, and a same-path/same-title suggest pass. `build` / `check` / `counterparts <id>`; `check` never fails CI on its own (`--strict` opts in). `setup` installs a pinned code provider into `<workspace>/_cairn/tools/` — per workspace, never global; Serena by default (symbols + references via the repo's language server), `--provider codebase-memory-mcp` for an optional architecture summary — and `code symbol <repo> <name>` / `code references <repo> <Class/method>` / `code summary <repo>` query it; with a provider, `check` also verifies `describes: entity Foo` anchors (`BROKEN_ANCHOR`). `serve` is an MCP stdio server over all of it (`list_contexts`, `counterparts`, `check`, `code_symbol`, `code_references`, `code_summary`): register once per workspace, `{"command":"npx","args":["cairn","context","serve","--config","<path>/repos.json"]}`. cairn ships no code parser; without the tool, code answers are `unknown` |
 
 `cairn render` is **greenfield only**: it writes files that do not exist, records them
 in the manifest, stores the render in `_cairn/base/`, and leaves anything already on
