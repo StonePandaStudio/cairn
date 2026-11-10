@@ -164,7 +164,7 @@ from; the developer reads it.
 #### B.4 — Update context documentation
 
 - **Update** existing `ai/contexts/**` files when the structure, business logic, or data flow they describe has changed.
-- **Create** a new context file when the task adds an area that doesn't yet have one. Follow the shape of existing docs.
+- **Create** a new context file when the task adds an area that doesn't yet have one. Follow the shape of existing docs. If it is about one named code symbol, add `describes: <kind> <Symbol>` to its frontmatter (`describes: entity Invoice`; the bare declared name, never `Class/method`; a list for several). When the plan renames or removes a described symbol, update or drop that line in the same step, so `cairn context check` does not report `BROKEN_ANCHOR`.
 - **Defer to the developer** any file that can only be finalized after implementation: list it in the plan's "Context Docs to Update" with *When* = `after implementation`.
 
 #### Before returning — fresh session and model

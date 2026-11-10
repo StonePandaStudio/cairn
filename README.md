@@ -177,7 +177,9 @@ Claude Code asks you to approve a project server the first time it sees it. The 
    re-index only if the code changed. Without the tool installed those answers are
    `unknown` with a hint, never an error.
 4. **Keep the cross-repo docs honest.** When you add or rename a context doc, link its
-   counterpart in the other repo and name the code it describes, in the doc's frontmatter:
+   counterpart in the other repo and name the code it describes, in the doc's frontmatter
+   (`/discover` and the architect's context updates write `describes:` for you when a doc is
+   about one named symbol, confirming the name with `code_symbol` when the tool is available):
    ```yaml
    ---
    counterpartOf: frontend:ai/contexts/entities/invoice.md

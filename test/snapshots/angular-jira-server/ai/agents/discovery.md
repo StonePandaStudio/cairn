@@ -78,6 +78,7 @@ Every file starts with this frontmatter and nothing else above it:
 type: entity
 source: src/invoice/invoice.entity.ts
 status: draft
+describes: entity Invoice
 ---
 # Invoice
 
@@ -92,6 +93,14 @@ status: draft
 - `type` is the category's singular (`entity`, `feature`, `page`, …); `source` is the
   main file, or a list when a subject spans several; `status: draft` stays until a
   human has reviewed the doc.
+- Add `describes: <kind> <Symbol>` when the doc is about one named code symbol (a class,
+  interface, function or component): `<kind>` is the `type`, `<Symbol>` the bare name
+  exactly as declared in the source file you read (`Invoice`, not `Invoice/pay` or a file
+  name). For a subject spanning several symbols, use a list of such lines. Never guess:
+  if the `code_symbol` tool is available, call it to confirm the symbol exists in this
+  repo; otherwise use only a name you saw declared. Leave the line out when there is no
+  single symbol. `cairn context check` reports a symbol that no longer exists as
+  `BROKEN_ANCHOR`, so a wrong name creates a false alarm.
 - Add `counterpartOf: <repo>:<path>` only when a sibling repo's doc is named in the
   Workspace table of `ai/AGENTS.md` **and** you have read it. Otherwise leave it out;
   `cairn context check` will suggest pairs.
