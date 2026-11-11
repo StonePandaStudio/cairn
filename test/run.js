@@ -3757,6 +3757,99 @@ test('serve: real stdio round trip — stdout carries only protocol lines', () =
   assert.strictEqual(JSON.parse(list.result.content[0].text).count, 3);
 });
 
+// ------------------------------------------------------------- context adopt
+
+const adoptMod = require('../lib/context/adopt');
+
+function adoptWs() {
+  const { ws, repos, config } = registerWs();
+  const put = (repo, rel, text) => {
+    const f = path.join(ws, repo, rel);
+    fs.mkdirSync(path.dirname(f), { recursive: true });
+    fs.writeFileSync(f, text);
+    return f;
+  };
+  put('backend', 'ai/contexts/entities/invoice.md', '# Invoice Entity\n\nBody stays.\n');
+  put('frontend', 'ai/contexts/entities/invoice.md', '# Invoice entity\r\n\r\nWindows line endings.\r\n');
+  put('backend', 'ai/contexts/features/payu/overview.md', '---\nstatus: draft\n---\n# PayU\n');
+  put('backend', 'ai/contexts/testing/conventions.md', '# Testing\n');
+  put('backend', 'ai/contexts/features/only-here.md', '# Only here\n');
+  return { ws, repos, config, put };
+}
+
+test('adopt: plan adds type from the category and, with the flag, same-path counterparts only', () => {
+  const { repos } = adoptWs();
+  const graph = context.build(repos);
+  const cands = context.suggest(graph.nodes);
+
+  const plain = adoptMod.plan(graph, { candidates: cands });
+  const byId = Object.fromEntries(plain.items.map((i) => [i.id, i.add]));
+  assert.deepStrictEqual(byId['backend:ai/contexts/entities/invoice.md'], { type: 'entity' });
+  assert.deepStrictEqual(byId['backend:ai/contexts/features/payu/overview.md'], { type: 'feature' }, 'existing frontmatter gets only the missing key');
+  assert.deepStrictEqual(byId['backend:ai/contexts/testing/conventions.md'], { type: 'testing' }, 'a non-plural folder is kept');
+
+  const linked = adoptMod.plan(graph, { candidates: cands, linkCandidates: true });
+  const l = Object.fromEntries(linked.items.map((i) => [i.id, i.add]));
+  assert.strictEqual(l['backend:ai/contexts/entities/invoice.md'].counterpartOf, 'frontend:ai/contexts/entities/invoice.md');
+  assert.strictEqual(l['frontend:ai/contexts/entities/invoice.md'].counterpartOf, 'backend:ai/contexts/entities/invoice.md');
+  assert.strictEqual(l['backend:ai/contexts/features/only-here.md'].counterpartOf, undefined, 'no pair, no link');
+});
+
+test('adopt: apply keeps bodies and line endings, is idempotent, and makes check see the links', () => {
+  const { ws, repos, put } = adoptWs();
+  const before = fs.readFileSync(path.join(ws, 'backend/ai/contexts/entities/invoice.md'), 'utf8');
+  let graph = context.build(repos);
+  const res = adoptMod.apply(adoptMod.plan(graph, { candidates: context.suggest(graph.nodes), linkCandidates: true }).items);
+  assert.strictEqual(res.failed.length, 0);
+
+  const be = fs.readFileSync(path.join(ws, 'backend/ai/contexts/entities/invoice.md'), 'utf8');
+  assert.ok(be.startsWith('---\ntype: entity\ncounterpartOf: frontend:ai/contexts/entities/invoice.md\n---\n'));
+  assert.ok(be.endsWith(before), 'the body is byte-for-byte what it was');
+  const fe = fs.readFileSync(path.join(ws, 'frontend/ai/contexts/entities/invoice.md'), 'utf8');
+  assert.ok(fe.startsWith('---\r\ntype: entity\r\n'), 'CRLF file gets CRLF frontmatter');
+  const payu = fs.readFileSync(path.join(ws, 'backend/ai/contexts/features/payu/overview.md'), 'utf8');
+  assert.strictEqual(payu, '---\nstatus: draft\ntype: feature\n---\n# PayU\n');
+
+  graph = context.build(repos);
+  assert.ok(graph.edges.some((e) => e.type === 'counterpartOf' && !e.inferred), 'declared edge now exists');
+  const found = context.check(graph).findings;
+  assert.ok(!found.some((f) => f.type === 'CANDIDATE'), 'the candidate is resolved');
+  assert.ok(!found.some((f) => f.type === 'MISSING_FRONTMATTER'));
+
+  const again = adoptMod.plan(graph, { candidates: context.suggest(graph.nodes), linkCandidates: true });
+  assert.strictEqual(again.items.length, 0, 'a second run has nothing to add');
+  put('backend', 'ai/contexts/entities/typed.md', '---\ntype: entity\n---\n# Typed\n');
+  assert.strictEqual(adoptMod.plan(context.build(repos), {}).items.length, 0, 'a doc that already has a type is not touched');
+});
+
+test('adopt: a file with a byte-order mark keeps it first, and the result parses', () => {
+  const out = adoptMod.withFrontmatter('﻿# Title\n', ['type: entity']);
+  assert.ok(out.startsWith('﻿---\ntype: entity\n---\n# Title'));
+  assert.strictEqual(frontmatter.parse(out).data.type, 'entity');
+  const again = adoptMod.withFrontmatter(out, ['counterpartOf: a:b']);
+  assert.ok(again.startsWith('﻿---\ntype: entity\ncounterpartOf: a:b\n---\n'));
+});
+
+test('adopt: CLI is a dry run by default, --write applies, an unterminated block is reported and kept', () => {
+  const { ws, config, put } = adoptWs();
+  const bin = path.join(__dirname, '..', 'bin', 'cairn.js');
+  const run = (...a) => spawnSync(process.execPath, [bin, 'context', 'adopt', '--config', config, '--json', ...a], { encoding: 'utf8' });
+  const f = path.join(ws, 'backend/ai/contexts/entities/invoice.md');
+  const before = fs.readFileSync(f, 'utf8');
+
+  const dry = run();
+  assert.strictEqual(dry.status, 0, dry.stderr);
+  assert.strictEqual(JSON.parse(dry.stdout).write, false);
+  assert.strictEqual(fs.readFileSync(f, 'utf8'), before, 'dry run writes nothing');
+
+  const bad = put('backend', 'ai/contexts/features/broken.md', '---\nstatus: x\n# never closed\n');
+  const wrote = run('--write');
+  assert.strictEqual(wrote.status, 1, 'a failure is a non-zero exit');
+  assert.ok(JSON.parse(wrote.stdout).failed.some((x) => /not closed/.test(x.reason)));
+  assert.strictEqual(fs.readFileSync(bad, 'utf8'), '---\nstatus: x\n# never closed\n');
+  assert.ok(fs.readFileSync(f, 'utf8').startsWith('---\ntype: entity'));
+});
+
 // ---------------------------------------------------------- context register
 
 const registerMod = require('../lib/context/register');

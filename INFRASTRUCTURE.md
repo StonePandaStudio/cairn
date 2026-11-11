@@ -73,7 +73,7 @@ instead of the class), so anchors verify "a symbol of this name exists", not its
 ## Not built yet
 
 `cairn sync` doing the MCP registration (for now `cairn context register` writes each repo's `.mcp.json` on demand), a Sourcegraph (HTTP)
-provider, `cairn context adopt`, the `local` tracker provider, OpenAPI contract checks.
+provider, the interactive form of `cairn context adopt` (conffile-style prompts; a non-interactive `adopt` exists), the `local` tracker provider, OpenAPI contract checks.
 `setup` warms each repo's language server once (a throwaway lookup per repo; `--no-warm`
 skips it), so the one-time cold start does not land on an agent's first question.
 

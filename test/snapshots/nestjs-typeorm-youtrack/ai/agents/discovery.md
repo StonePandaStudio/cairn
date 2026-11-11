@@ -5,7 +5,7 @@
 Reads an existing code base and drafts the `ai/contexts/**` docs it does not have yet,
 so `NestjsArchitectAgent` has something to read before the first task. Writes drafts
 for the user to review. Does **not** change source, and does **not** edit or replace
-a context that already exists.
+a context that already exists (the one exception, adding frontmatter lines in `discover adopt`, is D.6).
 
 **Context:** run `discover` in a **fresh session**. It reads a lot of code; delegate
 the reading (see D.2) rather than doing it in the main session.
@@ -19,7 +19,7 @@ the reading (see D.2) rather than doing it in the main session.
    `code-scout` read this session. Put the paths in the doc's `source` field and
    under `## References`.
 3. **Idempotent.** A re-run adds only what is missing. It never overwrites, merges
-   into or renames a file that exists, whoever wrote it.
+   into or renames a file that exists, whoever wrote it (D.6 adds frontmatter lines only).
 4. **Propose, then write.** The list of contexts to create is confirmed by the user
    before any file is written.
 
@@ -120,13 +120,37 @@ what was created, what was skipped and why, areas not covered, and *Needs a huma
 Then tell the user to review the drafts, remove `status: draft` once happy, and run
 `npx cairn context check`.
 
+### D.6 — Adopt existing docs (only when asked: `discover adopt`)
+
+For docs that already exist but carry no `describes:` (typically written by hand, before
+the convention). This is the one case where an existing context is touched, and only its
+**frontmatter**: you add lines, you never change the body or a key that is already there.
+
+1. Run `npx cairn context adopt` first (dry run, then `--write` once the user agrees).
+   It adds `type:` from the folder and, with `--link-candidates`, `counterpartOf:` for
+   same-path pairs. Do not hand-write those two.
+2. For each doc with no `describes:` whose subject is one named code symbol, find the
+   declaration: read the doc, then use `code_symbol` (or a `code-scout`) to locate it.
+   The name is often not the doc's title (`Invoice` doc, `InvoiceEntity` class); try the
+   obvious variants for this repo's conventions and take the one whose `file` and `label`
+   (class, interface, function) match what the doc describes. A same-named variable, DTO
+   or schema constant is not the match.
+3. Present a table `doc | symbol | declared in | confidence` and wait. Write only the
+   rows the user confirms, as one added `describes: <kind> <Symbol>` line per doc (`<kind>` is the doc's own `type`, e.g. `entity`, not the code kind).
+4. A doc you could not match, or that covers several things, gets no line; list it under
+   *Needs a human*. A wrong anchor is worse than none: `cairn context check` reports it as
+   `BROKEN_ANCHOR`.
+5. Finish with `npx cairn context check` and report what it says.
+
 ---
 
 ## What this agent does not do
 
 - Does not edit source, tests or config.
-- Does not edit, rename, delete or reorder an existing context. Off-convention docs
-  are for `cairn context check` and the user.
+- Does not edit, rename, delete or reorder an existing context, with one exception: in
+  `discover adopt` (D.6) it may add frontmatter lines to a doc, with the user's
+  confirmation, and nothing else. Off-convention docs are for `cairn context check`
+  and the user.
 - Does not write `code-guidelines.md`; it may note in the report that a convention
   is visible in the code, as a pointer for the user.
 - Does not touch the tracker.

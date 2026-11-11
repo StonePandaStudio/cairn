@@ -176,7 +176,18 @@ Claude Code asks you to approve a project server the first time it sees it. The 
    The first question about a repo may take several seconds while it is indexed; later ones
    re-index only if the code changed. Without the tool installed those answers are
    `unknown` with a hint, never an error.
-4. **Keep the cross-repo docs honest.** When you add or rename a context doc, link its
+4. **Bring existing docs under the convention (once, brownfield).** Docs written before
+   cairn have no frontmatter, so `check` can say nothing about them:
+   ```bash
+   cairn context adopt                      # dry run: what would be added
+   cairn context adopt --link-candidates --write
+   ```
+   This adds `type:` from the category folder and, with `--link-candidates`, `counterpartOf:`
+   for same-path pairs in another repo (review the pairs first). It only adds frontmatter
+   lines: bodies and existing keys are never touched, and a second run adds nothing. Then run
+   `/discover adopt` in each repo: the discovery agent proposes a `describes:` line per doc
+   (confirming the class with `code_symbol`), you confirm, it writes only those lines.
+5. **Keep the cross-repo docs honest.** When you add or rename a context doc, link its
    counterpart in the other repo and name the code it describes, in the doc's frontmatter
    (`/discover` and the architect's context updates write `describes:` for you when a doc is
    about one named symbol, confirming the name with `code_symbol` when the tool is available):
@@ -194,7 +205,7 @@ Claude Code asks you to approve a project server the first time it sees it. The 
    `check` reports and exits `0`; it never fails a build (`--strict` opts in). A
    `CANDIDATE` is a suggestion, not an error: link it, or silence it with
    `notCounterpartOf`.
-5. **Commit.** Generated files, `ai/` and `ai/contexts/` changes are ordinary tracked
+6. **Commit.** Generated files, `ai/` and `ai/contexts/` changes are ordinary tracked
    files. `_cairn/tools/` and `_cairn/cache/` are gitignored and never committed.
 
 **Poking at it by hand** (the same calls the agents make):
@@ -219,7 +230,7 @@ cairn context code summary backend
 | `cairn upgrade` | Walks the repos in a `repos.json`: updates the installed cairn through each repo's own package manager (npm / yarn / pnpm), then runs `cairn sync` with that version. Report-only unless `--apply`; never commits or pushes. A repo whose pin excludes the running version (`^0.9.0` stops at 0.9.x) is reported as blocked and not synced, unless `--bump-pin` rewrites the pin through the package manager |
 | `cairn override <cmd>` | Manages `ai/local/`, a repo's own additions to the generated agent docs: `status`, `extract <agent doc>`, `ack <slot>`. See "Customizing agent docs" |
 | `cairn preset list` | The bundled presets — kind (framework / orm / styling), what each ships, and which ones this repo's `stack` uses. `render`, `sync` and `init` also check the stack: a name listed twice or `core` as an entry is refused; a name with no preset (a typo) warns with a suggestion — `cli` and `unknown` are the deliberate exceptions |
-| `cairn context <cmd>` | **Prototype.** Resolves `ai/contexts/**/*.md` across a `repos.json` workspace into a graph — declared `counterpartOf` links, inferred reverse edges, and a same-path/same-title suggest pass. `build` / `check` / `counterparts <id>`; `check` never fails CI on its own (`--strict` opts in). `setup` installs a pinned code provider into `<workspace>/_cairn/tools/` — per workspace, never global; Serena by default (symbols + references via the repo's language server), `--provider codebase-memory-mcp` for an optional architecture summary — and `code symbol <repo> <name>` / `code references <repo> <Class/method>` / `code summary <repo>` query it; with a provider, `check` also verifies `describes: entity Foo` anchors (`BROKEN_ANCHOR`). `register` adds the server to each repo's `.mcp.json`; `serve` is an MCP stdio server over all of it (`list_contexts`, `counterparts`, `check`, `code_symbol`, `code_references`, `code_summary`): cairn ships no code parser; without the tool, code answers are `unknown` |
+| `cairn context <cmd>` | **Prototype.** Resolves `ai/contexts/**/*.md` across a `repos.json` workspace into a graph — declared `counterpartOf` links, inferred reverse edges, and a same-path/same-title suggest pass. `build` / `check` / `counterparts <id>`; `check` never fails CI on its own (`--strict` opts in). `adopt` retrofits frontmatter onto existing docs (`type:`, and with `--link-candidates` `counterpartOf:`; additions only, dry run unless `--write`). `setup` installs a pinned code provider into `<workspace>/_cairn/tools/` — per workspace, never global; Serena by default (symbols + references via the repo's language server), `--provider codebase-memory-mcp` for an optional architecture summary — and `code symbol <repo> <name>` / `code references <repo> <Class/method>` / `code summary <repo>` query it; with a provider, `check` also verifies `describes: entity Foo` anchors (`BROKEN_ANCHOR`). `register` adds the server to each repo's `.mcp.json`; `serve` is an MCP stdio server over all of it (`list_contexts`, `counterparts`, `check`, `code_symbol`, `code_references`, `code_summary`): cairn ships no code parser; without the tool, code answers are `unknown` |
 
 `cairn render` is **greenfield only**: it writes files that do not exist, records them
 in the manifest, stores the render in `_cairn/base/`, and leaves anything already on

@@ -58,7 +58,7 @@ flowchart TB
     ONE -- "parses" --> S1 & S2
     ONE -- "writes / reads" --> C1 & C2
 
-    CLI["cairn CLI<br/>context setup (+ warm LS) · register · code · check<br/>no repos.json → current repo is the workspace"] -. "same facade" .-> CS
+    CLI["cairn CLI<br/>context setup (+ warm LS) · adopt · register · code · check<br/>no repos.json → current repo is the workspace"] -. "same facade" .-> CS
     CLI -. "npm install --prefix" .-> TOOLDIR
     CLI -. "register: merge 'cairn' entry" .-> MCPJ["each repo's .mcp.json"]
     A1 & A2 & A3 -. "read at session start" .-> MCPJ
