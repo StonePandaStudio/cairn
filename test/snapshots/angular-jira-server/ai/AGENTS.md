@@ -64,6 +64,22 @@ section. These add tests to code that already exists:
 
 ---
 
+## Code lookups
+
+When the `cairn` MCP server is connected (`/mcp` lists it), "who uses X", "where is X defined"
+and "is it safe to change X" questions have a better tool than text search. Its tools are
+deferred in Claude Code: load `mcp__cairn__code_references` and `mcp__cairn__code_symbol` with
+ToolSearch first, or hand the question to the `code-scout` sub-agent, which already has them.
+They cover every repo of the workspace.
+
+- A unique, private name in one file does not need them; one Grep is enough.
+- A `missing` or empty answer is not proof of absence: names used as strings, DI tokens,
+  reflection, templates, and generated files are invisible to them. Read `notes` in the reply.
+- A symbol lookup matches by name, so check the file and label of the match before relying on it.
+- Before a delete, rename or signature change, run one Grep as well and compare the two.
+
+---
+
 ## Tracker
 
 `create_brief`, `enrich_description` and `plan_task` sync task state to the

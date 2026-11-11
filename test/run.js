@@ -3869,7 +3869,7 @@ test('register: creates .mcp.json with node + the repo own cairn, a repo-relativ
   const posix = registerMod.registerAll(repos, config);
   assert.deepStrictEqual(posix.map((r) => r.action), ['created', 'created']);
   const doc = JSON.parse(fs.readFileSync(path.join(repos[0].path, '.mcp.json'), 'utf8'));
-  assert.deepStrictEqual(doc.mcpServers.cairn, { command: 'node', args: ['node_modules/@stonepandastudio/cairn/bin/cairn.js', 'context', 'serve', '--config', '../repos.json'] });
+  assert.deepStrictEqual(doc.mcpServers.cairn, { command: 'node', args: ['node_modules/@stonepandastudio/cairn/bin/cairn.js', 'context', 'serve', '--config', '../repos.json'], alwaysLoad: true });
   assert.ok(posix.every((r) => r.installed === false), 'reports that cairn is not installed in the repo');
   const bin = path.join(repos[0].path, registerMod.CAIRN_BIN_REL);
   fs.mkdirSync(path.dirname(bin), { recursive: true });

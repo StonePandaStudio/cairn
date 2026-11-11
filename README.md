@@ -1,18 +1,26 @@
 # @stonepandastudio/cairn
 
-Shared AI workflow scaffolding, kept in sync across several repos.
+Shared AI workflow and project context for a group of repos, so coding agents in any one repo
+know the rest.
 
-Each repo carries an `ai/` folder and a `.claude/` folder holding the same workflow —
-brief → description → plan → execute → review, run by architect, developer and reviewer
-agents, with the steps optionally mirrored into an issue tracker. Hand-copied between
-repos, they drift. cairn renders them from one set of presets (a stack-agnostic core plus
-framework, ORM and styling presets), reports where existing copies disagree, and carries
-later preset changes into a repo without overwriting what it has customized: local
-additions live in `ai/local/`, everything else is three-way merged.
+cairn does two things:
+
+- **A common workflow, kept in sync.** Each repo carries an `ai/` and a `.claude/` folder with
+  the same workflow — brief → description → plan → execute → review, run by architect,
+  developer and reviewer agents, optionally mirrored into an issue tracker. cairn renders them
+  from one set of presets (a stack-agnostic core plus framework, ORM and styling presets),
+  reports where copies drift apart, and carries later preset changes into a repo without
+  overwriting what it has customized: local additions live in `ai/local/`, everything else is
+  three-way merged.
+- **Context that spans repos.** The docs under `ai/contexts/` (entities, features, decisions)
+  are linked across the workspace, and one MCP server per workspace serves them to agents,
+  together with symbol and reference lookups from a third-party code tool (Serena by default).
+  An agent in the frontend can ask what the backend's `Staff` entity is, or who calls a
+  function. cairn never parses code itself. It is verified on TypeScript/NestJS only.
 
 A cairn is a stack of stones left to mark a trail. That is what this does: it leaves
-markers — a manifest of what it generated, and a report of where the copies stopped
-agreeing.
+markers — a manifest of what it generated, a report of where the copies stopped agreeing,
+and a map of how the repos connect.
 
 ## Start on a new repo (or a group of repos)
 
@@ -123,17 +131,15 @@ pushes, and reports a repo with a blocked pin instead of syncing it with the old
 Exit `3` means conflicts in some repo, `1` an update failed or was blocked. Afterwards
 `cairn doctor --strict` should be clean.
 
-## Everyday workflow
+## Set up code lookups (once per workspace)
 
-Once the repos are set up (see the sections above), a normal day looks like this. Steps 1
-and 4 apply to a group of repos; the rest apply to any repo.
+Optional: everything else works without it. It lets agents in any repo ask about the others
+and look up symbols and references.
 
 **One repo only?** Run the same commands from inside it: with no `repos.json` and no
 `--config`, that repo alone is the workspace (tools in `<repo>/_cairn/tools/`, and
 `register` writes a `.mcp.json` whose server needs no `--config`).
 
-**One-time, per workspace** (skip if you do not want code lookups; everything else works
-without it):
 ```bash
 cairn context setup        # from the folder holding repos.json
 ```
@@ -152,12 +158,97 @@ cairn context register     # adds a "cairn" entry to each repo's .mcp.json (merg
 ```
 Claude Code asks you to approve a project server the first time it sees it. The name must stay
 `cairn`: the agent docs refer to `mcp__cairn__*`. The entry is
-`{ "command": "node", "args": ["node_modules/@stonepandastudio/cairn/bin/cairn.js", "context", "serve", "--config", "../repos.json"] }`
+`{ "command": "node", "args": ["node_modules/@stonepandastudio/cairn/bin/cairn.js", "context", "serve", "--config", "../repos.json"], "alwaysLoad": true }`
 (`node` + the repo's own installed cairn, so the same file works on Windows, macOS and Linux), with
-paths relative to each repo. Start Claude Code at the repo root: from a subfolder Claude Code runs
+paths relative to each repo. `alwaysLoad` keeps the six tools out of Claude Code's deferred tool
+search, so an agent can call them without loading them first. A repo registered by an earlier
+version has the entry without it: `cairn context register --force` updates it. Start Claude Code at the repo root: from a subfolder Claude Code runs
 the server from that subfolder and the relative path no longer resolves.
 
-**Each day**
+**Existing docs (brownfield, once).** Docs written before cairn have no frontmatter, so
+`check` can say nothing about them:
+```bash
+cairn context adopt                      # dry run: what would be added
+cairn context adopt --link-candidates --write
+```
+This adds `type:` from the category folder and, with `--link-candidates`, `counterpartOf:`
+for same-path pairs in another repo (review the pairs first). It only adds frontmatter
+lines: bodies and existing keys are never touched, and a second run adds nothing. Then run
+`/discover adopt` in each repo: the discovery agent proposes a `describes:` line per doc
+(confirming the class with `code_symbol`), you confirm, it writes only those lines.
+
+## How the agents and the MCP server work together
+
+Each repo runs its own Claude Code session. The session starts its own `cairn` MCP server
+from the repo's `.mcp.json` (over stdio, nothing listens on a port). The server reads the
+workspace's `repos.json`, so an agent in one repo can see the docs and code of all the others.
+
+```mermaid
+flowchart TB
+  subgraph REPOA["Repo A, e.g. backend: Claude Code session started at the repo root"]
+    direction TB
+    ARCH["architect<br/>plans, updates ai/contexts"]
+    DEV["developer<br/>implements the plan"]
+    REV["reviewer<br/>checks result against plan"]
+    DISC["discovery<br/>drafts docs for existing code"]
+    SCOUT["code-scout sub-agent<br/>read-only code questions"]
+    ARCH --> DEV --> REV
+    ARCH -- "who uses X?" --> SCOUT
+    DISC -- "confirm describes: symbol" --> SCOUT
+  end
+
+  subgraph REPOB["Repo B, e.g. frontend: its own Claude Code session"]
+    direction TB
+    AGB["same agents<br/>architect, developer, reviewer,<br/>discovery, code-scout"]
+  end
+
+  SERVERA["cairn MCP server A<br/>started from repo A .mcp.json<br/>stdio, read-only"]
+  SERVERB["cairn MCP server B<br/>started from repo B .mcp.json<br/>stdio, read-only"]
+
+  REPOA -- "mcp__cairn__* tools" --> SERVERA
+  REPOB -- "mcp__cairn__* tools" --> SERVERB
+
+  subgraph WS["Workspace: repos.json lists every repo"]
+    CTX["ai/contexts/** of every repo<br/>type, counterpartOf, describes"]
+    CODE["source code of every repo"]
+  end
+
+  SERVERA -- "list_contexts, counterparts, check" --> CTX
+  SERVERB -- "list_contexts, counterparts, check" --> CTX
+  SERVERA -- "code_symbol, code_references, code_summary" --> PROV
+  SERVERB -- "code_symbol, code_references, code_summary" --> PROV
+
+  subgraph PROV["Code providers: cairn never parses code"]
+    SERENA["Serena<br/>language server per repo<br/>default"]
+    CBM["codebase-memory-mcp<br/>architecture summary<br/>optional"]
+  end
+
+  SERENA --> CODE
+  CBM --> CODE
+
+  TRK[("Issue tracker<br/>Jira / YouTrack")]
+  ARCH -. "task state sync" .-> TRK
+  AGB -. "task state sync" .-> TRK
+```
+
+What each part is for:
+
+| Part | Role |
+|---|---|
+| architect, developer, reviewer | The task workflow in `ai/agents/`. The architect also keeps `ai/contexts/**` up to date. |
+| discovery | Drafts and adopts context docs for code that already exists (`/discover`). |
+| code-scout | A read-only sub-agent. The main agent hands it "who uses X" questions. It prefers `code_references` and falls back to Grep when the answer is `unknown`. |
+| `cairn` MCP server | Serves context docs and code lookups. It writes nothing. |
+| Serena | The default code provider. It runs a language server per repo. |
+| codebase-memory-mcp | Optional. Only the `code_summary` architecture overview. |
+
+An answer of `missing`, an empty list or `unknown` is not proof that nothing is there. The
+agents are told to read `notes` and to run one Grep before a delete, rename or signature change.
+
+## Everyday workflow
+
+Once the repos are set up (see the sections above), a normal day looks like this. Step 1
+applies to a group of repos; the rest apply to any repo.
 
 1. **Check the group is in step.** From the folder holding `repos.json`:
    ```bash
@@ -178,18 +269,7 @@ the server from that subfolder and the relative path no longer resolves.
    The first question about a repo may take several seconds while it is indexed; later ones
    re-index only if the code changed. Without the tool installed those answers are
    `unknown` with a hint, never an error.
-4. **Bring existing docs under the convention (once, brownfield).** Docs written before
-   cairn have no frontmatter, so `check` can say nothing about them:
-   ```bash
-   cairn context adopt                      # dry run: what would be added
-   cairn context adopt --link-candidates --write
-   ```
-   This adds `type:` from the category folder and, with `--link-candidates`, `counterpartOf:`
-   for same-path pairs in another repo (review the pairs first). It only adds frontmatter
-   lines: bodies and existing keys are never touched, and a second run adds nothing. Then run
-   `/discover adopt` in each repo: the discovery agent proposes a `describes:` line per doc
-   (confirming the class with `code_symbol`), you confirm, it writes only those lines.
-5. **Keep the cross-repo docs honest.** When you add or rename a context doc, link its
+4. **Keep the cross-repo docs honest.** When you add or rename a context doc, link its
    counterpart in the other repo and name the code it describes, in the doc's frontmatter
    (`/discover` and the architect's context updates write `describes:` for you when a doc is
    about one named symbol, confirming the name with `code_symbol` when the tool is available):
@@ -207,7 +287,7 @@ the server from that subfolder and the relative path no longer resolves.
    `check` reports and exits `0`; it never fails a build (`--strict` opts in). A
    `CANDIDATE` is a suggestion, not an error: link it, or silence it with
    `notCounterpartOf`.
-6. **Commit.** Generated files, `ai/` and `ai/contexts/` changes are ordinary tracked
+5. **Commit.** Generated files, `ai/` and `ai/contexts/` changes are ordinary tracked
    files. `_cairn/tools/` and `_cairn/cache/` are gitignored and never committed.
 
 **Poking at it by hand** (the same calls the agents make):
