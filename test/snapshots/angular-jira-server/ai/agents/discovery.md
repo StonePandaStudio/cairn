@@ -98,7 +98,10 @@ describes: entity Invoice
   exactly as declared in the source file you read (`Invoice`, not `Invoice/pay` or a file
   name). For a subject spanning several symbols, use a list of such lines. Never guess:
   if the `code_symbol` tool is available, call it to confirm the symbol exists in this
-  repo; otherwise use only a name you saw declared. Leave the line out when there is no
+  repo and check that a returned match is the declaration you mean (its `file` is the
+  doc's `source`, its `label` is a class, interface or function, not a same-named
+  variable, DTO or schema constant); otherwise use only a name you saw declared. The
+  class is often not the doc's title (`Invoice` doc, `InvoiceEntity` class). Leave the line out when there is no
   single symbol. `cairn context check` reports a symbol that no longer exists as
   `BROKEN_ANCHOR`, so a wrong name creates a false alarm.
 - Add `counterpartOf: <repo>:<path>` only when a sibling repo's doc is named in the
