@@ -51,6 +51,25 @@ where files live on disk (`_cairn/tools/`, `_cairn/cache/`).
   `_cairn/tools/`; Serena also writes `.serena/` into each repo it opens (gitignored by
   `setup`). On Windows the workspace path must stay under ~125 chars (pip MAX_PATH).
 
+## Trust limits of code answers
+
+Measured on three NestJS repos (217/220 caller files). The 3 misses, investigated: two were
+commented-out calls that the grep ground truth counted (not real misses); one was a scratch
+copy without `node_modules` (`app.get(Service).method()` needs the framework's types) and was
+found once dependencies were present. So the language server needs the repo's **dependencies
+installed**; without them answers degrade silently, which is why a JS/TS repo with
+`package.json` but no `node_modules` gets a `notes` warning on every answer.
+
+Freshness was tested with a long-lived process: a new calling file, an edit that removed a
+call, a deleted file and a restored file were each reflected on the next question (no restart
+needed).
+
+What stays unproven: `missing` and empty reference lists are not proof of absence (string
+names, DI tokens, reflection, templates, gitignored or generated files). The tool descriptions
+and the scout/architect docs say so and ask for one confirming grep before a delete, rename or
+signature change. A symbol lookup matches by name only (a same-named variable can match
+instead of the class), so anchors verify "a symbol of this name exists", not its kind.
+
 ## Not built yet
 
 `cairn sync` doing the MCP registration (for now `cairn context register` writes each repo's `.mcp.json` on demand), a Sourcegraph (HTTP)

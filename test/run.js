@@ -3377,6 +3377,21 @@ function serenaFixture(overrides = {}) {
 const alive = (pid) => { try { process.kill(pid, 0); return true; } catch { return false; } };
 const waitFor = async (cond, ms = 5000) => { const t0 = Date.now(); while (Date.now() - t0 < ms) { if (cond()) return true; await new Promise((r) => setTimeout(r, 25)); } return cond(); };
 
+atest('serena: a JS/TS repo without node_modules gets a note on every answer; with it, none', async () => {
+  const { repo, repoPath, make } = serenaFixture();
+  const src = make();
+  try {
+    fs.writeFileSync(path.join(repoPath, 'package.json'), '{}');
+    const bare = await src.symbol(repo, 'Invoice');
+    assert.ok(bare.notes && /node_modules/.test(bare.notes[0]), 'warned about missing dependencies');
+    assert.ok((await src.references(repo, 'Svc/pay')).notes, 'references carries the note too');
+    fs.mkdirSync(path.join(repoPath, 'node_modules'));
+    assert.strictEqual((await src.symbol(repo, 'Invoice')).notes, undefined);
+  } finally {
+    await src.close();
+  }
+});
+
 atest('serena: starts lazily on the first question and is reused afterwards', async () => {
   const { repo, make, log } = serenaFixture();
   const src = make();
