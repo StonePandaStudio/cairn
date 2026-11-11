@@ -2137,6 +2137,25 @@ atest('render: every command file has a description frontmatter block on line 1 
   }
 });
 
+test('render: Codex skills reuse the enabled workflow and adapt code lookups', () => {
+  const { renderTargets } = require('../lib/render');
+  const config = { stack: ['nestjs'], tracker: { provider: 'youtrack', projectKey: 'CI' } };
+  const targets = () => renderTargets({ config, presetsDir: 'presets' }).targets;
+  const defaults = targets();
+  assert.ok(!defaults.some(([rel]) => rel.startsWith('.agents/skills/')));
+  config.codexSkills = true;
+  const enabled = targets();
+  assert.deepStrictEqual(enabled.slice(0, defaults.length), defaults);
+  const skills = new Map(enabled.slice(defaults.length));
+  const brief = skills.get('.agents/skills/create-brief/SKILL.md');
+  assert.match(brief, /^---\nname: create-brief\ndescription: /);
+  assert.match(brief, /ai\/agents\/architect\.md/);
+  assert.match(brief, /code_references.*code_symbol/);
+  assert.doesNotMatch(brief, /\$ARGUMENTS/);
+  assert.ok(skills.has('.agents/skills/run-qa/SKILL.md'));
+  assert.ok(skills.has('.agents/skills/youtrack-status/SKILL.md'));
+});
+
 atest('render: the QA pipeline is the core contract filled by the stack that ships qa-* slots', async () => {
   const { main: init } = require('../lib/init');
   const log = console.log;

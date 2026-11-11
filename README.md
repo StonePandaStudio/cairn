@@ -165,6 +165,21 @@ search, so an agent can call them without loading them first. A repo registered 
 version has the entry without it: `cairn context register --force` updates it. Start Claude Code at the repo root: from a subfolder Claude Code runs
 the server from that subfolder and the relative path no longer resolves.
 
+**Codex.** Add the same server to the repo’s `.codex/config.toml` using a
+project-scoped entry. Replace `cwd` with the absolute path to that repo.
+
+```toml
+[mcp_servers.cairn]
+command = "node"
+cwd = "D:/projects/my-workspace/backend"
+args = ["node_modules/@stonepandastudio/cairn/bin/cairn.js", "context", "serve", "--config", "../repos.json"]
+```
+
+Adjust the `repos.json` path relative to `cwd`. For a standalone repo without
+`repos.json`, omit the final two arguments. Reopen the project in Codex and
+check that the `cairn` server is available. In the Codex CLI, use `/mcp` to see
+the active servers. Each checkout needs its own `cwd`.
+
 **Existing docs (brownfield, once).** Docs written before cairn have no frontmatter, so
 `check` can say nothing about them:
 ```bash
@@ -387,7 +402,9 @@ steps are `$enrich-description`, `$plan-task`, `$execute-plan`, and
 commands. Both hosts use the same role docs and task files in `ai/`.
 
 The skills cover Cairn's built-in commands, including QA and tracker
-commands when the repo's configuration enables them.
+commands when the repo's configuration enables them. For cross-repo context
+and symbol lookups, use the Codex MCP entry in “Set up code lookups.” The
+workflow can also run with local file search.
 
 Config keys that shape the rendered agents (all in `cairn.config.json`): `model` (reviewer
 tier, default `sonnet`), `validationStack` (`zod` default, or `class-validator`; only read
