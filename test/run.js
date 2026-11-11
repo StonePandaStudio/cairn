@@ -1385,6 +1385,215 @@ test('doctor: aliased paths fold onto the canonical name', () => {
   assert.strictEqual(files[0].status, 'IDENTICAL');
 });
 
+test('doctor: a workspace config with no `shared` list is analysed, not a crash', () => {
+  const { resolveRepos, analyze } = require('../lib/doctor');
+  const root = tmpRepo();
+  fs.mkdirSync(path.join(root, 'a'), { recursive: true });
+  const workspace = { repos: [{ name: 'a', path: path.join(root, 'a'), stack: 's' }] };
+  assert.deepStrictEqual(analyze(resolveRepos(workspace, root), workspace, {}), []);
+});
+
+test('doctor: a malformed workspace config is a one-line error (exit 2), not a stack trace', () => {
+  const root = tmpRepo();
+  const bin = path.join(__dirname, '..', 'bin', 'cairn.js');
+  const run = (cfg, args) => {
+    fs.writeFileSync(path.join(root, 'repos.json'), JSON.stringify(cfg));
+    return require('child_process').spawnSync(process.execPath, [bin, ...args], { cwd: root, encoding: 'utf8' });
+  };
+  for (const [cfg, args, re] of [
+    [{}, ['doctor'], /needs a "repos" array/],
+    [{ repos: {} }, ['upgrade'], /needs a "repos" array/],
+    [{}, ['context', 'check'], /needs a "repos" array/],
+    [{ repos: [], shared: [{ cohort: 'all' }] }, ['doctor'], /"shared\[0\]\.glob" is required/],
+  ]) {
+    const r = run(cfg, args);
+    assert.strictEqual(r.status, 2, args.join(' '));
+    assert.match(r.stderr, re);
+    assert.ok(!/^\s+at .*:\d+/m.test(r.stderr), 'no stack trace');
+  }
+});
+
+// ------------------------------------------------------------ malformed JSON, every reader
+// Every JSON file a user writes is read through lib/json.js: the file, the problem, exit 2.
+
+test('json: readJsonFile names the file and the problem for empty, malformed, unreadable input', () => {
+  const { readJsonFile } = require('../lib/json');
+  const { UserError } = require('../lib/errors');
+  const dir = tmpRepo();
+  const f = (name, text) => {
+    const p = path.join(dir, name);
+    fs.writeFileSync(p, text);
+    return p;
+  };
+  assert.throws(() => readJsonFile(f('e.json', '')), (e) => e instanceof UserError && /e\.json: the file is empty/.test(e.message));
+  assert.throws(() => readJsonFile(f('w.json', '  \n')), /the file is empty/);
+  assert.throws(() => readJsonFile(f('b.json', '{"a":')), (e) => e instanceof UserError && /b\.json: invalid JSON/.test(e.message));
+  assert.throws(() => readJsonFile(dir), (e) => e instanceof UserError && /cannot read it/.test(e.message));
+  assert.throws(() => readJsonFile(path.join(dir, 'missing.json')), /cannot read it — ENOENT/);
+  assert.strictEqual(readJsonFile(path.join(dir, 'missing.json'), { optional: true }), undefined);
+  assert.deepStrictEqual(readJsonFile(f('bom.json', '﻿{"a":1}')), { a: 1 });
+});
+
+test('workspace config: a wrong shape is reported by key', () => {
+  const { validateWorkspace } = require('../lib/workspace-config');
+  const ok = { repos: [{ name: 'a', path: './a' }] };
+  assert.strictEqual(validateWorkspace(ok, 'r.json'), ok);
+  assert.doesNotThrow(() => validateWorkspace({ repos: [] }, 'r.json'));
+  const cases = [
+    [null, /must be an object/],
+    [[], /must be an object/],
+    [{}, /needs a "repos" array/],
+    [{ repos: {} }, /needs a "repos" array/],
+    [{ repos: [null] }, /"repos\[0\]" must be an object/],
+    [{ repos: [{ path: './a' }] }, /"repos\[0\]\.name" is required/],
+    [{ repos: [{ name: 'a' }] }, /"repos\[0\]\.path" is required/],
+    [{ repos: [{ name: 5, path: './a' }] }, /"repos\[0\]\.name" must be a non-empty string/],
+    [{ repos: [{ name: 'a', path: '' }] }, /"repos\[0\]\.path" must be a non-empty string/],
+    [{ repos: [{ name: 'a', path: './a', stack: 3 }] }, /"repos\[0\]\.stack" must be a string or an array/],
+    [{ repos: [{ name: 'a', path: './a', vars: [] }] }, /"repos\[0\]\.vars" must be an object/],
+    [{ repos: [{ name: 'a', path: './a', pathAliases: { x: 1 } }] }, /pathAliases\["x"\]" must be a non-empty string/],
+    [{ repos: [{ name: 'a', path: './a' }, { name: 'a', path: './b' }] }, /duplicates another repo called "a"/],
+    [{ repos: [], shared: {} }, /"shared" must be an array/],
+    [{ repos: [], shared: [{ cohort: 'all' }] }, /"shared\[0\]\.glob" is required/],
+    [{ repos: [], shared: [{ glob: 'x', cohort: 'some' }] }, /"shared\[0\]\.cohort" must be one of: all, stack/],
+    [{ repos: [], normalize: [] }, /"normalize" must be an object/],
+    [{ repos: [], codeSource: 'serena' }, /"codeSource" must be an object/],
+  ];
+  for (const [cfg, re] of cases) assert.throws(() => validateWorkspace(cfg, 'r.json'), re, JSON.stringify(cfg));
+});
+
+test('repo config: a wrong type is a ConfigError naming the key, not a later crash', () => {
+  const { loadRepoConfig, ConfigError } = require('../lib/config');
+  const dir = tmpRepo();
+  const load = (cfg) => {
+    fs.writeFileSync(path.join(dir, 'cairn.config.json'), typeof cfg === 'string' ? cfg : JSON.stringify(cfg));
+    return loadRepoConfig(dir);
+  };
+  assert.throws(() => load('{"stack":'), (e) => e instanceof ConfigError && /invalid JSON/.test(e.message));
+  assert.throws(() => load(''), /the file is empty/);
+  assert.throws(() => load('null'), /must be a JSON object/);
+  assert.throws(() => load('[]'), /must be a JSON object/);
+  for (const [cfg, re] of [
+    [{ stack: 5 }, /"stack" must be a string or an array/],
+    [{ stack: [1] }, /"stack" must be a string or an array/],
+    [{ tdd: 'yes' }, /"tdd" must be true or false/],
+    [{ tracker: [] }, /"tracker" must be an object/],
+    [{ tracker: { provider: 3 } }, /"tracker\.provider" must be a non-empty string/],
+    [{ tracker: { statuses: [] } }, /"tracker\.statuses" must be an object/],
+    [{ agents: { architect: 'x' } }, /"agents\.architect" must be an object/],
+    [{ agents: { architect: { name: 1 } } }, /"agents\.architect\.name" must be a non-empty string/],
+    [{ commands: { build: 4 } }, /"commands\.build" must be a non-empty string/],
+    [{ vars: 'x' }, /"vars" must be an object/],
+    [{ workflow: {} }, /"workflow\.steps" is required/],
+    [{ workflow: { steps: [{ command: 'x' }] } }, /"workflow\.steps\[0\]\.role" is required/],
+    [{ workflow: { steps: [null] } }, /"workflow\.steps\[0\]" must be an object/],
+  ]) assert.throws(() => load(cfg), (e) => e instanceof ConfigError && re.test(e.message), JSON.stringify(cfg));
+  assert.doesNotThrow(() => load({ stack: ['nestjs'], tdd: true, tracker: { provider: 'none', envPrefix: '' } }));
+});
+
+test('manifest and package.json: unreadable or mis-typed files are errors, a missing one is not', () => {
+  const { readManifest } = require('../lib/manifest');
+  const { UserError } = require('../lib/errors');
+  const versions = require('../lib/doctor/versions');
+  const dir = tmpRepo();
+  assert.strictEqual(readManifest(dir), null, 'no manifest is normal');
+  fs.mkdirSync(path.join(dir, '_cairn'), { recursive: true });
+  const mf = path.join(dir, '_cairn', 'manifest.json');
+  for (const [text, re] of [
+    ['', /the file is empty/],
+    ['{', /invalid JSON/],
+    ['[]', /must be a JSON object/],
+    ['{"files":[]}', /"files" must be an object/],
+    ['{"files":{"a.md":3}}', /files\["a\.md"\]" must be an object/],
+  ]) {
+    fs.writeFileSync(mf, text);
+    assert.throws(() => readManifest(dir), (e) => e instanceof UserError && re.test(e.message), text);
+  }
+  fs.writeFileSync(mf, '{}');
+  assert.deepStrictEqual(readManifest(dir).files, {});
+
+  assert.strictEqual(versions.pinnedCairn(dir), null, 'no package.json is normal (not every repo is Node)');
+  fs.writeFileSync(path.join(dir, 'package.json'), '{"devDependencies":');
+  assert.throws(() => versions.pinnedCairn(dir), (e) => e instanceof UserError && /package\.json: invalid JSON/.test(e.message));
+  fs.writeFileSync(path.join(dir, 'package.json'), '[]');
+  assert.throws(() => versions.pinnedCairn(dir), /must be a JSON object/);
+});
+
+test('cli: every command that reads repos.json reports a malformed one in one line, exit 2', () => {
+  const root = tmpRepo();
+  const bin = path.join(__dirname, '..', 'bin', 'cairn.js');
+  const spawn = (args) => require('child_process').spawnSync(process.execPath, [bin, ...args], { cwd: root, encoding: 'utf8' });
+  const noStack = (text) => !/^\s+at .+:\d+:\d+\)?$/m.test(text);
+  for (const [text, re] of [
+    ['{"repos":', /invalid JSON/],
+    ['', /the file is empty/],
+    ['null', /must be an object/],
+    ['{"repos":[{"name":"a"}]}', /"repos\[0\]\.path" is required/],
+  ]) {
+    fs.writeFileSync(path.join(root, 'repos.json'), text);
+    for (const args of [['doctor'], ['doctor', '--json'], ['upgrade'], ['context', 'check'], ['context', 'build'], ['workspace', 'list'], ['workspace', 'remove', 'a']]) {
+      const r = spawn(args);
+      assert.strictEqual(r.status, 2, `${args.join(' ')} on ${JSON.stringify(text)}: ${r.stdout}${r.stderr}`);
+      assert.match(r.stderr, re, args.join(' '));
+      assert.ok(noStack(r.stderr), `no stack trace from ${args.join(' ')}`);
+    }
+  }
+});
+
+test('cli: a malformed cairn.config.json or manifest stops render / sync / doctor with one line', () => {
+  const root = tmpRepo();
+  const repo = path.join(root, 'a');
+  fs.mkdirSync(repo, { recursive: true });
+  const bin = path.join(__dirname, '..', 'bin', 'cairn.js');
+  const spawn = (cwd, args) => require('child_process').spawnSync(process.execPath, [bin, ...args], { cwd, encoding: 'utf8' });
+  assert.strictEqual(spawn(repo, ['init', '--stack', 'nestjs', '--tracker', 'none']).status, 0);
+  assert.strictEqual(spawn(repo, ['render']).status, 0);
+  fs.writeFileSync(path.join(root, 'repos.json'), JSON.stringify({ repos: [{ name: 'a', path: './a' }] }));
+  const noStack = (text) => !/^\s+at .+:\d+:\d+\)?$/m.test(text);
+
+  const cfg = path.join(repo, 'cairn.config.json');
+  const good = fs.readFileSync(cfg, 'utf8');
+  for (const bad of ['{', '', '[]', '{"tdd":"yes"}']) {
+    fs.writeFileSync(cfg, bad);
+    for (const [cwd, args] of [[repo, ['render', '--dry-run']], [repo, ['sync', '--dry-run']], [repo, ['override', 'status']], [repo, ['preset', 'list']], [root, ['doctor']]]) {
+      const r = spawn(cwd, args);
+      assert.ok(noStack(r.stdout + r.stderr), `${args.join(' ')} with config ${JSON.stringify(bad)}:\n${r.stdout}${r.stderr}`);
+      assert.notStrictEqual(r.status, 0, `${args.join(' ')} accepted config ${JSON.stringify(bad)}`);
+    }
+  }
+  fs.writeFileSync(cfg, good);
+
+  const mf = path.join(repo, '_cairn', 'manifest.json');
+  const goodManifest = fs.readFileSync(mf, 'utf8');
+  for (const bad of ['{', '', '[]', '{"files":[]}']) {
+    fs.writeFileSync(mf, bad);
+    for (const [cwd, args] of [[repo, ['sync', '--dry-run']], [repo, ['render', '--dry-run']], [root, ['doctor']]]) {
+      const r = spawn(cwd, args);
+      assert.ok(noStack(r.stdout + r.stderr), `${args.join(' ')} with manifest ${JSON.stringify(bad)}:\n${r.stdout}${r.stderr}`);
+      assert.notStrictEqual(r.status, 0, `${args.join(' ')} accepted manifest ${JSON.stringify(bad)}`);
+    }
+  }
+  fs.writeFileSync(mf, goodManifest);
+});
+
+test('cli: upgrade and doctor exit 2 when a repo file cannot be read, even without --strict', () => {
+  const root = tmpRepo();
+  const repo = path.join(root, 'a');
+  fs.mkdirSync(repo, { recursive: true });
+  const bin = path.join(__dirname, '..', 'bin', 'cairn.js');
+  const spawn = (cwd, args) => require('child_process').spawnSync(process.execPath, [bin, ...args], { cwd, encoding: 'utf8' });
+  assert.strictEqual(spawn(repo, ['init', '--stack', 'nestjs', '--tracker', 'none']).status, 0);
+  assert.strictEqual(spawn(repo, ['render']).status, 0);
+  fs.writeFileSync(path.join(root, 'repos.json'), JSON.stringify({ repos: [{ name: 'a', path: './a' }] }));
+  assert.strictEqual(spawn(root, ['upgrade']).status, 0, 'a clean workspace is exit 0');
+  fs.writeFileSync(path.join(repo, '_cairn', 'manifest.json'), '{');
+  for (const args of [['upgrade'], ['doctor']]) {
+    const r = spawn(root, args);
+    assert.strictEqual(r.status, 2, `${args.join(' ')}: ${r.stdout}${r.stderr}`);
+    assert.match(r.stdout + r.stderr, /invalid JSON/);
+  }
+});
+
 test('doctor: an unmanaged repo is not treated as tracker:none', () => {
   // Regression guard. Filtering unknown-tracker repos out of tracker-gated rules
   // silently emptied those sections while repos were still being migrated.

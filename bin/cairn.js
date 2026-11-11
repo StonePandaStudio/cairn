@@ -74,7 +74,15 @@ function main() {
       // async: code providers may run long-lived language servers
       Promise.resolve(require('../lib/context/cli').main(rest)).then(
         (code) => { process.exitCode = code; },
-        (err) => { console.error(err && err.stack ? err.stack : String(err)); process.exitCode = 1; },
+        (err) => {
+          if (err && err.userError) {
+            console.error(err.message);
+            process.exitCode = 2;
+            return;
+          }
+          console.error(err && err.stack ? err.stack : String(err));
+          process.exitCode = 1;
+        },
       );
       return;
 
@@ -102,4 +110,13 @@ function main() {
   }
 }
 
-main();
+try {
+  main();
+} catch (err) {
+  if (err && err.userError) {
+    console.error(err.message);
+    process.exitCode = 2;
+  } else {
+    throw err;
+  }
+}
