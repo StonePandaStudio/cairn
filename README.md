@@ -152,8 +152,10 @@ cairn context register     # adds a "cairn" entry to each repo's .mcp.json (merg
 ```
 Claude Code asks you to approve a project server the first time it sees it. The name must stay
 `cairn`: the agent docs refer to `mcp__cairn__*`. The entry is
-`{ "command": "npx", "args": ["cairn", "context", "serve", "--config", "../repos.json"] }`
-(`cmd /c npx …` when run on Windows), with the config path relative to each repo.
+`{ "command": "node", "args": ["node_modules/@stonepandastudio/cairn/bin/cairn.js", "context", "serve", "--config", "../repos.json"] }`
+(`node` + the repo's own installed cairn, so the same file works on Windows, macOS and Linux), with
+paths relative to each repo. Start Claude Code at the repo root: from a subfolder Claude Code runs
+the server from that subfolder and the relative path no longer resolves.
 
 **Each day**
 
