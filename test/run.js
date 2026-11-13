@@ -1120,7 +1120,7 @@ test('presets: listPresets reads every folder but core, with kind and what it sh
   const all = listPresets();
   const names = all.map((p) => p.name);
   assert.ok(!names.includes('core'), 'core is applied to everyone, not a choice');
-  for (const n of ['nestjs', 'react', 'typeorm', 'tailwind']) assert.ok(names.includes(n), n);
+  for (const n of ['nestjs', 'react', 'typeorm', 'tailwind', 'spring', 'jpa-flyway', 'css-modules', 'docker']) assert.ok(names.includes(n), n);
   const nest = all.find((p) => p.name === 'nestjs');
   assert.strictEqual(nest.kind, 'framework');
   assert.ok(nest.ships.includes('slots'));
@@ -3013,6 +3013,9 @@ const SNAPSHOT_CASES = {
     tracker: { provider: 'youtrack', projectKey: 'CI', statuses: { inProgress: 'Develop', review: 'Review' } },
   },
   'nextjs-drizzle-youtrack': { stack: ['nextjs', 'drizzle'], tracker: { provider: 'youtrack', projectKey: 'CI' } },
+  'react-css-modules-none': { stack: ['react', 'css-modules'], tracker: { provider: 'none' } },
+  'spring-jpa-flyway-docker-none': { stack: ['spring', 'jpa-flyway', 'docker'], tracker: { provider: 'none' } },
+  'spring-jpa-flyway-none': { stack: ['spring', 'jpa-flyway'], tracker: { provider: 'none' } },
 };
 
 function snapshotFiles(dir, base = dir) {

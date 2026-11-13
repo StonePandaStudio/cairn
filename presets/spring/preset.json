@@ -1,0 +1,4 @@
+{
+  "kind": "framework",
+  "description": "Spring Boot 3 + Kotlin spine, ORM-agnostic; Controller/Service/DAO layering, domain packages, AppException; fills the QA pipeline slots (JUnit 5 + MockK)"
+}

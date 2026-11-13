@@ -34,6 +34,11 @@ presets/
   fastify/    Fastify 5 + TypeScript spine, ORM agnostic — plugin per feature, Zod type provider,
               typed domain errors + one global handler, Lambda notes. No QA slots yet
     slots/    the framework side of each {{> stack/… }} point
+  spring/     Spring Boot 3 + Kotlin spine, ORM agnostic — Controller/Service/DAO layering, domain
+              packages (not model packages), AppException, JUnit 5 + MockK `buildSut`. Fills the QA slots
+    slots/    the framework side of each {{> stack/… }} point
+  jpa-flyway/ ORM add-on — JPA/Hibernate entities, BaseDao + Criteria/metamodel, locking, Flyway migrations
+    slots/    the ORM side, appended to spring
   typeorm/    ORM add-on — entities, queries, migrations, decomposition
     slots/    the ORM side of the same {{> stack/… }} points (appended to nestjs)
   prisma/     ORM add-on — Prisma 7 schema, migrate, driver adapter, client as a decorator
@@ -47,6 +52,12 @@ presets/
     slots/    the React side of the same {{> stack/… }} points
   nextjs/     App-Router layer over `react` — server/client boundary, actions, route handlers
     slots/    the Next.js side of the same {{> stack/… }} points
+  docker/     infrastructure add-on — Compose base/dev/prod split, dev mounts vs prod multi-stage builds,
+              healthcheck-ordered startup, one-shot migrations, env contract. Composes after any framework
+    slots/    the infra side of the same {{> stack/… }} points
+  css-modules/ styling add-on — CSS Modules, two-tier tokens + private component tokens, typography roles,
+              logical properties, `data-theme` dark mode. Alternative to `tailwind`, not a companion
+    slots/    the styling side of the same {{> stack/… }} points
   tailwind/   styling add-on — @theme tokens, no tailwind.config.ts, dark mode via token re-map
     slots/    the styling side of the same {{> stack/… }} points
 ```
@@ -57,13 +68,16 @@ Compose the slots a repo needs. Rough axes — **framework** (`nestjs`, `react`,
 ```
 --stack nestjs,typeorm                  a NestJS + TypeORM API
 --stack fastify,prisma                  a Fastify + Zod + Prisma API
+--stack spring,jpa-flyway               a Spring Boot + Kotlin API on JPA with Flyway migrations
+--stack spring,jpa-flyway,docker        the same API, with its Docker Compose stack (add `docker` last)
 --stack angular                         an Angular frontend (SCSS theming inline for now)
 --stack nextjs,react,tailwind,drizzle   a fullstack Next.js app — nextjs primary (owns plan ordering + fullstack refs)
 --stack react,tailwind                  a Vite SPA against a separate API
+--stack react,css-modules               the same SPA styled with CSS Modules and design tokens
 ```
 
 `typeorm` and `angular` are seeded from two repos; `drizzle`, `react`, `nextjs`,
-`tailwind`, `fastify` and `prisma` from one repo each. A single-consumer preset is hand-judged, not
+`tailwind`, `fastify`, `prisma`, `spring`, `jpa-flyway`, `css-modules` and `docker` from one repo each. A single-consumer preset is hand-judged, not
 measured, and gets refined when a second repo on that axis appears — the
 `preset-cli` "no peer" limit.
 
@@ -111,7 +125,8 @@ AGENTS.md section. A stack without it (react, nextjs today) gets none of them.
 | `qa-write-steps` | primary-only | the writer's procedure (factories, specs, page objects, scoped runs) |
 | `qa-all-targets` | primary-only | what `all` means, or that it is unsupported |
 
-The nestjs preset fills them for Jest (unit + integration), angular for Playwright e2e.
+The nestjs preset fills them for Jest (unit + integration), spring for JUnit 5 + MockK
+(unit, controller, integration), angular for Playwright e2e.
 Adding a stack is seven small files, not three agents. Agent names come from the primary
 stack (`NestjsQAArchitectAgent`) and can be set with `agents.qaArchitect.name` etc.
 

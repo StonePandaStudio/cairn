@@ -1,0 +1,4 @@
+{
+  "kind": "styling",
+  "description": "CSS Modules + two-tier design tokens (primitive/semantic), private component tokens, logical properties, typography roles, data-theme dark mode"
+}

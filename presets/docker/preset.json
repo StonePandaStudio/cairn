@@ -1,0 +1,4 @@
+{
+  "kind": "infra",
+  "description": "Docker + Compose: base/dev/prod file split, dev mounts vs prod multi-stage builds, healthcheck-ordered startup, run-to-completion migrations, env contract (appended to any framework)"
+}

@@ -1,0 +1,4 @@
+{
+  "kind": "orm",
+  "description": "JPA/Hibernate entities, DAO layer with Criteria + metamodel, locking, Flyway migrations (appended to spring)"
+}
