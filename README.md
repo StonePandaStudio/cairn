@@ -25,7 +25,7 @@ and a map of how the repos connect.
 ## Start on a new repo (or a group of repos)
 
 A repo with no `ai/` folder yet. For several repos that make up one project, do steps 1–2 in
-each, then step 3 once, then step 4.
+each, then step 3 once, then step 4. Using Codex? See "Start a Codex-based project" below.
 
 1. **Install and init.** `--stack` is framework first, then add-ons; `cairn preset list`
    shows what exists (`unknown` gives the core agents with no stack rules).
@@ -35,6 +35,14 @@ each, then step 3 once, then step 4.
    ```
    Use `--tracker none` for no issue tracker. For `jira-server` / `youtrack`, put the credentials
    in the repo's `.env` (see "Tracker"). Add `--dry-run` first to see what would be written.
+
+   **Which agent host?** `init` records it as `"hosts"` in `cairn.config.json`; the default is
+   `["claude"]`. For Codex too, add `--host claude,codex` (or the shorthand `--codex`):
+   `npx cairn init --stack nestjs,typeorm --tracker none --host claude,codex`. `render` then also
+   writes the workflow as Codex skills in `.agents/skills/` and a short root `AGENTS.md` that points
+   Codex at `ai/AGENTS.md`. The hosts run the same workflow from the same `ai/` docs; a repo can
+   serve both. For an existing repo, edit `hosts` in `cairn.config.json` by hand (the older
+   `"codexSkills": true` still works and means the same as adding `codex`).
 2. **Edit `cairn.config.json`** if the defaults need changing: `commands.build`, `tdd`,
    `model`, `agents.<role>.name`.
 3. **Group of repos only: declare the workspace.** Create a `repos.json` in the folder that
@@ -52,11 +60,60 @@ each, then step 3 once, then step 4.
    npx cairn render --dry-run      # what would be written
    npx cairn render
    ```
-   Commit `cairn.config.json`, `_cairn/`, `ai/` and `.claude/`. Generated files are
-   committed, not gitignored. Then run `/create-brief` in Claude Code to start a task.
+   Commit `cairn.config.json`, `_cairn/`, `ai/` and `.claude/` (plus `.agents/skills/` and the
+   root `AGENTS.md` for Codex). Generated files are committed, not gitignored. Then run
+   `/create-brief` in Claude Code, or `$create-brief` in Codex, to start a task.
+
+   For Codex, `render --codex-mcp` also writes the machine-local `cairn` MCP table into
+   `.codex/config.toml`; see "Set up code lookups". That file is not committed.
 
 If you add the workspace *after* rendering, run `npx cairn sync` in each repo to carry the
 Workspace table in. From the workspace folder, `cairn doctor` reports drift across the repos.
+
+## Start a Codex-based project
+
+The same setup as above, with Codex switched on. A repo can serve Claude Code and Codex at
+once; both run the same workflow from the same `ai/` docs.
+
+1. **Install and init with `--codex`**, in the repo root:
+   ```bash
+   npm i -D @stonepandastudio/cairn
+   npx cairn init --stack nestjs,typeorm --tracker none --codex --render
+   ```
+   `--codex` saves `"hosts": ["claude", "codex"]` in `cairn.config.json`; `--render` scaffolds right away
+   (without it, run `npx cairn render` as the next step). Add `--dry-run` to preview. Tracker
+   options are the same as in "Start on a new repo".
+2. **What you get**, all committed:
+   - `ai/` — role docs, task files, `ai/AGENTS.md` (the same as for Claude Code);
+   - `.agents/skills/<step>/SKILL.md` — one Codex skill per workflow step (`create-brief`,
+     `enrich-description`, `plan-task`, `execute-plan`, `code-review`, plus `discover`, QA and
+     tracker steps where the config enables them);
+   - `AGENTS.md` at the repo root — a short pointer that sends Codex to `ai/AGENTS.md` and the
+     skills. A repo that already has a root `AGENTS.md` keeps it; add the pointer by hand;
+   - `.claude/` — still generated, because the skills read the same role docs and the
+     `code-scout` procedure from there. Ignore it if nobody uses Claude Code.
+3. **Optional: cross-repo context and code lookups.** Install Serena once per workspace
+   (`cairn context setup`, see "Set up code lookups"), then register the server for Codex:
+   ```bash
+   npx cairn render --codex-mcp        # or: cairn context register --codex
+   ```
+   This writes a `[mcp_servers.cairn]` table into `.codex/config.toml`. The file has an
+   absolute path in it, so it is specific to this machine: do not commit it, and run the command
+   again on each checkout. Skip this step and the skills still work, with plain file search.
+4. **Group of repos:** repeat 1–3 in each repo, then `cairn workspace init` / `add` and
+   `cairn sync` as in "Start on a new repo". `cairn upgrade --apply --codex-mcp` later updates
+   every repo and refreshes each Codex entry.
+5. **Start working.** Open Codex at the repo root (not a subfolder) and run:
+   ```
+   $create-brief Add CSV export
+   ```
+   then `$enrich-description`, `$plan-task`, `$execute-plan`, `$code-review`. See "Everyday
+   workflow" for the daily loop and "Use the workflow in Codex" for how the skills differ from
+   the Claude commands.
+
+Adding Codex to a repo that is already cairn-managed: add `"codex"` to `hosts` in
+`cairn.config.json`, run `npx cairn sync` (or `render`), then `render --codex-mcp` if you want
+the MCP server.
 
 ## Start on a repo that already has code
 
@@ -81,7 +138,10 @@ The code base exists; the AI workflow and its docs do not (or only as hand-copie
      instead, delete the file and run `cairn render`.
    - If the repo already has its own style guide, point `ai/infrastructure/code-guidelines.md`
      (rendered as an editable seed) at it or fold it in.
-3. **Draft the context docs.** In Claude Code, inside the repo:
+   - With `codex` in `hosts`, a root `AGENTS.md` the repo already has is kept, not overwritten
+     (`render` reports it as "already on disk, not written by cairn"). Add a pointer to it by
+     hand: read `ai/AGENTS.md`, and start workflow steps with the `$` skills in `.agents/skills/`.
+3. **Draft the context docs.** In Claude Code (or Codex, with `$discover`), inside the repo:
    ```
    /discover            # whole repo
    /discover <area>     # or one area at a time
@@ -91,8 +151,10 @@ The code base exists; the AI workflow and its docs do not (or only as hand-copie
    the drafts and change `status` when you accept them. See "Starting on an existing code
    base: `/discover`".
 4. **Optional, tests for code that exists:** `/plan-tests`, `/execute-test-plan`, `/run-qa`
-   (stacks that ship the QA slots only). See "QA pipeline for existing code".
-5. **Commit** `cairn.config.json`, `_cairn/`, `ai/` and `.claude/`.
+   (`$plan-tests`, … in Codex; stacks that ship the QA slots only). See "QA pipeline for
+   existing code".
+5. **Commit** `cairn.config.json`, `_cairn/`, `ai/` and `.claude/` (and `.agents/skills/`
+   with the root `AGENTS.md` if Codex is on).
 
 For a group of repos, do this in each repo, then `cairn workspace init` / `add` as in the
 section above and `cairn sync` in each repo. `cairn doctor`, run from the workspace folder,
@@ -117,6 +179,9 @@ npx cairn sync                              # apply
 - On a `0.x` version a pin like `^0.9.0` stops at `0.9.x`; install the new version explicitly
   (`@latest`) or the update is a no-op.
 - `cairn sync --only <path>` syncs one file and leaves the rest alone.
+- Codex skills and the generated root `AGENTS.md` are managed files like the rest: `sync`
+  carries template changes into them and keeps your edits. Turn Codex on later by setting
+  `"codex"` to `hosts` and running `sync`.
 - Review `git diff`, then commit. Generated files are ordinary tracked files.
 
 **A group of repos** (from the folder holding `repos.json`)
@@ -125,6 +190,7 @@ cairn doctor                    # versions table: pin / installed / last rendere
 cairn upgrade                   # report only: what would change in each repo
 cairn upgrade --apply           # update cairn in each repo, then `cairn sync` there
 cairn upgrade --apply --bump-pin   # also rewrite a pin that excludes the new version
+cairn upgrade --apply --codex-mcp  # also refresh each repo's Codex MCP entry (machine-local)
 ```
 `upgrade` uses each repo's own package manager (picked from its lockfile), never commits or
 pushes, and reports a repo with a blocked pin instead of syncing it with the old version.
@@ -168,8 +234,11 @@ the server from that subfolder and the relative path no longer resolves.
 **Codex.** `cairn context register --codex` also writes the server into each repo's
 project-scoped `.codex/config.toml` (a `[mcp_servers.cairn]` table; other servers and
 settings in the file are kept, and a different `cairn` table is left alone unless
-`--force`). Codex needs an absolute `cwd`, so that file is specific to the machine:
-each checkout runs the command itself and the file is not committed. By hand:
+`--force`). `cairn render --codex-mcp` and `cairn upgrade --apply --codex-mcp` write the same
+table as part of a render or an upgrade. Codex needs an absolute `cwd`, so that file is
+specific to the machine: each checkout runs one of these commands itself, and the file is not
+committed (add `.codex/config.toml` to `.gitignore` if the repo holds only this entry). Codex
+reads a project's `.codex/config.toml` once the project is trusted. By hand:
 
 ```toml
 [mcp_servers.cairn]
@@ -181,7 +250,9 @@ args = ["node_modules/@stonepandastudio/cairn/bin/cairn.js", "context", "serve",
 Adjust the `repos.json` path relative to `cwd`. For a standalone repo without
 `repos.json`, omit the final two arguments. Reopen the project in Codex and
 check that the `cairn` server is available. In the Codex CLI, use `/mcp` to see
-the active servers.
+the active servers. As with Claude Code, start Codex at the repo root: the paths in the
+entry are relative to `cwd`, and a session started elsewhere will not find the server.
+Without the server the skills still work; code lookups fall back to plain file search.
 
 **Existing docs (brownfield, once).** Docs written before cairn have no frontmatter, so
 `check` can say nothing about them:
@@ -198,7 +269,9 @@ lines: bodies and existing keys are never touched, and a second run adds nothing
 ## How the agents and the MCP server work together
 
 Each repo runs its own Claude Code session. The session starts its own `cairn` MCP server
-from the repo's `.mcp.json` (over stdio, nothing listens on a port). The server reads the
+from the repo's `.mcp.json` (over stdio, nothing listens on a port). A Codex session does the
+same from `.codex/config.toml`; the agents and tools below are identical, only the host differs
+(Codex reaches the tools by their names under the `cairn` server rather than as `mcp__cairn__*`). The server reads the
 workspace's `repos.json`, so an agent in one repo can see the docs and code of all the others.
 
 ```mermaid
@@ -281,12 +354,26 @@ applies to a group of repos; the rest apply to any repo.
    Fill in the brief yourself; the agents do the rest and stop for your decisions. The plan
    step also updates `ai/contexts/**`. If the task needs a change in a sibling repo,
    `/request-change` files it there through the tracker.
+
+   **In Codex** (repo has `codex` in `hosts`), open Codex at the repo root and use the skill of
+   the same name, with the task after it:
+   ```
+   $create-brief Add CSV export → $enrich-description → $plan-task → $execute-plan → $code-review
+   ```
+   Same agents, same `ai/` task files, same stops for your decisions. Codex has no separate
+   model or agent picker here: it uses the model you started it with, asks in chat where
+   Claude would show a picker, and runs the architect → developer → reviewer roles one after
+   another where the Claude docs name sub-agents (unless delegation is allowed). Start a fresh
+   Codex chat where the docs say to start a fresh session. A repo can mix hosts: tasks
+   started in one can be continued in the other, because the state lives in `ai/`, not in the chat.
 3. **Let the agent look across repos.** With the MCP server registered, the architect can
    ask `counterparts` for the matching doc in another repo (content included, no checkout
    needed), `code_symbol` whether a type exists there, or `code_summary` for an overview.
    The first question about a repo may take several seconds while it is indexed; later ones
    re-index only if the code changed. Without the tool installed those answers are
-   `unknown` with a hint, never an error.
+   `unknown` with a hint, never an error. In Codex the same lookups need the `cairn` entry in
+   `.codex/config.toml` on this machine (`cairn context register --codex`); a fresh clone
+   has none until you run it.
 4. **Keep the cross-repo docs honest.** When you add or rename a context doc, link its
    counterpart in the other repo and name the code it describes, in the doc's frontmatter
    (`/discover` and the architect's context updates write `describes:` for you when a doc is
@@ -305,8 +392,9 @@ applies to a group of repos; the rest apply to any repo.
    `check` reports and exits `0`; it never fails a build (`--strict` opts in). A
    `CANDIDATE` is a suggestion, not an error: link it, or silence it with
    `notCounterpartOf`.
-5. **Commit.** Generated files, `ai/` and `ai/contexts/` changes are ordinary tracked
-   files. `_cairn/tools/` and `_cairn/cache/` are gitignored and never committed.
+5. **Commit.** Generated files (including `.agents/skills/` and the root `AGENTS.md`),
+   `ai/` and `ai/contexts/` changes are ordinary tracked files. `_cairn/tools/` and
+   `_cairn/cache/` are gitignored and never committed; neither is the machine-local `cairn` entry in `.codex/config.toml`.
 
 **Poking at it by hand** (the same calls the agents make):
 ```bash
@@ -395,8 +483,8 @@ Generated files are **committed**, not gitignored. Claude Code discovers
 
 ### Use the workflow in Codex
 
-Pass `--codex` to `cairn init` for a new repo, or set `"codexSkills": true` in
-`cairn.config.json`, then run `npx cairn render`. Use `npx cairn sync` to merge
+Pass `--host claude,codex` (or `--codex`) to `cairn init` for a new repo, or add `"codex"` to
+`hosts` in `cairn.config.json`, then run `npx cairn render`. Use `npx cairn sync` to merge
 local edits with preset changes, or `cairn upgrade --apply` to update and sync
 all enabled repos in a workspace. Commit the generated `.agents/skills/`
 files with the rest of the scaffold. The same option renders a short root
@@ -418,7 +506,8 @@ commands when the repo's configuration enables them. For cross-repo context
 and symbol lookups, use the Codex MCP entry in “Set up code lookups.” The
 workflow can also run with local file search.
 
-Config keys that shape the rendered agents (all in `cairn.config.json`): `model` (reviewer
+Config keys that shape the rendered agents (all in `cairn.config.json`): `hosts` (agent
+hosts to write files for, `["claude"]` by default; add `"codex"` for Codex skills), `model` (reviewer
 tier, default `sonnet`), `validationStack` (`zod` default, or `class-validator`; only read
 when `nestjs` is in `stack`), `tdd`, `commands.build`, `agents.<role>.name` / `.doc`, and
 `workspace` (path to `repos.json`, default `../repos.json`).

@@ -4251,16 +4251,68 @@ test('register --codex: the CLI writes both files only when asked', () => {
   ]);
 });
 
-atest('init --codex: sets codexSkills and --render writes the skills and a root AGENTS.md pointer', async () => {
+atest('init --codex / --host: hosts is saved in the config; --render writes the Codex skills and a root AGENTS.md pointer', async () => {
   const { main: init } = require('../lib/init');
+  const read = (d) => JSON.parse(fs.readFileSync(path.join(d, 'cairn.config.json'), 'utf8'));
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cairn-initcodex-'));
   assert.strictEqual(init(['--repo', dir, '--stack', 'nestjs', '--tracker', 'none', '--codex', '--render', '--no-color']), 0);
-  assert.strictEqual(JSON.parse(fs.readFileSync(path.join(dir, 'cairn.config.json'), 'utf8')).codexSkills, true);
+  assert.deepStrictEqual(read(dir).hosts, ['claude', 'codex']);
+  assert.strictEqual(read(dir).codexSkills, undefined, 'the deprecated key is not written');
   assert.ok(fs.existsSync(path.join(dir, '.agents', 'skills', 'create-brief', 'SKILL.md')));
   assert.match(fs.readFileSync(path.join(dir, 'AGENTS.md'), 'utf8'), /ai\/AGENTS\.md/);
+
   const plain = fs.mkdtempSync(path.join(os.tmpdir(), 'cairn-initplain-'));
   assert.strictEqual(init(['--repo', plain, '--stack', 'nestjs', '--tracker', 'none', '--render', '--no-color']), 0);
+  assert.deepStrictEqual(read(plain).hosts, ['claude'], 'Claude is the default and is written down');
   assert.ok(!fs.existsSync(path.join(plain, 'AGENTS.md')));
+
+  const viaHost = fs.mkdtempSync(path.join(os.tmpdir(), 'cairn-inithost-'));
+  assert.strictEqual(init(['--repo', viaHost, '--stack', 'nestjs', '--tracker', 'none', '--host', 'codex,claude,codex', '--no-color']), 0);
+  assert.deepStrictEqual(read(viaHost).hosts, ['codex', 'claude'], 'order kept, duplicates dropped');
+
+  const bad = fs.mkdtempSync(path.join(os.tmpdir(), 'cairn-initbad-'));
+  assert.strictEqual(init(['--repo', bad, '--stack', 'nestjs', '--tracker', 'none', '--host', 'cursor', '--no-color']), 2);
+  assert.ok(!fs.existsSync(path.join(bad, 'cairn.config.json')));
+});
+
+test('hosts: resolveHosts defaults to Claude, honours hosts, and still reads the old codexSkills key', () => {
+  const { resolveHosts, normalizeHosts, listHosts, getHost } = require('../lib/hosts');
+  assert.deepStrictEqual(listHosts(), ['claude', 'codex']);
+  assert.deepStrictEqual(resolveHosts({}), ['claude']);
+  assert.deepStrictEqual(resolveHosts({ hosts: ['codex'] }), ['codex']);
+  assert.deepStrictEqual(resolveHosts({ hosts: ['claude', 'codex'] }), ['claude', 'codex']);
+  assert.deepStrictEqual(resolveHosts({ codexSkills: true }), ['claude', 'codex']);
+  assert.deepStrictEqual(resolveHosts({ hosts: ['claude', 'codex'], codexSkills: true }), ['claude', 'codex']);
+  assert.deepStrictEqual(resolveHosts({ codexSkills: false }), ['claude']);
+  assert.deepStrictEqual(normalizeHosts('claude, codex'), ['claude', 'codex']);
+  assert.throws(() => normalizeHosts(['cursor']), /unknown host "cursor" — available: claude, codex/);
+  assert.throws(() => normalizeHosts([]), /at least one/);
+  assert.throws(() => getHost('nope'), /unknown host/);
+  for (const id of listHosts()) assert.ok(getHost(id).mcp && typeof getHost(id).mcp.register === 'function', id);
+});
+
+test('hosts: `hosts` and the old `codexSkills` render the same files; the default adds no Codex files', () => {
+  const { renderTargets } = require('../lib/render');
+  const base = { stack: ['nestjs'], tracker: { provider: 'none' } };
+  const files = (c) => renderTargets({ config: { ...base, ...c }, presetsDir: 'presets' }).targets.map((t) => t[0]).sort();
+  assert.deepStrictEqual(files({ hosts: ['claude', 'codex'] }), files({ codexSkills: true }));
+  assert.deepStrictEqual(files({ hosts: ['claude'] }), files({}));
+  assert.ok(files({ hosts: ['claude'] }).every((f) => !f.startsWith('.agents/') && f !== 'AGENTS.md'));
+  assert.ok(files({ hosts: ['claude', 'codex'] }).includes('.agents/skills/plan-task/SKILL.md'));
+});
+
+test('config: hosts is validated by key — wrong type, empty and unknown names are one-line errors', () => {
+  const { loadRepoConfig } = require('../lib/config');
+  const load = (hosts) => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cairn-hosts-'));
+    fs.writeFileSync(path.join(dir, 'cairn.config.json'), JSON.stringify({ stack: ['nestjs'], hosts }));
+    return loadRepoConfig(dir, { required: true });
+  };
+  assert.deepStrictEqual(load(['claude', 'codex']).hosts, ['claude', 'codex']);
+  assert.throws(() => load('codex'), /hosts/);
+  assert.throws(() => load([]), /at least one/);
+  assert.throws(() => load(['claude', 'cursor']), /unknown host "cursor"/);
+  assert.throws(() => load([1]), /hosts\[0\]/);
 });
 
 test('render: a root AGENTS.md the repo already has is kept when Codex skills are enabled', () => {

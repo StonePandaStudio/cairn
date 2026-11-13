@@ -6,10 +6,20 @@
   "type": "object",
   "additionalProperties": false,
   "properties": {
+    "hosts": {
+      "type": "array",
+      "items": { "type": "string", "enum": ["claude", "codex"] },
+      "minItems": 1,
+      "uniqueItems": true,
+      "default": ["claude"],
+      "description": "Agent hosts cairn writes files for. `claude` is the shared baseline (.claude/, ai/); `codex` adds Codex skills in .agents/skills/ and a root AGENTS.md pointer.",
+      "examples": [["claude"], ["claude", "codex"]]
+    },
     "codexSkills": {
       "type": "boolean",
       "default": false,
-      "description": "Also generate repository-local Codex skills for the built-in Cairn commands."
+      "deprecated": true,
+      "description": "Deprecated spelling of adding `codex` to `hosts`; still honoured."
     },
     "$schema": { "type": "string" },
     "cairn": {
