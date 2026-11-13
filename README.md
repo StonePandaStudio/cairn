@@ -37,11 +37,11 @@ each, then step 3 once, then step 4. Using Codex? See "Start a Codex-based proje
    in the repo's `.env` (see "Tracker"). Add `--dry-run` first to see what would be written.
 
    **Which agent host?** `init` records it as `"hosts"` in `cairn.config.json`; the default is
-   `["claude"]`. For Codex too, add `--host claude,codex`:
-   `npx cairn init --stack nestjs,typeorm --tracker none --host claude,codex`. `render` then also
-   writes the workflow as Codex skills in `.agents/skills/` and a short root `AGENTS.md` that points
-   Codex at `ai/AGENTS.md`. The hosts run the same workflow from the same `ai/` docs; a repo can
-   serve both. For an existing repo, edit `hosts` in `cairn.config.json` by hand (the older
+   `["claude"]`. For a Codex project use `--host codex`:
+   `npx cairn init --stack nestjs,typeorm --tracker none --host codex`. `render` then writes the
+   workflow as Codex skills in `.agents/skills/` and a short root `AGENTS.md` that points Codex at
+   `ai/AGENTS.md`. A repo used from both Claude Code and Codex takes `--host claude,codex`; the
+   hosts run the same workflow from the same `ai/` docs. For an existing repo, edit `hosts` in `cairn.config.json` by hand (the older
    `"codexSkills": true` still works and means the same as adding `codex`).
 2. **Edit `cairn.config.json`** if the defaults need changing: `commands.build`, `tdd`,
    `model`, `agents.<role>.name`.
@@ -72,15 +72,15 @@ Workspace table in. From the workspace folder, `cairn doctor` reports drift acro
 
 ## Start a Codex-based project
 
-The same setup as above, with Codex switched on. A repo can serve Claude Code and Codex at
-once; both run the same workflow from the same `ai/` docs.
+The same setup as above, with Codex as the host. Claude Code and Codex run the same workflow
+from the same `ai/` docs, so a repo can also serve both (`--host claude,codex`).
 
-1. **Install and init with `--host claude,codex`**, in the repo root:
+1. **Install and init with `--host codex`**, in the repo root:
    ```bash
    npm i -D @stonepandastudio/cairn
-   npx cairn init --stack nestjs,typeorm --tracker none --host claude,codex --render
+   npx cairn init --stack nestjs,typeorm --tracker none --host codex --render
    ```
-   `--host` saves `"hosts": ["claude", "codex"]` in `cairn.config.json`; `--render` scaffolds right away
+   `--host` saves `"hosts": ["codex"]` in `cairn.config.json`; `--render` scaffolds right away
    (without it, run `npx cairn render` as the next step). Add `--dry-run` to preview. Tracker
    options are the same as in "Start on a new repo".
 2. **What you get**, all committed:
@@ -488,7 +488,7 @@ Generated files are **committed**, not gitignored. Claude Code discovers
 
 ### Use the workflow in Codex
 
-Pass `--host claude,codex` to `cairn init` for a new repo, or add `"codex"` to
+Pass `--host codex` to `cairn init` for a new repo, or add `"codex"` to
 `hosts` in `cairn.config.json`, then run `npx cairn render`. Use `npx cairn sync` to merge
 local edits with preset changes, or `cairn upgrade --apply` to update and sync
 all enabled repos in a workspace. Commit the generated `.agents/skills/`
