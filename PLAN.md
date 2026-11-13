@@ -4,6 +4,118 @@ Execution order for what comes after v1. The *why* is in `DESIGN.md`
 ("The cross-repo context layer", "### Sequencing"); this is the running order and
 where we are in it.
 
+## Next (2026-11-13) — command names, project docs in the flow, interactive tool
+
+Everything below lands in **0.16.0**, which is not published yet (0.15.0 is the last release), so
+renames cost nothing now and need only aliases for what 0.15.0 already shipped.
+
+### Where we are
+
+Built since 0.15.0, all on `main`, 256 tests passing. A repo that does not use the new keys renders
+exactly as before (every pre-existing snapshot is byte-identical):
+
+| Area | State |
+|---|---|
+| Presets | `spring`, `jpa-flyway`, `css-modules`, `docker` added (13 in total) |
+| Hosts | `hosts` config key (default `claude`), adapters in `lib/hosts/` (claude, codex), `init --host`; `codexSkills` kept as a deprecated alias with a one-line note |
+| Codex | skills in `.agents/skills/`, root `AGENTS.md` pointer, `.codex/config.toml` MCP entry; a Codex-only repo gets no `.claude/` folder and Codex wording in the shared docs (`cmdPrefix`, `guideFile`, tool names) |
+| MCP | `cairn context register` is the one command; it writes `.mcp.json` / `.codex/config.toml` per the repo's hosts |
+| Project docs | `docs` config key; **Project docs** table in `ai/AGENTS.md`; architect, developer and reviewer read the relevant docs; `/discover` carries doc knowledge into contexts with provenance (`## From the project docs`, `## Doc vs code`) |
+| README | new "What is supported", "Start a Codex-based project", "Existing docs as a knowledge source" |
+
+Not yet verified: no Codex session has been run against a Codex-only repo, and `/discover` with
+`docs` has not been tried on a real repo. spravaspis (Russian docs under `docum/`) is the intended
+first trial.
+
+### Planned, in order
+
+**1. `cairn context install-tools` (rename of `context setup`).**
+Installs Serena (and optionally codebase-memory-mcp) into `_cairn/tools/` and warms each repo's
+language server. `setup` stays as a silent alias: it is in 0.15.0 and in published docs. Flags are
+unchanged (`--provider`, `--no-warm`). The help text says it also warms the language servers.
+Touches: `lib/context/cli.js`, README, `INFRASTRUCTURE.md`, `infrastructure.mmd` (it names `cairn
+context setup`; keep the diagram current), the "not installed" hints, tests.
+
+**2. `cairn docs add|list|remove` (new).**
+Fills the `docs` key without hand-editing JSON.
+- `docs add <path>… [--about <text>] [--when <text>]`. A file becomes one entry. A folder expands to
+  one entry per `.md` file under it, with `about` taken from the file's first heading unless given;
+  `--no-expand` keeps a folder as a single entry. Idempotent: an existing path is left alone and
+  reported.
+- `docs list` prints the table. `docs remove <path>` drops an entry.
+- Edits only the `docs` key of `cairn.config.json` and keeps every other key and the file's
+  formatting (the `workspace add` precedent). Validation reuses `normalizeDocs`.
+- `--dry-run`. Warns on a path that does not exist.
+- Prints `cairn sync` as the next step, which carries the Project docs section into `ai/AGENTS.md`.
+- Optional later: `cairn init` offers it when it finds a `docs/` or `docum/` folder.
+
+**3. `cairn context add-frontmatter` (rename of `context adopt`).**
+The name says what it does: it adds `type:` (from the folder) and, with `--link-candidates`,
+`counterpartOf:` to docs already in `ai/contexts/` that have no frontmatter. `adopt` stays as an
+alias. It is not part of the main flow; it is for a repo that already had hand-written
+`ai/contexts/` docs. `--link-candidates` is documented as cross-repo linking. A `--docs-dirs` option
+is **not** added: the command never touches files outside `ai/contexts/`, and project docs are
+referenced through `docs`, not copied or edited.
+Touches: `lib/context/cli.js`, `adopt.js` help text, `presets/core/agents/discovery.md` D.6 and
+`commands/discover.md` (both say `cairn context adopt`; **this changes every snapshot**, review it
+once), README, `INFRASTRUCTURE.md`.
+
+**4. README order fix.**
+For a repo that has code and docs the sequence is: `context install-tools` → `context register` →
+`docs add` → (`context add-frontmatter`, only for old `ai/contexts/` docs) → `/discover`.
+`register` comes before `/discover` because discovery confirms `describes:` anchors with
+`code_symbol`. Rewrite "Start on a repo that already has code", "Set up code lookups" and "Everyday
+workflow" to match, and state `add-frontmatter` as an "only if".
+
+For 1–4: old names keep working without a deprecation note (they shipped); README and help use only
+the new names; one commit per item; tests for each alias and for `docs add` (file, folder,
+idempotence, formatting preserved, missing path).
+
+### The interactive tool (install / upgrade wizard) — summary and notes
+
+**Status: not started.** Only the idea and an estimate exist. `INFRASTRUCTURE.md` already lists "the
+interactive form of `cairn context adopt`" as a wish, so the need was noted before.
+
+**Shape (discussed, not decided in detail).**
+- A thin orchestrator. It asks questions, builds argv, and calls the existing `main(argv)` of
+  `init`, `workspace`, `render`, `context register`, `context install-tools`, `docs add` and
+  `upgrade`. No second code path for the work itself.
+- Preview before apply: the commands' own `--dry-run` output, then a confirmation.
+- It ends by printing the equivalent non-interactive commands, so a run is reproducible and teaches
+  the flags. Flags stay first-class for CI and agents; the wizard is never required.
+
+**Install flow.** hosts → stack → tracker (and project key) → workspace (single repo or group) →
+`docs` (offer a detected `docs/` or `docum/`) → render → register → install-tools.
+
+**Upgrade flow.** Show the `cairn upgrade` report, ask about `--apply` and `--bump-pin` per repo,
+point at conflicts. Report first, never commits, as `upgrade` does today.
+
+**Pieces that are new.**
+1. Prompt layer. The package has zero runtime dependencies. Options: dependency-free
+   `readline/promises` (text, yes/no, numbered choice, comma-separated multi-select, about 150
+   lines, must work without a TTY) or one small prompt library for arrow-key menus. **Open
+   decision.**
+2. Detection (optional, later): suggest `--stack` from `package.json` dependencies (nest, fastify,
+   react, next, angular, prisma, drizzle, typeorm, tailwind), `build.gradle.kts` (Spring,
+   Hibernate), `docker-compose.yml`, and a docs folder. Heuristic; always confirmed.
+3. Injectable prompts, so tests feed scripted answers and assert the resulting argv.
+
+**Estimate.** A thin install wizard is about a day; detection and the upgrade flow one to two days
+more; arrow-key polish is small on top. These figures come from reading the code, not from a
+prototype.
+
+**Risks.** Wrong detection defaults (keep them cheap to correct). The upgrade flow touches package
+managers and merge conflicts. Windows TTY quirks (test early, including a piped non-TTY run). The
+wizard drifting from the commands it wraps, hence "call `main`, don't reimplement".
+
+**Suggested phases.** (a) prompt layer and an install wizard without detection; (b) the `docs` offer
+and the upgrade flow; (c) detection. Do items 1–4 above first, so the wizard is written against the
+final command names.
+
+**Open questions.** Prompt dependency or not. Command name (`cairn wizard`, `cairn start`, or bare
+`cairn` in a TTY with no repo config). Whether the wizard may run `npm i -D` itself or only print it.
+Whether to offer `register` when no host of the repo needs it.
+
 ## Scope split — core vs. the context layer (decided 2026-10-22)
 
 Two products had grown into one roadmap. Splitting them so the second cannot pull
