@@ -3220,7 +3220,7 @@ test('upgrade: a repo whose pin excludes the running cairn is blocked, not repor
   assert.strictEqual(fs.readFileSync(path.join(ws.repo, 'package.json'), 'utf8'), before, 'the pin is untouched without --bump-pin');
 });
 
-test('render and workspace upgrade refresh Codex files and preview local MCP registration', () => {
+test('render and workspace upgrade refresh Codex files and leave a repo-owned AGENTS.md alone', () => {
   const { main: render } = require('../lib/render/cli');
   const { main: upgrade } = require('../lib/upgrade/cli');
   const { readManifest, record, writeManifest, writeBase } = require('../lib/manifest');
@@ -3229,13 +3229,12 @@ test('render and workspace upgrade refresh Codex files and preview local MCP reg
   const workspace = path.join(root, 'repos.json');
   const rel = '.agents/skills/create-brief/SKILL.md';
   const skill = path.join(repo, rel);
-  const mcp = path.join(repo, '.codex/config.toml');
   fs.mkdirSync(repo);
   fs.writeFileSync(workspace, JSON.stringify({ repos: [{ name: 'backend', path: 'backend' }] }));
   fs.writeFileSync(path.join(repo, 'cairn.config.json'), JSON.stringify({ codexSkills: true }));
   fs.writeFileSync(path.join(repo, 'AGENTS.md'), 'Repo-owned guide\n');
   const renderArgs = ['--repo', repo, '--no-color'];
-  const upgradeArgs = ['--config', workspace, '--no-color', '--mcp'];
+  const upgradeArgs = ['--config', workspace, '--no-color'];
   assert.strictEqual(captureLog(() => render(renderArgs)).result, 0);
   const expected = fs.readFileSync(skill, 'utf8');
   const stale = () => {
@@ -3247,10 +3246,8 @@ test('render and workspace upgrade refresh Codex files and preview local MCP reg
   };
 
   stale();
-  const preview = captureLog(() => render([...renderArgs, '--mcp', '--dry-run']));
+  const preview = captureLog(() => render([...renderArgs, '--dry-run']));
   assert.strictEqual(preview.result, 0);
-  assert.match(preview.out, /preview: created/);
-  assert.strictEqual(fs.existsSync(mcp), false);
   assert.strictEqual(fs.readFileSync(skill, 'utf8'), 'Old skill\n');
   assert.strictEqual(captureLog(() => render(renderArgs)).result, 0);
   assert.strictEqual(fs.readFileSync(skill, 'utf8'), expected);
@@ -3262,38 +3259,11 @@ test('render and workspace upgrade refresh Codex files and preview local MCP reg
 
   stale();
   const report = captureLog(() => upgrade(upgradeArgs));
-  assert.match(report.out, /\bMCP\b/);
-  assert.match(report.out, /codex created/);
   assert.match(report.out, /note: backend: "codexSkills" is deprecated/);
-  assert.strictEqual(fs.existsSync(mcp), false);
   const applied = captureLog(() => upgrade([...upgradeArgs, '--apply']));
   assert.strictEqual(applied.result, 0, applied.out);
   assert.strictEqual(fs.readFileSync(skill, 'utf8'), expected);
   assert.strictEqual(fs.readFileSync(path.join(repo, 'AGENTS.md'), 'utf8'), 'Repo-owned guide\n');
-  assert.match(fs.readFileSync(mcp, 'utf8'), /"\.\.\/repos\.json"/);
-});
-
-test('mcp registration follows the repo hosts: --mcp writes an entry for each host and only for those', () => {
-  const { main: render } = require('../lib/render/cli');
-  const root = tmpRepo();
-  const mk = (name, cfg) => {
-    const repo = path.join(root, name);
-    fs.mkdirSync(repo);
-    fs.writeFileSync(path.join(repo, 'cairn.config.json'), JSON.stringify({ stack: ['nestjs'], tracker: { provider: 'none' }, ...cfg }));
-    return repo;
-  };
-  const claudeOnly = mk('claude-only', { hosts: ['claude'] });
-  const both = mk('both', { hosts: ['claude', 'codex'] });
-
-  const all = captureLog(() => render(['--repo', both, '--mcp', '--no-color']));
-  assert.strictEqual(all.result, 0, all.out);
-  assert.ok(fs.existsSync(path.join(both, '.mcp.json')));
-  assert.ok(fs.existsSync(path.join(both, '.codex', 'config.toml')));
-
-  const claudeMcp = captureLog(() => render(['--repo', claudeOnly, '--mcp', '--no-color']));
-  assert.strictEqual(claudeMcp.result, 0, claudeMcp.out);
-  assert.ok(fs.existsSync(path.join(claudeOnly, '.mcp.json')));
-  assert.ok(!fs.existsSync(path.join(claudeOnly, '.codex')));
 });
 
 test('older repos: a config without `hosts` renders Claude only, and a codexSkills one keeps working with a deprecation note', () => {
@@ -4296,20 +4266,44 @@ test('register --codex: writes .codex/config.toml with an absolute cwd, merges, 
   assert.match(fs.readFileSync(file, 'utf8'), /url = "https:\/\/x"\n\n\[mcp_servers\.cairn\]\n/);
 });
 
-test('register --codex: the CLI writes both files only when asked', () => {
+test('register: one command writes an entry for each host a repo uses, and only those', () => {
   const { repos, config } = registerWs();
+  const [backend, frontend] = repos;
+  const cfg = (repo, hosts) => fs.writeFileSync(path.join(repo.path, 'cairn.config.json'), JSON.stringify({ stack: ['nestjs'], hosts }));
+  cfg(backend, ['claude', 'codex']);
+  cfg(frontend, ['claude']);
   const bin = path.join(__dirname, '..', 'bin', 'cairn.js');
-  const run = (extra) => spawnSync(process.execPath, [bin, 'context', 'register', '--config', config, '--json', ...extra], { encoding: 'utf8' });
-  assert.strictEqual(run([]).status, 0);
-  assert.ok(!fs.existsSync(path.join(repos[0].path, '.codex')));
-  const out = run(['--codex']);
+  const run = (extra = []) => spawnSync(process.execPath, [bin, 'context', 'register', '--config', config, '--json', ...extra], { encoding: 'utf8' });
+
+  const dry = run(['--dry-run']);
+  assert.strictEqual(dry.status, 0, dry.stderr);
+  assert.ok(!fs.existsSync(path.join(backend.path, '.mcp.json')), 'a dry run writes nothing');
+
+  const out = run();
   assert.strictEqual(out.status, 0, out.stderr);
-  assert.deepStrictEqual(JSON.parse(out.stdout).map((r) => [r.repo, r.target || 'claude', r.action]), [
-    ['backend', 'claude', 'unchanged'],
+  assert.deepStrictEqual(JSON.parse(out.stdout).map((r) => [r.repo, r.host, r.action]), [
+    ['backend', 'claude', 'created'],
     ['backend', 'codex', 'created'],
-    ['frontend', 'claude', 'unchanged'],
-    ['frontend', 'codex', 'created'],
+    ['frontend', 'claude', 'created'],
   ]);
+  assert.ok(fs.existsSync(path.join(backend.path, '.codex', 'config.toml')));
+  assert.ok(!fs.existsSync(path.join(frontend.path, '.codex')), 'a Claude-only repo gets no Codex file');
+
+  assert.deepStrictEqual(JSON.parse(run().stdout).map((r) => r.action), ['unchanged', 'unchanged', 'unchanged']);
+
+  // a repo without a cairn.config.json is Claude only
+  const bare = registerWs();
+  const second = spawnSync(process.execPath, [bin, 'context', 'register', '--config', bare.config, '--json'], { encoding: 'utf8' });
+  assert.deepStrictEqual(JSON.parse(second.stdout).map((r) => [r.host, r.action]), [['claude', 'created'], ['claude', 'created']]);
+
+  // a different entry is left alone (exit 1) until --force
+  fs.writeFileSync(path.join(backend.path, '.codex', 'config.toml'), '[mcp_servers.cairn]\ncommand = "mine"\n');
+  const differs = run();
+  assert.strictEqual(differs.status, 1);
+  assert.deepStrictEqual(JSON.parse(differs.stdout).map((r) => r.action), ['unchanged', 'differs', 'unchanged']);
+  const forced = run(['--force']);
+  assert.strictEqual(forced.status, 0);
+  assert.deepStrictEqual(JSON.parse(forced.stdout).map((r) => r.action), ['unchanged', 'replaced', 'unchanged']);
 });
 
 atest('init --host: hosts is saved in the config; --render writes the Codex skills and a root AGENTS.md pointer', async () => {

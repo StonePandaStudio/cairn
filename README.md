@@ -64,7 +64,7 @@ each, then step 3 once, then step 4. Using Codex? See "Start a Codex-based proje
    root `AGENTS.md` for Codex). Generated files are committed, not gitignored. Then run
    `/create-brief` in Claude Code, or `$create-brief` in Codex, to start a task.
 
-   For Codex, `render --mcp` also writes the machine-local `cairn` MCP table into
+   For Codex, `cairn context register` also writes the machine-local `cairn` MCP table into
    `.codex/config.toml`; see "Set up code lookups". That file is not committed.
 
 If you add the workspace *after* rendering, run `npx cairn sync` in each repo to carry the
@@ -93,16 +93,16 @@ once; both run the same workflow from the same `ai/` docs.
    - `.claude/` — still generated, because the skills read the same role docs and the
      `code-scout` procedure from there. Ignore it if nobody uses Claude Code.
 3. **Optional: cross-repo context and code lookups.** Install Serena once per workspace
-   (`cairn context setup`, see "Set up code lookups"), then register the server for Codex:
+   (`cairn context setup`, see "Set up code lookups"), then register the server (one command for every host the repo uses):
    ```bash
-   npx cairn render --mcp              # or: cairn context register --codex
+   npx cairn context register
    ```
    This writes a `[mcp_servers.cairn]` table into `.codex/config.toml`. The file has an
    absolute path in it, so it is specific to this machine: do not commit it, and run the command
    again on each checkout. Skip this step and the skills still work, with plain file search.
 4. **Group of repos:** repeat 1–3 in each repo, then `cairn workspace init` / `add` and
-   `cairn sync` as in "Start on a new repo". `cairn upgrade --apply --mcp` later updates
-   every repo and refreshes each Codex entry.
+   `cairn sync` as in "Start on a new repo". Run `cairn context register` once from the
+   workspace folder to register the server in every repo.
 5. **Start working.** Open Codex at the repo root (not a subfolder) and run:
    ```
    $create-brief Add CSV export
@@ -112,8 +112,8 @@ once; both run the same workflow from the same `ai/` docs.
    the Claude commands.
 
 Adding Codex to a repo that is already cairn-managed: add `"codex"` to `hosts` in
-`cairn.config.json`, run `npx cairn sync` (or `render`), then `render --mcp` if you want
-the MCP server.
+`cairn.config.json`, run `npx cairn sync` (or `render`), then `cairn context register` if you
+want the MCP server.
 
 ## Start on a repo that already has code
 
@@ -197,7 +197,6 @@ cairn doctor                    # versions table: pin / installed / last rendere
 cairn upgrade                   # report only: what would change in each repo
 cairn upgrade --apply           # update cairn in each repo, then `cairn sync` there
 cairn upgrade --apply --bump-pin   # also rewrite a pin that excludes the new version
-cairn upgrade --apply --mcp        # also register the MCP server for each host a repo uses
 ```
 `upgrade` uses each repo's own package manager (picked from its lockfile), never commits or
 pushes, and reports a repo with a blocked pin instead of syncing it with the old version.
@@ -227,7 +226,7 @@ see fast answers from the start. On Windows keep the workspace path short (under
 limit). `cairn context setup --provider codebase-memory-mcp` adds an optional architecture
 summary tool. Then register the MCP server, so agents in any repo can ask about the others:
 ```bash
-cairn context register     # adds a "cairn" entry to each repo's .mcp.json (merge; --force to replace)
+cairn context register     # adds a "cairn" entry for each host a repo uses (merge; --force to replace)
 ```
 Claude Code asks you to approve a project server the first time it sees it. The name must stay
 `cairn`: the agent docs refer to `mcp__cairn__*`. The entry is
@@ -238,13 +237,12 @@ search, so an agent can call them without loading them first. A repo registered 
 version has the entry without it: `cairn context register --force` updates it. Start Claude Code at the repo root: from a subfolder Claude Code runs
 the server from that subfolder and the relative path no longer resolves.
 
-**Codex.** `cairn context register --codex` also writes the server into each repo's
-project-scoped `.codex/config.toml` (a `[mcp_servers.cairn]` table; other servers and
-settings in the file are kept, and a different `cairn` table is left alone unless
-`--force`). `cairn render --mcp` and `cairn upgrade --apply --mcp` write the same
-table as part of a render or an upgrade, for the repos that have `codex` in `hosts`. Codex needs an absolute `cwd`, so that file is
-specific to the machine: each checkout runs one of these commands itself, and the file is not
-committed (add `.codex/config.toml` to `.gitignore` if the repo holds only this entry). Codex
+**Codex.** `register` writes an entry for every host a repo names in `hosts` (Claude only, by
+default): `.mcp.json` for `claude`, and for `codex` the project-scoped `.codex/config.toml`, as a
+`[mcp_servers.cairn]` table (other servers and settings in the file are kept, and a different
+`cairn` table is left alone unless `--force`). Codex needs an absolute `cwd`, so that file is
+specific to the machine: each checkout runs `register` itself, and the file is not committed
+(add `.codex/config.toml` to `.gitignore` if the repo holds only this entry). Codex
 reads a project's `.codex/config.toml` once the project is trusted. By hand:
 
 ```toml
@@ -379,7 +377,7 @@ applies to a group of repos; the rest apply to any repo.
    The first question about a repo may take several seconds while it is indexed; later ones
    re-index only if the code changed. Without the tool installed those answers are
    `unknown` with a hint, never an error. In Codex the same lookups need the `cairn` entry in
-   `.codex/config.toml` on this machine (`cairn context register --codex`); a fresh clone
+   `.codex/config.toml` on this machine (`cairn context register`); a fresh clone
    has none until you run it.
 4. **Keep the cross-repo docs honest.** When you add or rename a context doc, link its
    counterpart in the other repo and name the code it describes, in the doc's frontmatter
@@ -498,10 +496,8 @@ files with the rest of the scaffold. The same option renders a short root
 `AGENTS.md` that points Codex at `ai/AGENTS.md` and the skills; a repo that
 already has its own root `AGENTS.md` keeps it — add the pointer by hand.
 
-Add `--mcp` to `cairn render` or `cairn upgrade --apply` to register the Cairn MCP server for
-each host the repo uses: `.mcp.json` for `claude`, the machine-local `.codex/config.toml` for
-`codex`. A host the repo does not use gets no entry. Preview with `cairn render --mcp --dry-run` or `cairn upgrade --mcp`. Existing
-settings are preserved, and a differing Cairn entry is reported for review.
+To use the Cairn MCP server from Codex, run `cairn context register`: it writes the entry for each
+host the repo uses (see "Set up code lookups"), and none for a host the repo does not use.
 
 Open Codex in the repo and invoke `$create-brief Add CSV export`. The next
 steps are `$enrich-description`, `$plan-task`, `$execute-plan`, and
