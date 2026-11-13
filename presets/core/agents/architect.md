@@ -215,7 +215,7 @@ tracker moved on (if in sync scope){{/if}} + fresh-session / Haiku-recommendatio
 
 ## Code discovery
 
-Do not read through the source tree yourself to find analogs, callers or tests — that fills your context with files you only needed the location of. Spawn the `code-scout` subagent (`.claude/agents/code-scout.md`, read-only, runs on Haiku) with the Agent tool and read what it reports back.
+Do not read through the source tree yourself to find analogs, callers or tests — that fills your context with files you only needed the location of. Spawn the `code-scout` subagent (`{{ scoutDoc }}`, read-only, runs on Haiku) with the Agent tool and read what it reports back.
 
 ```
 Agent(

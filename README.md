@@ -90,8 +90,10 @@ from the same `ai/` docs, so a repo can also serve both (`--host claude,codex`).
      tracker steps where the config enables them);
    - `AGENTS.md` at the repo root — a short pointer that sends Codex to `ai/AGENTS.md` and the
      skills. A repo that already has a root `AGENTS.md` keeps it; add the pointer by hand;
-   - `.claude/` — still generated, because the skills read the same role docs and the
-     `code-scout` procedure from there. Ignore it if nobody uses Claude Code.
+   - `.agents/code-scout.md` — the read-only code-search procedure the skills and role docs refer
+     to (a Claude Code repo has it as `.claude/agents/code-scout.md` instead).
+
+   There is no `.claude/` folder: a repo gets Claude Code's files only when `claude` is in `hosts`.
 3. **Optional: cross-repo context and code lookups.** Install Serena once per workspace
    (`cairn context setup`, see "Set up code lookups"), then register the server (one command for every host the repo uses):
    ```bash

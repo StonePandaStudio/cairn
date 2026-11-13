@@ -3015,6 +3015,7 @@ const SNAPSHOT_CASES = {
   'nextjs-drizzle-youtrack': { stack: ['nextjs', 'drizzle'], tracker: { provider: 'youtrack', projectKey: 'CI' } },
   'react-css-modules-none': { stack: ['react', 'css-modules'], tracker: { provider: 'none' } },
   'nestjs-typeorm-codex': { stack: ['nestjs', 'typeorm'], tracker: { provider: 'none' }, codexSkills: true },
+  'nestjs-codex-only': { stack: ['nestjs'], tracker: { provider: 'none' }, hosts: ['codex'] },
   'spring-jpa-flyway-docker-none': { stack: ['spring', 'jpa-flyway', 'docker'], tracker: { provider: 'none' } },
   'spring-jpa-flyway-none': { stack: ['spring', 'jpa-flyway'], tracker: { provider: 'none' } },
 };
@@ -4344,6 +4345,50 @@ test('hosts: resolveHosts defaults to Claude, honours hosts, and still reads the
   assert.throws(() => normalizeHosts([]), /at least one/);
   assert.throws(() => getHost('nope'), /unknown host/);
   for (const id of listHosts()) assert.ok(getHost(id).mcp && typeof getHost(id).mcp.register === 'function', id);
+});
+
+test('hosts: a Codex-only repo gets no .claude/ folder; the scout procedure moves to .agents/', () => {
+  const { renderTargets } = require('../lib/render');
+  const base = { stack: ['nestjs'], tracker: { provider: 'youtrack', projectKey: 'CI' } };
+  const render = (hosts) => new Map(renderTargets({ config: { ...base, hosts }, presetsDir: 'presets' }).targets.map((t) => [t[0], t[1]]));
+
+  const codex = render(['codex']);
+  assert.deepStrictEqual([...codex.keys()].filter((f) => f.startsWith('.claude/')), []);
+  for (const f of ['ai/AGENTS.md', 'ai/agents/architect.md', '.agents/skills/create-brief/SKILL.md', '.agents/skills/youtrack-status/SKILL.md', 'AGENTS.md']) {
+    assert.ok(codex.has(f), f);
+  }
+  const scout = codex.get('.agents/code-scout.md');
+  assert.ok(scout, 'the scout procedure is written for Codex');
+  assert.doesNotMatch(scout, /^---/m, 'no Claude subagent frontmatter');
+  assert.doesNotMatch(scout, /^model:|^tools:/m);
+  assert.match(scout, /^# code-scout/);
+  assert.match(scout, /read-only code scout/);
+  assert.match(codex.get('.agents/skills/plan-task/SKILL.md'), /search procedure in `\.agents\/code-scout\.md`/);
+  assert.match(codex.get('ai/agents/developer.md'), /`code-scout` subagent \(`\.agents\/code-scout\.md`/);
+  assert.ok(![...codex.values()].some((c) => c.includes('.claude/')), 'nothing in a Codex-only repo points at .claude/');
+
+  const both = render(['claude', 'codex']);
+  assert.ok(both.has('.claude/commands/plan-task.md') && both.has('.claude/agents/code-scout.md'));
+  assert.ok(!both.has('.agents/code-scout.md'), 'one scout doc: the Claude one');
+  assert.match(both.get('.agents/skills/plan-task/SKILL.md'), /search procedure in `\.claude\/agents\/code-scout\.md`/);
+  assert.match(both.get('ai/agents/developer.md'), /`\.claude\/agents\/code-scout\.md`/);
+
+  const claude = render(['claude']);
+  assert.ok(![...claude.keys()].some((f) => f.startsWith('.agents/') || f === 'AGENTS.md'));
+});
+
+test('hosts: switching a repo from claude to codex reports the old .claude files as orphaned and deletes nothing', () => {
+  const { main: render } = require('../lib/render/cli');
+  const { main: sync } = require('../lib/sync/cli');
+  const repo = tmpRepo();
+  fs.writeFileSync(path.join(repo, 'cairn.config.json'), JSON.stringify({ stack: ['nestjs'], tracker: { provider: 'none' }, hosts: ['claude'] }));
+  assert.strictEqual(captureLog(() => render(['--repo', repo, '--no-color'])).result, 0);
+  assert.ok(fs.existsSync(path.join(repo, '.claude', 'agents', 'code-scout.md')));
+  fs.writeFileSync(path.join(repo, 'cairn.config.json'), JSON.stringify({ stack: ['nestjs'], tracker: { provider: 'none' }, hosts: ['codex'] }));
+  const out = captureLog(() => sync(['--repo', repo, '--no-color']));
+  assert.match(out.out, /orphaned\s+\.claude\/agents\/code-scout\.md/);
+  assert.ok(fs.existsSync(path.join(repo, '.claude', 'agents', 'code-scout.md')), 'sync leaves the old file for you to remove');
+  assert.ok(fs.existsSync(path.join(repo, '.agents', 'code-scout.md')));
 });
 
 test('hosts: `hosts` and the old `codexSkills` render the same files; the default adds no Codex files', () => {

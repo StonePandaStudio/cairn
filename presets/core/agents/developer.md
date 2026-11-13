@@ -151,7 +151,7 @@ Before implementing any pattern, find an existing analog in the source tree (see
 
 To locate code without loading it into your context — the analog to mirror, every caller
 of a symbol you are about to change, whether a file the plan names exists — spawn the
-`code-scout` subagent (`.claude/agents/code-scout.md`, read-only) with the Agent tool:
+`code-scout` subagent (`{{ scoutDoc }}`, read-only) with the Agent tool:
 
 ```
 Agent(

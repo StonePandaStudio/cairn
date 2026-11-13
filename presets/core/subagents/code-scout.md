@@ -1,4 +1,4 @@
-<!-- cairn preset: core. Rendered to `.claude/agents/code-scout.md` — a native Claude Code
+<!-- cairn preset: core. Rendered to `.claude/agents/code-scout.md` when the repo uses Claude Code — a native Claude Code
      subagent, unlike the ai/agents/*.md role docs, which run as a persona in the main
      session. Subagents cannot spawn subagents, so this one must stay a leaf: read-only
      tools, no Agent tool. -->

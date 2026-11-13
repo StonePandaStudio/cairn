@@ -12,7 +12,7 @@
       "minItems": 1,
       "uniqueItems": true,
       "default": ["claude"],
-      "description": "Agent hosts cairn writes files for. `claude` is the shared baseline (.claude/, ai/); `codex` adds Codex skills in .agents/skills/ and a root AGENTS.md pointer.",
+      "description": "Agent hosts cairn writes files for. Every host reads the shared ai/ docs. `claude` adds .claude/ (commands and the code-scout subagent, plus the .mcp.json entry); `codex` adds Codex skills in .agents/skills/, a root AGENTS.md pointer and, when `claude` is not also listed, .agents/code-scout.md. A repo without `claude` gets no .claude/ folder.",
       "examples": [["claude"], ["claude", "codex"]]
     },
     "codexSkills": {
