@@ -69,8 +69,8 @@ The code base exists; the AI workflow and its docs do not (or only as hand-copie
    npm i -D @stonepandastudio/cairn
    npx cairn init --stack fastify,prisma --tracker none
    ```
-2. **Render.** `cairn render` only writes files that do not exist and reports the rest,
-   so an existing `ai/`, `.claude/commands/` or `ai/scripts/*.js` is never overwritten.
+2. **Render.** `cairn render` seeds the scaffold and reports existing files it
+   leaves in place, such as hand-written `ai/` docs or `.claude/commands/`.
    ```bash
    npx cairn render --dry-run
    npx cairn render
@@ -332,9 +332,9 @@ cairn context code summary backend
 | `cairn preset list` | The bundled presets — kind (framework / orm / styling), what each ships, and which ones this repo's `stack` uses. `render`, `sync` and `init` also check the stack: a name listed twice or `core` as an entry is refused; a name with no preset (a typo) warns with a suggestion — `cli` and `unknown` are the deliberate exceptions |
 | `cairn context <cmd>` | **Prototype.** Resolves `ai/contexts/**/*.md` across a `repos.json` workspace into a graph — declared `counterpartOf` links, inferred reverse edges, and a same-path/same-title suggest pass. `build` / `check` / `counterparts <id>`; `check` never fails CI on its own (`--strict` opts in). `adopt` retrofits frontmatter onto existing docs (`type:`, and with `--link-candidates` `counterpartOf:`; additions only, dry run unless `--write`). `setup` installs a pinned code provider into `<workspace>/_cairn/tools/` — per workspace, never global; Serena by default (symbols + references via the repo's language server), `--provider codebase-memory-mcp` for an optional architecture summary — and `code symbol <repo> <name>` / `code references <repo> <Class/method>` / `code summary <repo>` query it; with a provider, `check` also verifies `describes: entity Foo` anchors (`BROKEN_ANCHOR`). `register` adds the server to each repo's `.mcp.json`; `serve` is an MCP stdio server over all of it (`list_contexts`, `counterparts`, `check`, `code_symbol`, `code_references`, `code_summary`): cairn ships no code parser; without the tool, code answers are `unknown` |
 
-`cairn render` is **greenfield only**: it writes files that do not exist, records them
-in the manifest, stores the render in `_cairn/base/`, and leaves anything already on
-disk alone (reporting it).
+`cairn render` seeds missing files and refreshes managed Codex skills and the
+generated root `AGENTS.md` when their contents still match the last render. It
+records those writes in the manifest and stores the render in `_cairn/base/`.
 
 `cairn sync` is the upgrade path. For each managed file it holds three versions —
 `base` (the last render, in `_cairn/base/`), `ours` (what is on disk), `theirs` (what
@@ -396,11 +396,17 @@ Generated files are **committed**, not gitignored. Claude Code discovers
 ### Use the workflow in Codex
 
 Pass `--codex` to `cairn init` for a new repo, or set `"codexSkills": true` in
-`cairn.config.json`, then run `npx cairn sync` in an existing Cairn repo or
-`npx cairn render` for the first render. Commit the generated `.agents/skills/`
+`cairn.config.json`, then run `npx cairn render`. Use `npx cairn sync` to merge
+local edits with preset changes, or `cairn upgrade --apply` to update and sync
+all enabled repos in a workspace. Commit the generated `.agents/skills/`
 files with the rest of the scaffold. The same option renders a short root
 `AGENTS.md` that points Codex at `ai/AGENTS.md` and the skills; a repo that
 already has its own root `AGENTS.md` keeps it — add the pointer by hand.
+
+Add `--codex-mcp` to `cairn render` or `cairn upgrade --apply` to include the
+machine-local Cairn MCP table in `.codex/config.toml`. Preview it with
+`cairn render --codex-mcp --dry-run` or `cairn upgrade --codex-mcp`. Existing
+settings are preserved, and a differing Cairn table is reported for review.
 
 Open Codex in the repo and invoke `$create-brief Add CSV export`. The next
 steps are `$enrich-description`, `$plan-task`, `$execute-plan`, and

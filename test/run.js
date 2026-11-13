@@ -3220,6 +3220,57 @@ test('upgrade: a repo whose pin excludes the running cairn is blocked, not repor
   assert.strictEqual(fs.readFileSync(path.join(ws.repo, 'package.json'), 'utf8'), before, 'the pin is untouched without --bump-pin');
 });
 
+test('render and workspace upgrade refresh Codex files and preview local MCP registration', () => {
+  const { main: render } = require('../lib/render/cli');
+  const { main: upgrade } = require('../lib/upgrade/cli');
+  const { readManifest, record, writeManifest, writeBase } = require('../lib/manifest');
+  const root = tmpRepo();
+  const repo = path.join(root, 'backend');
+  const workspace = path.join(root, 'repos.json');
+  const rel = '.agents/skills/create-brief/SKILL.md';
+  const skill = path.join(repo, rel);
+  const mcp = path.join(repo, '.codex/config.toml');
+  fs.mkdirSync(repo);
+  fs.writeFileSync(workspace, JSON.stringify({ repos: [{ name: 'backend', path: 'backend' }] }));
+  fs.writeFileSync(path.join(repo, 'cairn.config.json'), JSON.stringify({ codexSkills: true }));
+  fs.writeFileSync(path.join(repo, 'AGENTS.md'), 'Repo-owned guide\n');
+  const renderArgs = ['--repo', repo, '--no-color'];
+  const upgradeArgs = ['--config', workspace, '--no-color', '--codex-mcp'];
+  assert.strictEqual(captureLog(() => render(renderArgs)).result, 0);
+  const expected = fs.readFileSync(skill, 'utf8');
+  const stale = () => {
+    const manifest = readManifest(repo);
+    fs.writeFileSync(skill, 'Old skill\n');
+    writeBase(repo, rel, 'Old skill\n');
+    record(manifest, rel, manifest.files[rel].source, 'Old skill\n');
+    writeManifest(repo, manifest);
+  };
+
+  stale();
+  const preview = captureLog(() => render([...renderArgs, '--codex-mcp', '--dry-run']));
+  assert.strictEqual(preview.result, 0);
+  assert.match(preview.out, /preview: created/);
+  assert.strictEqual(fs.existsSync(mcp), false);
+  assert.strictEqual(fs.readFileSync(skill, 'utf8'), 'Old skill\n');
+  assert.strictEqual(captureLog(() => render(renderArgs)).result, 0);
+  assert.strictEqual(fs.readFileSync(skill, 'utf8'), expected);
+
+  stale();
+  fs.writeFileSync(skill, 'Local skill edit\n');
+  assert.strictEqual(captureLog(() => render(renderArgs)).result, 0);
+  assert.strictEqual(fs.readFileSync(skill, 'utf8'), 'Local skill edit\n');
+
+  stale();
+  const report = captureLog(() => upgrade(upgradeArgs));
+  assert.match(report.out, /CODEX MCP/);
+  assert.strictEqual(fs.existsSync(mcp), false);
+  const applied = captureLog(() => upgrade([...upgradeArgs, '--apply']));
+  assert.strictEqual(applied.result, 0, applied.out);
+  assert.strictEqual(fs.readFileSync(skill, 'utf8'), expected);
+  assert.strictEqual(fs.readFileSync(path.join(repo, 'AGENTS.md'), 'utf8'), 'Repo-owned guide\n');
+  assert.match(fs.readFileSync(mcp, 'utf8'), /"\.\.\/repos\.json"/);
+});
+
 test('upgrade: picks the package manager from the lockfile and builds the update command', () => {
   const { packageManager, updateCommand, parseArgs } = require('../lib/upgrade/cli');
   const dir = tmpRepo();
