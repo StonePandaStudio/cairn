@@ -257,9 +257,15 @@ repo that has not rendered yet). What changes:
 - `ai/AGENTS.md` gets a **Project docs** table with each doc, what it is about and when to read it.
 - The architect, developer and reviewer read the docs that cover the area of the task; a change that
   contradicts a listed doc is a finding.
-- `/discover` reads them first, uses them as leads to find subjects and to word a context, and cites
-  both the doc and the code. It states only what the code confirms and says so when they disagree. It
-  does not copy a doc into a context.
+- `/discover` reads them and puts what they know into the contexts it writes. What the code cannot
+  show (why, business rules, constraints, terms) goes under `## From the project docs`, each bullet
+  ending with its source, for example `(docum/arch.md § Layers)`. What the code does stays in the main
+  sections and needs a code source, so a doc claim never passes for a code fact. Where a doc and the
+  code disagree, or a doc describes something the code does not have, the context says so under
+  `## Doc vs code` and the report lists it. The proposal table gets a **Docs** column, and subjects
+  that only a doc mentions are listed as *Documented, not found in code*, for you to keep or drop.
+  The report also lists which docs fed nothing, so you can see what the contexts still lack.
+  `/discover billing docum/billing.md` reads one more doc for that run only.
 - `sync`, `render`, `upgrade` and `doctor` warn when a listed path does not exist.
 
 cairn never parses these files. They stay where they are, and `cairn context check` does not see them.

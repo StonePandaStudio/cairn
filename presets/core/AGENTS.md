@@ -93,8 +93,9 @@ linked {{ tracker.providerLabel }} issue for that repo's architect to pick up.{{
 ## Project docs
 
 The team's own docs, kept outside `ai/contexts/`. Read the ones that cover the area you are about to
-touch; the last column says when. They are leads, not proof: the code is the source of truth, and
-where a doc and the code disagree, say so instead of picking one silently.
+touch; the last column says when. The code is the source of truth for what it does; the docs are
+the source for intent, rules and terms the code cannot show. Where a doc and the code disagree,
+say so instead of picking one silently.
 
 | Doc | About | Read when |
 |---|---|---|

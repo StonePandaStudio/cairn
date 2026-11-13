@@ -18,7 +18,10 @@ the reading (see D.2) rather than doing it in the main session.
 1. **Describe what the code does, not what it should do.** A context is a statement
    of fact about this repo. If the code is ambiguous or inconsistent, say so in the
    doc; do not pick a side.
-2. **Cite only what you saw.** Every claim in a context traces to a file you or a
+{{#if docs}}   The listed project docs may add what the code cannot show: intent, business rules,
+   constraints, terminology. Carry that over, tagged with the doc it comes from (D.4); never
+   state it as a fact about the code.
+{{/if}}2. **Cite only what you saw.** Every claim in a context traces to a file you or a
    `code-scout` read this session. Put the paths in the doc's `source` field and
    under `## References`.
 3. **Idempotent.** A re-run adds only what is missing. It never overwrites, merges
@@ -34,7 +37,12 @@ the reading (see D.2) rather than doing it in the main session.
 
 - `ai/infrastructure/code-guidelines.md`, `ai/AGENTS.md`, the repo's `README.md`
   and `package.json`: what this project is, its stack, its commands.
-{{#if docs}}- The project docs in `ai/AGENTS.md` § Project docs. Read the ones that cover the area you are discovering. They are leads: use them to find subjects and to word a context, but state only what the code confirms, cite both the doc and the code in `## References`, and when they disagree say so in the context. Do not copy a doc into a context.
+{{#if docs}}- The project docs in `ai/AGENTS.md` § Project docs. Take the ones whose *About* and *Read when*
+  match the area you are discovering, read their headings first, then only the sections that cover
+  a subject, and note for each section the subject it covers. They add what the code cannot show
+  (intent, rules, constraints, terms) and they point at subjects; for what the code does, the code
+  wins. A path in `$ARGUMENTS` that is not listed (`discover billing docum/billing.md`) is read as a
+  project doc for this run only.
 {{/if}}- Every file under `ai/contexts/**`. For each, note its path, `source` field if any,
   and the entity, feature or page it covers. Docs on the wrong path or with no
   frontmatter still count as covering their subject.
@@ -46,6 +54,10 @@ the reading (see D.2) rather than doing it in the main session.
 Search with the `code-scout` subagent, one self-contained question per area, several
 in parallel. A subject is anything the list above says to document, not every
 file. When `$ARGUMENTS` names an area, search only there.
+{{#if docs}}
+The project docs you read in D.1 can name subjects the code search missed: a concept, process or
+rule you cannot locate in the code. Keep them; they are listed in D.3, not dropped.
+{{/if}}
 
 ### D.3 — Propose
 
@@ -61,7 +73,13 @@ A subject is **exists** when any context from D.1 covers it: the same path, the 
 and never propose a second doc for it. If an existing doc looks wrong, off the
 convention or stale, list it under *Needs a human* in the report; do not touch it.
 
-The user removes rows, renames them or adds an area. Write only what they confirm.
+{{#if docs}}
+Add a **Docs** column: the project docs, with the heading, that each row draws on, or `—`. Under
+the table list **Documented, not found in code**: subjects only a doc mentions, with the doc and
+heading. The user decides whether each becomes a context; one that does is written with the doc as
+its `source` and says in its body that no code was found.
+
+{{/if}}The user removes rows, renames them or adds an area. Write only what they confirm.
 
 ### D.4 — Write
 
@@ -83,6 +101,11 @@ describes: entity Invoice
 <one paragraph: what it is, in this repo's own terms>
 
 ## <sections the list in D.2 names for this kind of subject>
+{{#if docs}}
+## From the project docs   <!-- only when a doc adds something -->
+
+## Doc vs code   <!-- only when they disagree -->
+{{/if}}
 
 ## References
 - `src/invoice/invoice.entity.ts`
@@ -106,12 +129,27 @@ describes: entity Invoice
   Workspace table of `ai/AGENTS.md` **and** you have read it. Otherwise leave it out;
   `cairn context check` will suggest pairs.
 - Short beats complete. Leave a section out rather than pad it.
+{{#if docs}}- **Facts from the project docs.** When a doc states something the code cannot show (why,
+  a business rule, a constraint, a term), put it under `## From the project docs`: short bullets,
+  each ending with its source, e.g. `(docum/arch.md § Layers)`. Paraphrase. Quote at most a line,
+  and point to the heading for the detail. Keep the doc's own domain terms. What the code does
+  stays in the main sections and needs a code source; a doc claim is never promoted to one.
+- **A doc and the code disagree**, or a doc says the code does something you cannot find: put
+  both under `## Doc vs code`: what the doc says, what the code does or "not found in code", each
+  with its citation. Do not pick a side and do not edit the doc. It also goes under *Needs a human*.
+- List the docs you drew from under `## References`, next to the code files.
+- Write in the language the repo's existing `ai/` docs use, with domain terms spelled as the
+  project docs spell them.
+{{/if}}
 
 ### D.5 — Report
 
 Write `ai/discovery-report.md` (overwrite it; it is the one file this agent owns):
 what was created, what was skipped and why, areas not covered, and *Needs a human*.
-Then tell the user to review the drafts, remove `status: draft` once happy, and run
+{{#if docs}}Also: *Docs used* (each doc and the contexts it fed), *Doc vs code* (every
+disagreement, one line each), *Documented, not found in code*, and *Docs that fed nothing*
+(listed docs no context drew from), so the user sees what the docs hold that the contexts still lack.
+{{/if}}Then tell the user to review the drafts, remove `status: draft` once happy, and run
 `npx cairn context check`.
 
 ### D.6 — Adopt existing docs (only when asked: `discover adopt`)
@@ -147,4 +185,5 @@ the convention). This is the one case where an existing context is touched, and 
   and the user.
 - Does not write `code-guidelines.md`; it may note in the report that a convention
   is visible in the code, as a pointer for the user.
-- Does not touch the tracker.
+{{#if docs}}- Does not edit or reorder the project docs, and does not copy them wholesale into contexts.
+{{/if}}- Does not touch the tracker.

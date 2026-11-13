@@ -4453,14 +4453,22 @@ test('docs: listed in ai/AGENTS.md and read by the architect, developer, reviewe
   assert.match(agents, /## Project docs/);
   assert.match(agents, /\| `docum\/api\.md` \| — \| the task touches this area \|/);
   assert.match(agents, /\| `docum\/arch-backend\.md` \| backend layers \| a domain, service or DAO changes \|/);
-  assert.match(agents, /where a doc and the code disagree, say so/);
+  assert.match(agents, /Where a doc and the code disagree,\s+say so/);
   for (const role of ['architect', 'developer', 'reviewer', 'discovery']) {
     assert.match(docs.get(`ai/agents/${role}.md`), /ai\/AGENTS\.md` § Project docs/, role);
   }
+  const discovery = docs.get('ai/agents/discovery.md');
+  for (const text of ['## From the project docs', '## Doc vs code', 'Documented, not found in code', 'Docs that fed nothing', '**Docs** column']) {
+    assert.ok(discovery.includes(text), text);
+  }
+  assert.match(discovery, /the code\s+wins/);
+  assert.ok(docs.get('.claude/commands/discover.md').includes('extra project doc for this run only'));
   const none = files({});
   for (const f of ['ai/AGENTS.md', 'ai/agents/architect.md', 'ai/agents/developer.md', 'ai/agents/reviewer.md', 'ai/agents/discovery.md']) {
     assert.doesNotMatch(none.get(f), /Project docs/, f);
   }
+  assert.doesNotMatch(none.get('ai/agents/discovery.md'), /Doc vs code|From the project docs/);
+  assert.doesNotMatch(none.get('.claude/commands/discover.md'), /project doc for this run/);
 });
 
 test('docs: a listed path that does not exist is a note, an existing one is not', () => {
