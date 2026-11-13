@@ -22,6 +22,69 @@ A cairn is a stack of stones left to mark a trail. That is what this does: it le
 markers — a manifest of what it generated, a report of where the copies stopped agreeing,
 and a map of how the repos connect.
 
+## What is supported
+
+### Presets
+
+A repo's `stack` is a list: the framework first, then add-ons, in this order of axes —
+framework, ORM, styling, infrastructure. `cairn preset list` prints the same table from the
+installed version. `unknown` (core agents, no stack rules) and `cli` are valid names without a
+preset; any other name with no preset is refused with a suggestion.
+
+| Preset | Kind | What it covers |
+|---|---|---|
+| `nestjs` | framework | NestJS + TypeScript spine, ORM-agnostic. Has the QA pipeline (Jest unit + integration) and a `validationStack` choice (`zod` or `class-validator`) |
+| `fastify` | framework | Fastify 5 + TypeScript: plugin per feature, Zod type provider, typed domain errors |
+| `spring` | framework | Spring Boot 3 + Kotlin: Controller/Service/DAO layering, domain packages, `AppException`. Has the QA pipeline (JUnit 5 + MockK) |
+| `angular` | framework | Angular with SCSS theming and i18n. Has the QA pipeline (Playwright e2e) |
+| `react` | framework | React frontend: components, hooks, state, testing; styling-agnostic |
+| `nextjs` | framework | Next.js App Router layer over `react`: server/client boundary, actions, route handlers |
+| `typeorm` | orm | TypeORM entities, queries, migrations. Pairs with `nestjs` |
+| `prisma` | orm | Prisma schema, `prisma migrate`, driver adapter (Postgres). Pairs with `fastify` or `nestjs` |
+| `drizzle` | orm | Drizzle schema, drizzle-kit migrations, RLS in migrations (Postgres/Supabase) |
+| `jpa-flyway` | orm | JPA/Hibernate entities, DAOs with Criteria and the metamodel, locking, Flyway migrations. Pairs with `spring` |
+| `tailwind` | styling | Tailwind `@theme` tokens, dark mode by token re-map |
+| `css-modules` | styling | CSS Modules, two-tier design tokens, private component tokens, typography roles. An alternative to `tailwind` |
+| `docker` | infra | Compose base/dev/prod split, healthcheck-ordered startup, one-shot migrations, environment contract. Goes last |
+
+```bash
+--stack nestjs,typeorm                  # an API
+--stack spring,jpa-flyway,docker        # a Spring API with its container stack
+--stack nextjs,react,tailwind,drizzle   # a full-stack Next.js app (nextjs first)
+--stack react,css-modules               # a Vite SPA
+```
+
+`drizzle`, `react`, `nextjs`, `tailwind`, `fastify`, `prisma`, `spring`, `jpa-flyway`,
+`css-modules` and `docker` were each written from a single repo, so treat their rules as one
+team's conventions and adjust them in `ai/local/`. The layout and the slot
+mechanism are in `presets/README.md`.
+
+### Issue trackers
+
+Set per repo with `--tracker` (`tracker.provider` in `cairn.config.json`).
+
+| Provider | For | Credentials in `.env` |
+|---|---|---|
+| `jira-server` | Jira Server / Data Center (Basic auth; Jira Server 8.5.1 predates personal access tokens). Needs `--project-key`; story and sub-task type names are configurable | `JIRA_BASE_URL`, `JIRA_USER`, `JIRA_PASSWORD` |
+| `youtrack` | YouTrack (Bearer token; admin-read scope for the project and stage lookups). Needs `--project-key`. The only provider with issue links, which `/request-change` uses | `YOUTRACK_URL`, `YOUTRACK_TOKEN`, `YOUTRACK_PROJECT` |
+| `none` | No tracker. The workflow runs the same and every sync point is a no-op | none |
+
+Variable names can be prefixed (`--env-prefix`) when the repo's own app reads the same ones.
+Moving issues between stages, epics and public refs are in "Tracker".
+
+### Agent hosts
+
+Set per repo with `--host` (`hosts` in `cairn.config.json`); the default is `claude`. Every
+host reads the same `ai/` role docs and task files.
+
+| Host | Gets | MCP entry (`cairn context register`) |
+|---|---|---|
+| `claude` | `.claude/commands/` (slash commands, `/plan-task`) and the `code-scout` subagent in `.claude/agents/` | `.mcp.json`, committed |
+| `codex` | `.agents/skills/` (one skill per step, `$plan-task`), a root `AGENTS.md` pointer, and the scout procedure as `.agents/code-scout.md` when `claude` is not also listed | `.codex/config.toml`, per machine |
+
+`--host claude,codex` serves both from one repo. A repo with only `codex` gets no `.claude/`
+folder, and its docs are worded for Codex. See "Start a Codex-based project".
+
 ## Start on a new repo (or a group of repos)
 
 A repo with no `ai/` folder yet. For several repos that make up one project, do steps 1–2 in
