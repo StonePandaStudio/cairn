@@ -3262,13 +3262,80 @@ test('render and workspace upgrade refresh Codex files and preview local MCP reg
 
   stale();
   const report = captureLog(() => upgrade(upgradeArgs));
-  assert.match(report.out, /CODEX MCP/);
+  assert.match(report.out, /\bMCP\b/);
+  assert.match(report.out, /codex created/);
+  assert.match(report.out, /note: backend: "codexSkills" is deprecated/);
   assert.strictEqual(fs.existsSync(mcp), false);
   const applied = captureLog(() => upgrade([...upgradeArgs, '--apply']));
   assert.strictEqual(applied.result, 0, applied.out);
   assert.strictEqual(fs.readFileSync(skill, 'utf8'), expected);
   assert.strictEqual(fs.readFileSync(path.join(repo, 'AGENTS.md'), 'utf8'), 'Repo-owned guide\n');
   assert.match(fs.readFileSync(mcp, 'utf8'), /"\.\.\/repos\.json"/);
+});
+
+test('mcp registration follows the repo hosts: --codex-mcp skips a Claude-only repo, --mcp writes each host', () => {
+  const { main: render } = require('../lib/render/cli');
+  const root = tmpRepo();
+  const mk = (name, cfg) => {
+    const repo = path.join(root, name);
+    fs.mkdirSync(repo);
+    fs.writeFileSync(path.join(repo, 'cairn.config.json'), JSON.stringify({ stack: ['nestjs'], tracker: { provider: 'none' }, ...cfg }));
+    return repo;
+  };
+  const claudeOnly = mk('claude-only', { hosts: ['claude'] });
+  const both = mk('both', { hosts: ['claude', 'codex'] });
+
+  const skipped = captureLog(() => render(['--repo', claudeOnly, '--codex-mcp', '--no-color']));
+  assert.strictEqual(skipped.result, 0, skipped.out);
+  assert.match(skipped.out, /skipped\s+\.codex[\\/]config\.toml\s+\(codex is not in hosts\)/);
+  assert.ok(!fs.existsSync(path.join(claudeOnly, '.codex')), 'no Codex file in a Claude-only repo');
+  assert.ok(!fs.existsSync(path.join(claudeOnly, '.mcp.json')), '--codex-mcp leaves the Claude entry alone');
+
+  const all = captureLog(() => render(['--repo', both, '--mcp', '--no-color']));
+  assert.strictEqual(all.result, 0, all.out);
+  assert.ok(fs.existsSync(path.join(both, '.mcp.json')));
+  assert.ok(fs.existsSync(path.join(both, '.codex', 'config.toml')));
+
+  const claudeMcp = captureLog(() => render(['--repo', claudeOnly, '--mcp', '--no-color']));
+  assert.strictEqual(claudeMcp.result, 0, claudeMcp.out);
+  assert.ok(fs.existsSync(path.join(claudeOnly, '.mcp.json')));
+  assert.ok(!fs.existsSync(path.join(claudeOnly, '.codex')));
+});
+
+test('older repos: a config without `hosts` renders Claude only, and a codexSkills one keeps working with a deprecation note', () => {
+  const { main: render } = require('../lib/render/cli');
+  const { main: sync } = require('../lib/sync/cli');
+  const { main: doctor } = require('../lib/doctor');
+  const root = tmpRepo();
+  const mk = (name, cfg) => {
+    const repo = path.join(root, name);
+    fs.mkdirSync(repo);
+    fs.writeFileSync(path.join(repo, 'cairn.config.json'), JSON.stringify({ cairn: '0.14.2', stack: ['nestjs'], tracker: { provider: 'none' }, ...cfg }));
+    return repo;
+  };
+  const old = mk('old', {});
+  const oldCodex = mk('old-codex', { codexSkills: true });
+  for (const repo of [old, oldCodex]) assert.strictEqual(captureLog(() => render(['--repo', repo, '--no-color'])).result, 0);
+
+  // nothing about hosts is added or required: the repo is still Claude only, and sync is quiet about it
+  assert.ok(!fs.existsSync(path.join(old, '.agents')) && !fs.existsSync(path.join(old, 'AGENTS.md')));
+  const quiet = captureLog(() => sync(['--repo', old, '--no-color']));
+  assert.strictEqual(quiet.result, 0, quiet.out);
+  assert.doesNotMatch(quiet.out, /deprecated/);
+
+  // a repo that used codexSkills keeps its skills and is told the new spelling, without being rewritten
+  const before = fs.readFileSync(path.join(oldCodex, 'cairn.config.json'), 'utf8');
+  assert.ok(fs.existsSync(path.join(oldCodex, '.agents', 'skills', 'plan-task', 'SKILL.md')));
+  const noted = captureLog(() => sync(['--repo', oldCodex, '--no-color']));
+  assert.strictEqual(noted.result, 0, noted.out);
+  assert.match(noted.out, /"codexSkills" is deprecated — use "hosts": \["claude","codex"\]/);
+  assert.strictEqual(fs.readFileSync(path.join(oldCodex, 'cairn.config.json'), 'utf8'), before, 'the config is never rewritten');
+  assert.match(captureLog(() => render(['--repo', oldCodex, '--no-color'])).out, /note: "codexSkills" is deprecated/);
+
+  fs.writeFileSync(path.join(root, 'repos.json'), JSON.stringify({ repos: [{ name: 'old', path: 'old' }, { name: 'old-codex', path: 'old-codex' }] }));
+  const diag = captureLog(() => doctor(['--config', path.join(root, 'repos.json'), '--no-color']));
+  assert.match(diag.out, /old-codex: "codexSkills" is deprecated/);
+  assert.doesNotMatch(diag.out, /old: "codexSkills"/);
 });
 
 test('upgrade: picks the package manager from the lockfile and builds the update command', () => {

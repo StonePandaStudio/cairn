@@ -101,7 +101,7 @@ once; both run the same workflow from the same `ai/` docs.
    absolute path in it, so it is specific to this machine: do not commit it, and run the command
    again on each checkout. Skip this step and the skills still work, with plain file search.
 4. **Group of repos:** repeat 1–3 in each repo, then `cairn workspace init` / `add` and
-   `cairn sync` as in "Start on a new repo". `cairn upgrade --apply --codex-mcp` later updates
+   `cairn sync` as in "Start on a new repo". `cairn upgrade --apply --mcp` later updates
    every repo and refreshes each Codex entry.
 5. **Start working.** Open Codex at the repo root (not a subfolder) and run:
    ```
@@ -180,9 +180,16 @@ npx cairn sync                              # apply
   (`@latest`) or the update is a no-op.
 - `cairn sync --only <path>` syncs one file and leaves the rest alone.
 - Codex skills and the generated root `AGENTS.md` are managed files like the rest: `sync`
-  carries template changes into them and keeps your edits. Turn Codex on later by setting
+  carries template changes into them and keeps your edits. Turn Codex on later by adding
   `"codex"` to `hosts` and running `sync`.
 - Review `git diff`, then commit. Generated files are ordinary tracked files.
+
+**A repo set up with an older cairn (before `hosts`)** needs nothing: a config without `hosts`
+means `["claude"]`, which is what it always rendered, so `sync` produces no new files and no
+conflicts. To add Codex, add `"hosts": ["claude", "codex"]` to `cairn.config.json` and run
+`cairn sync`. A repo that used `"codexSkills": true` keeps working unchanged. `sync`, `render`,
+`upgrade` and `cairn doctor` print one line telling you to use `hosts` instead (cairn never
+rewrites your config), and the line goes away once you replace the key.
 
 **A group of repos** (from the folder holding `repos.json`)
 ```bash
@@ -190,7 +197,7 @@ cairn doctor                    # versions table: pin / installed / last rendere
 cairn upgrade                   # report only: what would change in each repo
 cairn upgrade --apply           # update cairn in each repo, then `cairn sync` there
 cairn upgrade --apply --bump-pin   # also rewrite a pin that excludes the new version
-cairn upgrade --apply --codex-mcp  # also refresh each repo's Codex MCP entry (machine-local)
+cairn upgrade --apply --mcp        # also register the MCP server for each host a repo uses
 ```
 `upgrade` uses each repo's own package manager (picked from its lockfile), never commits or
 pushes, and reports a repo with a blocked pin instead of syncing it with the old version.
@@ -491,10 +498,11 @@ files with the rest of the scaffold. The same option renders a short root
 `AGENTS.md` that points Codex at `ai/AGENTS.md` and the skills; a repo that
 already has its own root `AGENTS.md` keeps it — add the pointer by hand.
 
-Add `--codex-mcp` to `cairn render` or `cairn upgrade --apply` to include the
-machine-local Cairn MCP table in `.codex/config.toml`. Preview it with
-`cairn render --codex-mcp --dry-run` or `cairn upgrade --codex-mcp`. Existing
-settings are preserved, and a differing Cairn table is reported for review.
+Add `--mcp` to `cairn render` or `cairn upgrade --apply` to register the Cairn MCP server for
+each host the repo uses: `.mcp.json` for `claude`, the machine-local `.codex/config.toml` for
+`codex`. `--codex-mcp` does only the Codex entry, and skips a repo that does not have `codex` in
+its `hosts`. Preview with `cairn render --mcp --dry-run` or `cairn upgrade --mcp`. Existing
+settings are preserved, and a differing Cairn entry is reported for review.
 
 Open Codex in the repo and invoke `$create-brief Add CSV export`. The next
 steps are `$enrich-description`, `$plan-task`, `$execute-plan`, and
