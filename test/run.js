@@ -3235,7 +3235,7 @@ test('render and workspace upgrade refresh Codex files and preview local MCP reg
   fs.writeFileSync(path.join(repo, 'cairn.config.json'), JSON.stringify({ codexSkills: true }));
   fs.writeFileSync(path.join(repo, 'AGENTS.md'), 'Repo-owned guide\n');
   const renderArgs = ['--repo', repo, '--no-color'];
-  const upgradeArgs = ['--config', workspace, '--no-color', '--codex-mcp'];
+  const upgradeArgs = ['--config', workspace, '--no-color', '--mcp'];
   assert.strictEqual(captureLog(() => render(renderArgs)).result, 0);
   const expected = fs.readFileSync(skill, 'utf8');
   const stale = () => {
@@ -3247,7 +3247,7 @@ test('render and workspace upgrade refresh Codex files and preview local MCP reg
   };
 
   stale();
-  const preview = captureLog(() => render([...renderArgs, '--codex-mcp', '--dry-run']));
+  const preview = captureLog(() => render([...renderArgs, '--mcp', '--dry-run']));
   assert.strictEqual(preview.result, 0);
   assert.match(preview.out, /preview: created/);
   assert.strictEqual(fs.existsSync(mcp), false);
@@ -3273,7 +3273,7 @@ test('render and workspace upgrade refresh Codex files and preview local MCP reg
   assert.match(fs.readFileSync(mcp, 'utf8'), /"\.\.\/repos\.json"/);
 });
 
-test('mcp registration follows the repo hosts: --codex-mcp skips a Claude-only repo, --mcp writes each host', () => {
+test('mcp registration follows the repo hosts: --mcp writes an entry for each host and only for those', () => {
   const { main: render } = require('../lib/render/cli');
   const root = tmpRepo();
   const mk = (name, cfg) => {
@@ -3284,12 +3284,6 @@ test('mcp registration follows the repo hosts: --codex-mcp skips a Claude-only r
   };
   const claudeOnly = mk('claude-only', { hosts: ['claude'] });
   const both = mk('both', { hosts: ['claude', 'codex'] });
-
-  const skipped = captureLog(() => render(['--repo', claudeOnly, '--codex-mcp', '--no-color']));
-  assert.strictEqual(skipped.result, 0, skipped.out);
-  assert.match(skipped.out, /skipped\s+\.codex[\\/]config\.toml\s+\(codex is not in hosts\)/);
-  assert.ok(!fs.existsSync(path.join(claudeOnly, '.codex')), 'no Codex file in a Claude-only repo');
-  assert.ok(!fs.existsSync(path.join(claudeOnly, '.mcp.json')), '--codex-mcp leaves the Claude entry alone');
 
   const all = captureLog(() => render(['--repo', both, '--mcp', '--no-color']));
   assert.strictEqual(all.result, 0, all.out);
@@ -4318,11 +4312,11 @@ test('register --codex: the CLI writes both files only when asked', () => {
   ]);
 });
 
-atest('init --codex / --host: hosts is saved in the config; --render writes the Codex skills and a root AGENTS.md pointer', async () => {
+atest('init --host: hosts is saved in the config; --render writes the Codex skills and a root AGENTS.md pointer', async () => {
   const { main: init } = require('../lib/init');
   const read = (d) => JSON.parse(fs.readFileSync(path.join(d, 'cairn.config.json'), 'utf8'));
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cairn-initcodex-'));
-  assert.strictEqual(init(['--repo', dir, '--stack', 'nestjs', '--tracker', 'none', '--codex', '--render', '--no-color']), 0);
+  assert.strictEqual(init(['--repo', dir, '--stack', 'nestjs', '--tracker', 'none', '--host', 'claude,codex', '--render', '--no-color']), 0);
   assert.deepStrictEqual(read(dir).hosts, ['claude', 'codex']);
   assert.strictEqual(read(dir).codexSkills, undefined, 'the deprecated key is not written');
   assert.ok(fs.existsSync(path.join(dir, '.agents', 'skills', 'create-brief', 'SKILL.md')));

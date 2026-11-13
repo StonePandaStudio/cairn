@@ -37,7 +37,7 @@ each, then step 3 once, then step 4. Using Codex? See "Start a Codex-based proje
    in the repo's `.env` (see "Tracker"). Add `--dry-run` first to see what would be written.
 
    **Which agent host?** `init` records it as `"hosts"` in `cairn.config.json`; the default is
-   `["claude"]`. For Codex too, add `--host claude,codex` (or the shorthand `--codex`):
+   `["claude"]`. For Codex too, add `--host claude,codex`:
    `npx cairn init --stack nestjs,typeorm --tracker none --host claude,codex`. `render` then also
    writes the workflow as Codex skills in `.agents/skills/` and a short root `AGENTS.md` that points
    Codex at `ai/AGENTS.md`. The hosts run the same workflow from the same `ai/` docs; a repo can
@@ -64,7 +64,7 @@ each, then step 3 once, then step 4. Using Codex? See "Start a Codex-based proje
    root `AGENTS.md` for Codex). Generated files are committed, not gitignored. Then run
    `/create-brief` in Claude Code, or `$create-brief` in Codex, to start a task.
 
-   For Codex, `render --codex-mcp` also writes the machine-local `cairn` MCP table into
+   For Codex, `render --mcp` also writes the machine-local `cairn` MCP table into
    `.codex/config.toml`; see "Set up code lookups". That file is not committed.
 
 If you add the workspace *after* rendering, run `npx cairn sync` in each repo to carry the
@@ -75,12 +75,12 @@ Workspace table in. From the workspace folder, `cairn doctor` reports drift acro
 The same setup as above, with Codex switched on. A repo can serve Claude Code and Codex at
 once; both run the same workflow from the same `ai/` docs.
 
-1. **Install and init with `--codex`**, in the repo root:
+1. **Install and init with `--host claude,codex`**, in the repo root:
    ```bash
    npm i -D @stonepandastudio/cairn
-   npx cairn init --stack nestjs,typeorm --tracker none --codex --render
+   npx cairn init --stack nestjs,typeorm --tracker none --host claude,codex --render
    ```
-   `--codex` saves `"hosts": ["claude", "codex"]` in `cairn.config.json`; `--render` scaffolds right away
+   `--host` saves `"hosts": ["claude", "codex"]` in `cairn.config.json`; `--render` scaffolds right away
    (without it, run `npx cairn render` as the next step). Add `--dry-run` to preview. Tracker
    options are the same as in "Start on a new repo".
 2. **What you get**, all committed:
@@ -95,7 +95,7 @@ once; both run the same workflow from the same `ai/` docs.
 3. **Optional: cross-repo context and code lookups.** Install Serena once per workspace
    (`cairn context setup`, see "Set up code lookups"), then register the server for Codex:
    ```bash
-   npx cairn render --codex-mcp        # or: cairn context register --codex
+   npx cairn render --mcp              # or: cairn context register --codex
    ```
    This writes a `[mcp_servers.cairn]` table into `.codex/config.toml`. The file has an
    absolute path in it, so it is specific to this machine: do not commit it, and run the command
@@ -112,7 +112,7 @@ once; both run the same workflow from the same `ai/` docs.
    the Claude commands.
 
 Adding Codex to a repo that is already cairn-managed: add `"codex"` to `hosts` in
-`cairn.config.json`, run `npx cairn sync` (or `render`), then `render --codex-mcp` if you want
+`cairn.config.json`, run `npx cairn sync` (or `render`), then `render --mcp` if you want
 the MCP server.
 
 ## Start on a repo that already has code
@@ -241,8 +241,8 @@ the server from that subfolder and the relative path no longer resolves.
 **Codex.** `cairn context register --codex` also writes the server into each repo's
 project-scoped `.codex/config.toml` (a `[mcp_servers.cairn]` table; other servers and
 settings in the file are kept, and a different `cairn` table is left alone unless
-`--force`). `cairn render --codex-mcp` and `cairn upgrade --apply --codex-mcp` write the same
-table as part of a render or an upgrade. Codex needs an absolute `cwd`, so that file is
+`--force`). `cairn render --mcp` and `cairn upgrade --apply --mcp` write the same
+table as part of a render or an upgrade, for the repos that have `codex` in `hosts`. Codex needs an absolute `cwd`, so that file is
 specific to the machine: each checkout runs one of these commands itself, and the file is not
 committed (add `.codex/config.toml` to `.gitignore` if the repo holds only this entry). Codex
 reads a project's `.codex/config.toml` once the project is trusted. By hand:
@@ -490,7 +490,7 @@ Generated files are **committed**, not gitignored. Claude Code discovers
 
 ### Use the workflow in Codex
 
-Pass `--host claude,codex` (or `--codex`) to `cairn init` for a new repo, or add `"codex"` to
+Pass `--host claude,codex` to `cairn init` for a new repo, or add `"codex"` to
 `hosts` in `cairn.config.json`, then run `npx cairn render`. Use `npx cairn sync` to merge
 local edits with preset changes, or `cairn upgrade --apply` to update and sync
 all enabled repos in a workspace. Commit the generated `.agents/skills/`
@@ -500,8 +500,7 @@ already has its own root `AGENTS.md` keeps it — add the pointer by hand.
 
 Add `--mcp` to `cairn render` or `cairn upgrade --apply` to register the Cairn MCP server for
 each host the repo uses: `.mcp.json` for `claude`, the machine-local `.codex/config.toml` for
-`codex`. `--codex-mcp` does only the Codex entry, and skips a repo that does not have `codex` in
-its `hosts`. Preview with `cairn render --mcp --dry-run` or `cairn upgrade --mcp`. Existing
+`codex`. A host the repo does not use gets no entry. Preview with `cairn render --mcp --dry-run` or `cairn upgrade --mcp`. Existing
 settings are preserved, and a differing Cairn entry is reported for review.
 
 Open Codex in the repo and invoke `$create-brief Add CSV export`. The next
