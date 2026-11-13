@@ -3016,6 +3016,11 @@ const SNAPSHOT_CASES = {
   'react-css-modules-none': { stack: ['react', 'css-modules'], tracker: { provider: 'none' } },
   'nestjs-typeorm-codex': { stack: ['nestjs', 'typeorm'], tracker: { provider: 'none' }, codexSkills: true },
   'nestjs-codex-only': { stack: ['nestjs'], tracker: { provider: 'none' }, hosts: ['codex'] },
+  'nestjs-docs': {
+    stack: ['nestjs'],
+    tracker: { provider: 'none' },
+    docs: ['docum/api.md', { path: 'docum/arch-backend.md', about: 'backend layers and package rules', when: 'a domain, service or DAO changes' }],
+  },
   'spring-jpa-flyway-docker-none': { stack: ['spring', 'jpa-flyway', 'docker'], tracker: { provider: 'none' } },
   'spring-jpa-flyway-none': { stack: ['spring', 'jpa-flyway'], tracker: { provider: 'none' } },
 };
@@ -4415,6 +4420,58 @@ test('hosts: switching a repo from claude to codex reports the old .claude files
   assert.match(out.out, /orphaned\s+\.claude\/agents\/code-scout\.md/);
   assert.ok(fs.existsSync(path.join(repo, '.claude', 'agents', 'code-scout.md')), 'sync leaves the old file for you to remove');
   assert.ok(fs.existsSync(path.join(repo, '.agents', 'code-scout.md')));
+});
+
+test('docs: entries are normalized, and a malformed one is a one-line error naming it', () => {
+  const { normalizeDocs } = require('../lib/docs');
+  assert.strictEqual(normalizeDocs(undefined), null);
+  assert.strictEqual(normalizeDocs([]), null);
+  assert.deepStrictEqual(normalizeDocs(['docum/api.md', { path: 'docum\\arch/', about: 'layers | rules', when: 'a domain changes' }]), [
+    { path: 'docum/api.md', about: '—', when: 'the task touches this area' },
+    { path: 'docum/arch', about: 'layers \\| rules', when: 'a domain changes' },
+  ]);
+  assert.throws(() => normalizeDocs('docum'), /docs must be an array/);
+  assert.throws(() => normalizeDocs([3]), /docs\[0\] must be a path or an object/);
+  assert.throws(() => normalizeDocs([{ about: 'x' }]), /docs\[0\]\.path is required/);
+  assert.throws(() => normalizeDocs([{ path: 'a', about: 1 }]), /docs\[0\]\.about must be a string/);
+  assert.throws(() => normalizeDocs(['/etc/docs']), /relative to the repo/);
+  assert.throws(() => normalizeDocs(['C:/docs']), /relative to the repo/);
+  assert.throws(() => normalizeDocs(['a', 'a/']), /docs\[1\]\.path "a" is listed twice/);
+
+  const { loadRepoConfig } = require('../lib/config');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cairn-docs-'));
+  fs.writeFileSync(path.join(dir, 'cairn.config.json'), JSON.stringify({ stack: ['nestjs'], docs: [{ about: 'no path' }] }));
+  assert.throws(() => loadRepoConfig(dir, { required: true }), /docs\[0\]\.path is required/);
+});
+
+test('docs: listed in ai/AGENTS.md and read by the architect, developer, reviewer and discovery; absent when not configured', () => {
+  const { renderTargets } = require('../lib/render');
+  const base = { stack: ['nestjs'], tracker: { provider: 'none' } };
+  const files = (extra) => new Map(renderTargets({ config: { ...base, ...extra }, presetsDir: 'presets' }).targets.map((t) => [t[0], t[1]]));
+  const docs = files({ docs: ['docum/api.md', { path: 'docum/arch-backend.md', about: 'backend layers', when: 'a domain, service or DAO changes' }] });
+  const agents = docs.get('ai/AGENTS.md');
+  assert.match(agents, /## Project docs/);
+  assert.match(agents, /\| `docum\/api\.md` \| — \| the task touches this area \|/);
+  assert.match(agents, /\| `docum\/arch-backend\.md` \| backend layers \| a domain, service or DAO changes \|/);
+  assert.match(agents, /where a doc and the code disagree, say so/);
+  for (const role of ['architect', 'developer', 'reviewer', 'discovery']) {
+    assert.match(docs.get(`ai/agents/${role}.md`), /ai\/AGENTS\.md` § Project docs/, role);
+  }
+  const none = files({});
+  for (const f of ['ai/AGENTS.md', 'ai/agents/architect.md', 'ai/agents/developer.md', 'ai/agents/reviewer.md', 'ai/agents/discovery.md']) {
+    assert.doesNotMatch(none.get(f), /Project docs/, f);
+  }
+});
+
+test('docs: a listed path that does not exist is a note, an existing one is not', () => {
+  const { configNotes } = require('../lib/config-notes');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cairn-docsnote-'));
+  fs.mkdirSync(path.join(dir, 'docum'));
+  fs.writeFileSync(path.join(dir, 'docum', 'api.md'), '# api');
+  const notes = configNotes({ path: dir, docs: ['docum/api.md', 'docum/', 'docum/gone.md'] });
+  assert.deepStrictEqual(notes, ['docs: "docum/gone.md" does not exist in this repo — the agents are told to read it']);
+  assert.deepStrictEqual(configNotes({ path: dir }), []);
+  assert.deepStrictEqual(configNotes({ docs: ['x'] }), [], 'no repo path, nothing to check');
 });
 
 test('hosts: `hosts` and the old `codexSkills` render the same files; the default adds no Codex files', () => {

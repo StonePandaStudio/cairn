@@ -34,7 +34,8 @@ the reading (see D.2) rather than doing it in the main session.
 
 - `ai/infrastructure/code-guidelines.md`, `ai/AGENTS.md`, the repo's `README.md`
   and `package.json`: what this project is, its stack, its commands.
-- Every file under `ai/contexts/**`. For each, note its path, `source` field if any,
+{{#if docs}}- The project docs in `ai/AGENTS.md` § Project docs. Read the ones that cover the area you are discovering. They are leads: use them to find subjects and to word a context, but state only what the code confirms, cite both the doc and the code in `## References`, and when they disagree say so in the context. Do not copy a doc into a context.
+{{/if}}- Every file under `ai/contexts/**`. For each, note its path, `source` field if any,
   and the entity, feature or page it covers. Docs on the wrong path or with no
   frontmatter still count as covering their subject.
 

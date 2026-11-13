@@ -66,6 +66,8 @@ tasks (see `ai/WORKFLOW.md`). Don't assume a `{{ tracker.exampleKey }}-` prefix.
 
 {{> stack/mandatory-docs }}
 - Any `ai/contexts/**` files referenced in the plan
+{{#if docs}}- The project docs in `ai/AGENTS.md` § Project docs that the plan cites or that cover the changed area; a change that contradicts one is a finding unless the plan says why
+{{/if}}
 
 `code-guidelines.md` is the complete rule set: every blocking finding must cite a specific section of it (or of the plan).
 

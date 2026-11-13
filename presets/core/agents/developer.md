@@ -66,6 +66,8 @@ Before implementing, read:
 
 {{> stack/mandatory-docs }}
 - Any `ai/contexts/**` files referenced by the plan
+{{#if docs}}- The project docs in `ai/AGENTS.md` § Project docs that the plan cites or that cover the area you are changing
+{{/if}}
 {{#if qa}}
 If the plan has a **Tests** section, also read the test docs:
 

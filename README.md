@@ -214,7 +214,10 @@ The code base exists; the AI workflow and its docs do not (or only as hand-copie
    - With `codex` in `hosts`, a root `AGENTS.md` the repo already has is kept, not overwritten
      (`render` reports it as "already on disk, not written by cairn"). Add a pointer to it by
      hand: read `ai/AGENTS.md`, and start workflow steps with the `$` skills in `.agents/skills/`.
-3. **Draft the context docs.** In Claude Code (or Codex, with `$discover`), inside the repo:
+3. **Optional, before `/discover`: list the docs you already have.** If the repo has its own
+   documentation outside `ai/contexts/` (a `docum/` or `docs/` folder, an architecture file), name it
+   in `cairn.config.json` so the agents read it; see "Existing docs as a knowledge source" below.
+4. **Draft the context docs.** In Claude Code (or Codex, with `$discover`), inside the repo:
    ```
    /discover            # whole repo
    /discover <area>     # or one area at a time
@@ -223,15 +226,46 @@ The code base exists; the AI workflow and its docs do not (or only as hand-copie
    the confirmed ones as `status: draft` plus `ai/discovery-report.md`. Safe to re-run. Review
    the drafts and change `status` when you accept them. See "Starting on an existing code
    base: `/discover`".
-4. **Optional, tests for code that exists:** `/plan-tests`, `/execute-test-plan`, `/run-qa`
+5. **Optional, tests for code that exists:** `/plan-tests`, `/execute-test-plan`, `/run-qa`
    (`$plan-tests`, … in Codex; stacks that ship the QA slots only). See "QA pipeline for
    existing code".
-5. **Commit** `cairn.config.json`, `_cairn/`, `ai/` and `.claude/` (and `.agents/skills/`
+6. **Commit** `cairn.config.json`, `_cairn/`, `ai/` and `.claude/` (and `.agents/skills/`
    with the root `AGENTS.md` if Codex is on).
 
 For a group of repos, do this in each repo, then `cairn workspace init` / `add` as in the
 section above and `cairn sync` in each repo. `cairn doctor`, run from the workspace folder,
 shows where the copies disagree before you start reconciling them.
+
+### Existing docs as a knowledge source
+
+A repo's own documentation often lives outside `ai/contexts/`. cairn reads only
+`ai/contexts/**`, so list the rest under `docs` in `cairn.config.json`:
+
+```json
+"docs": [
+  { "path": "docum/arch-backend.md", "about": "backend layers and package rules",
+    "when": "a domain, service or DAO changes" },
+  { "path": "docum/api.md", "about": "HTTP API contracts", "when": "an endpoint changes" },
+  "docum/sync.md"
+]
+```
+
+An entry is a path relative to the repo (a file, or a folder whose own index the agents open), or an
+object with `path` plus an optional `about` and `when`. Then run `npx cairn sync` (or `render` for a
+repo that has not rendered yet). What changes:
+
+- `ai/AGENTS.md` gets a **Project docs** table with each doc, what it is about and when to read it.
+- The architect, developer and reviewer read the docs that cover the area of the task; a change that
+  contradicts a listed doc is a finding.
+- `/discover` reads them first, uses them as leads to find subjects and to word a context, and cites
+  both the doc and the code. It states only what the code confirms and says so when they disagree. It
+  does not copy a doc into a context.
+- `sync`, `render`, `upgrade` and `doctor` warn when a listed path does not exist.
+
+cairn never parses these files. They stay where they are, and `cairn context check` does not see them.
+To link them across repos, or to have `check` verify them, move or copy a doc into
+`ai/contexts/<category>/<name>.md` (see "Set up code lookups", "Existing docs (brownfield, once)").
+Keep the table short: a doc nobody needs for a task only costs context.
 
 ## Update cairn in a repo that already has it
 
@@ -585,7 +619,8 @@ workflow can also run with local file search.
 Config keys that shape the rendered agents (all in `cairn.config.json`): `hosts` (agent
 hosts to write files for, `["claude"]` by default; add `"codex"` for Codex skills), `model` (reviewer
 tier, default `sonnet`), `validationStack` (`zod` default, or `class-validator`; only read
-when `nestjs` is in `stack`), `tdd`, `commands.build`, `agents.<role>.name` / `.doc`, and
+when `nestjs` is in `stack`), `tdd`, `commands.build`, `agents.<role>.name` / `.doc`,
+`docs` (existing documentation the agents should read, see "Existing docs as a knowledge source"), and
 `workspace` (path to `repos.json`, default `../repos.json`).
 
 Three agents, one step each, rendered from `presets/core` with the stack's slots filled in:

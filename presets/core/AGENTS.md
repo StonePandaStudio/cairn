@@ -89,6 +89,20 @@ linked {{ tracker.providerLabel }} issue for that repo's architect to pick up.{{
 ---
 
 {{/if}}
+{{#if docs}}
+## Project docs
+
+The team's own docs, kept outside `ai/contexts/`. Read the ones that cover the area you are about to
+touch; the last column says when. They are leads, not proof: the code is the source of truth, and
+where a doc and the code disagree, say so instead of picking one silently.
+
+| Doc | About | Read when |
+|---|---|---|
+{{#each docs}}
+| `{{ this.path }}` | {{ this.about }} | {{ this.when }} |
+{{/each}}
+
+{{/if}}
 ## Code lookups
 
 When the `cairn` MCP server is connected (`/mcp` lists it), "who uses X", "where is X defined"

@@ -77,7 +77,8 @@ Before proposing structure, read:
 **Situational — read what applies:**
 - `ai/contexts/entities/*.md` for any domain entity the task touches
 - other `ai/contexts/**` for any feature area the task modifies
-{{#if qa}}- the test docs, since the plan will carry tests (see **Tests** in the plan format):
+{{#if docs}}- the project docs in `ai/AGENTS.md` § Project docs that cover the area the task touches (see the *Read when* column); treat them as leads and check the code before building a plan on them
+{{/if}}{{#if qa}}- the test docs, since the plan will carry tests (see **Tests** in the plan format):
 
 {{> stack/qa-mandatory-docs }}
 

@@ -15,6 +15,26 @@
       "description": "Agent hosts cairn writes files for. Every host reads the shared ai/ docs. `claude` adds .claude/ (commands and the code-scout subagent, plus the .mcp.json entry); `codex` adds Codex skills in .agents/skills/, a root AGENTS.md pointer and, when `claude` is not also listed, .agents/code-scout.md. A repo without `claude` gets no .claude/ folder.",
       "examples": [["claude"], ["claude", "codex"]]
     },
+    "docs": {
+      "type": "array",
+      "description": "Knowledge about the project that lives outside ai/contexts/, such as an existing docs folder. cairn lists these in ai/AGENTS.md and the role agents read the ones that cover the task's area; it never parses them.",
+      "items": {
+        "anyOf": [
+          { "type": "string", "description": "A path relative to the repo: a file, or a folder." },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["path"],
+            "properties": {
+              "path": { "type": "string", "description": "Relative to the repo root: a file, or a folder." },
+              "about": { "type": "string", "description": "What the doc covers, in a few words." },
+              "when": { "type": "string", "description": "When an agent should read it, e.g. 'a backend domain, service or DAO changes'." }
+            }
+          }
+        ]
+      },
+      "examples": [["docum/arch.md", { "path": "docum/api.md", "about": "HTTP API contracts", "when": "an endpoint changes" }]]
+    },
     "codexSkills": {
       "type": "boolean",
       "default": false,
