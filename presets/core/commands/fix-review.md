@@ -3,8 +3,10 @@ description: Fix what a code review found, then re-review
 argument-hint: "[task] [step] [blockers|all|B1 S2 …] [--replan]"
 ---
 You are the **fix-review orchestrator**. You chain the agents; you do not plan, edit
-source, or review yourself. Everything below happens in this session by spawning
-sub-agents with the `Agent` tool, each call **blocking**.
+source, or review yourself. Everything below happens in this {{#if host.claude}}session by spawning
+sub-agents with the `Agent` tool, each call **blocking**{{else}}chat by running one role at a time: a delegated
+sub-agent if your host can delegate, otherwise yourself. Each `Agent(...)` block below is one role run: its
+`prompt` is what the role is given, and `model` does not apply. Wait for each run to finish before the next{{/if}}.
 
 Parse `$ARGUMENTS`: first token is the task ID (e.g. {{ tracker.exampleKey }}-210), second is the step
 number, the rest are items and flags.
@@ -16,11 +18,12 @@ number, the rest are items and flags.
 
 ## 1. Check the inputs
 
-- Missing task or step: stop with "Usage: `/fix-review [task] [step] [blockers|all|B1 S2 …] [--replan]`".
-- `ai/tasks/[task]/review-step-[step].md` must exist. If not, stop: "Run `/code-review [task] [step]` first."
+- Missing task or step: stop with "Usage: `{{ cmdPrefix }}fix-review [task] [step] [blockers|all|B1 S2 …] [--replan]`".
+- `ai/tasks/[task]/review-step-[step].md` must exist. If not, stop: "Run `{{ cmdPrefix }}code-review [task] [step]` first."
 - Read the review in full and resolve the items to a list of findings. If it is empty (no
   blockers when `blockers` was asked, or none left), stop: "Nothing to fix."
 
+{{#if host.claude}}
 ## 2. Confirm models once
 
 The sub-agents cannot ask anything, so ask here, once, with the `AskUserQuestion` tool
@@ -28,6 +31,12 @@ The sub-agents cannot ask anything, so ask here, once, with the `AskUserQuestion
 {{ developerAgent }} on Haiku (recommended)?"** In direct mode leave out the architect.
 OK — pass those as each sub-agent's `model`. Not OK — omit `model`, so they inherit this session's.
 
+{{else}}
+## 2. Models
+
+Nothing to confirm: every role runs on the model this chat uses.
+
+{{/if}}
 ## 3. Fix
 
 **With `--replan`** — spawn the architect:
@@ -108,8 +117,8 @@ Mode: [replan | direct]. Applied: [IDs fixed]. Skipped: [IDs, with reason].
 Re-review: [Summary line].
 ```
 
-If blockers remain, say so and suggest `/fix-review [task] [step] blockers --replan` when
-this pass was direct, or the manual path (`/plan-task`, `/execute-plan`) when it was already
+If blockers remain, say so and suggest `{{ cmdPrefix }}fix-review [task] [step] blockers --replan` when
+this pass was direct, or the manual path (`{{ cmdPrefix }}plan-task`, `{{ cmdPrefix }}execute-plan`) when it was already
 a replan. **One round only** — never start a second fix pass on your own.
 
 ## What this command does NOT do

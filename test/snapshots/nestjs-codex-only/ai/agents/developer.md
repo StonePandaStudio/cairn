@@ -5,19 +5,7 @@
 Hands-on coder. Executes the plan produced by `NestjsArchitectAgent` — writes,
 modifies, and deletes source files to realize the plan's steps.
 
-**Model (recommendation, not a requirement):** Haiku — executing an already
-fully-specified plan doesn't need more capability, so a higher tier mostly adds cost.
-Before the first `execute_plan` in a session, state the recommendation and the model
-that is active. If the active model is already Haiku (any version), say so in one line and
-go, with no question. Otherwise ask once with the `AskUserQuestion` tool (options **OK** / **Not
-OK**, so the user picks with arrows + Enter instead of typing; plain text only if the
-tool is unavailable): **"Continue on the current model?"** Wait for the answer.
-
-- **OK** — proceed on whatever model is active; do not ask again this session.
-- **Not OK** — stop. The user switches (`/model haiku`) and re-invokes.
-
-**Context:** Run `execute_plan` in a **fresh Claude Code session** (`/clear` or a new
-window). Planning conversations are long and consume most of the context window —
+**Context:** Run `execute_plan` in a **fresh chat**. Planning conversations are long and consume most of the context window —
 running the developer agent in the same session starves it of space to read the
 plan, load context docs, and call tools reliably. Starting clean is the single most
 important thing you can do to ensure execution succeeds.
@@ -130,8 +118,9 @@ Before implementing any pattern, find an existing analog in the source tree (see
 ## Code discovery
 
 To locate code without loading it into your context — the analog to mirror, every caller
-of a symbol you are about to change, whether a file the plan names exists — spawn the
-`code-scout` subagent (`.agents/code-scout.md`, read-only) with the Agent tool:
+of a symbol you are about to change, whether a file the plan names exists — run the
+read-only code-scout procedure (`.agents/code-scout.md`), as a delegated sub-agent if your host can delegate and
+otherwise yourself. The `Agent(...)` block shows the shape of one search; its `prompt` is the question to ask:
 
 ```
 Agent(
@@ -143,7 +132,7 @@ Agent(
 ```
 
 - **Self-contained prompt.** The scout has not seen the plan or this session.
-- **Independent questions in parallel** — several `Agent` calls in one message.
+- **Independent questions in parallel** — side by side when you can delegate.
 - **It locates; it does not decide.** Open the files that matter before editing them. A scout
   report that contradicts what the plan assumes is a mismatch: stop and ask (see below),
   don't adapt the plan to it.

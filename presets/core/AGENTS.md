@@ -18,18 +18,18 @@ against the plan and the guidelines. Each runs in its own session.
 transitions. Dispatch table: `ai/INITIAL_PROMPT.md`.
 
 {{#each workflow.steps}}
-{{ @index_1 }}. **`/{{ this.command }} {{ tracker.exampleKey }}-NNN 1`** — `{{ this.agentName }}`{{#if this.model}} ({{ this.model }}){{/if}} — {{ this.oneLine }}
+{{ @index_1 }}. **`{{ cmdPrefix }}{{ this.command }} {{ tracker.exampleKey }}-NNN 1`** — `{{ this.agentName }}`{{#if this.model}} ({{ this.model }}){{/if}} — {{ this.summary }}
 {{/each}}
 
 Informal engagement on a task defaults to the first step.
 
 **After a review.** `{{ reviewerAgent }}` ends by offering the next step: replan and re-review,
-fix now without replanning, or stop. Either fix runs as `/fix-review [task] [step] [blockers|all|B1 S2 …] [--replan]`,
+fix now without replanning, or stop. Either fix runs as `{{ cmdPrefix }}fix-review [task] [step] [blockers|all|B1 S2 …] [--replan]`,
 which chains the agents as sub-agents (one fix round, then a re-review). Run it by hand to pick
 individual findings.
 {{#if tracker.publicRefs}}
 
-The task can also be given as a public ref: `/plan-task {{ tracker.exampleKey }}-1-4.2` is step 2 of
+The task can also be given as a public ref: `{{ cmdPrefix }}plan-task {{ tracker.exampleKey }}-1-4.2` is step 2 of
 story 4 in epic 1. Details: `ai/WORKFLOW.md`.
 {{/if}}
 
@@ -51,7 +51,7 @@ Read `{{ this.doc }}` for the full role, workflow, tools, and instructions.{{#if
 Run once, before the first task, when `ai/contexts/` is empty or thin. Safe to re-run:
 it only adds what is missing.
 
-- `/discover [area]` — `{{ discoveryAgent }}` (`ai/agents/discovery.md`) proposes, then drafts, `ai/contexts/**` docs from the code (`status: draft` until you review them), and writes `ai/discovery-report.md`
+- `{{ cmdPrefix }}discover [area]` — `{{ discoveryAgent }}` (`ai/agents/discovery.md`) proposes, then drafts, `ai/contexts/**` docs from the code (`status: draft` until you review them), and writes `ai/discovery-report.md`
 
 ---
 
@@ -61,9 +61,9 @@ it only adds what is missing.
 Separate from the workflow above, which gets its tests from the plan's **Tests**
 section. These add tests to code that already exists:
 
-- `/plan-tests [task] [target]` — `{{ qaArchitectAgent }}` (`ai/agents/qa-architect.md`) writes `ai/tasks/[task]/test-plan-[target].md`
-- `/execute-test-plan [task] [target]` — `{{ qaDeveloperAgent }}` (`ai/agents/qa-developer.md`) writes and verifies the tests
-- `/run-qa [task] [target|all]` — `{{ qaOrchestratorAgent }}` (`ai/agents/qa-orchestrator.md`) runs both
+- `{{ cmdPrefix }}plan-tests [task] [target]` — `{{ qaArchitectAgent }}` (`ai/agents/qa-architect.md`) writes `ai/tasks/[task]/test-plan-[target].md`
+- `{{ cmdPrefix }}execute-test-plan [task] [target]` — `{{ qaDeveloperAgent }}` (`ai/agents/qa-developer.md`) writes and verifies the tests
+- `{{ cmdPrefix }}run-qa [task] [target|all]` — `{{ qaOrchestratorAgent }}` (`ai/agents/qa-orchestrator.md`) runs both
 
 ---
 
@@ -81,9 +81,9 @@ This repo is one of {{ workspace.count }} in a workspace (`{{ workspace.file }}`
 
 Work in this repo, but do not plan in ignorance of the rest. When a task touches what a
 sibling owns (an API, a schema, a screen, a decision record), read that sibling's
-`CLAUDE.md` and `ai/contexts/**` first. Never edit a sibling as a side effect: a needed
+`{{ guideFile }}` and `ai/contexts/**` first. Never edit a sibling as a side effect: a needed
 change there is a separate task in that repo. A missing contract is a finding to report,
-not something to mock silently.{{#if tracker.remote}} `/request-change [repo] [task]` files it as a
+not something to mock silently.{{#if tracker.remote}} `{{ cmdPrefix }}request-change [repo] [task]` files it as a
 linked {{ tracker.providerLabel }} issue for that repo's architect to pick up.{{/if}}
 
 ---
@@ -93,8 +93,8 @@ linked {{ tracker.providerLabel }} issue for that repo's architect to pick up.{{
 
 When the `cairn` MCP server is connected (`/mcp` lists it), "who uses X", "where is X defined"
 and "is it safe to change X" questions have a better tool than text search. Its tools are
-deferred in Claude Code: load `mcp__cairn__code_references` and `mcp__cairn__code_symbol` with
-ToolSearch first, or hand the question to the `code-scout` sub-agent, which already has them.
+{{#if host.claude}}deferred in Claude Code: load `mcp__cairn__code_references` and `mcp__cairn__code_symbol` with
+ToolSearch first, or hand the question to the `code-scout` sub-agent, which already has them.{{else}}`code_references` and `code_symbol`; the `code-scout` procedure (`{{ scoutDoc }}`) already uses them.{{/if}}
 They cover every repo of the workspace.
 
 - A unique, private name in one file does not need them; one Grep is enough.
@@ -111,7 +111,7 @@ They cover every repo of the workspace.
 `create_brief`, `enrich_description` and `plan_task` sync task state to the
 `{{ tracker.exampleKey }}` project on {{ tracker.providerLabel }} as a side effect.
 Mapping, sync points, stage names, and the `LOCAL-*` rule: `ai/WORKFLOW.md`. Manual:
-`/{{ tracker.slug }}-status`, `/{{ tracker.slug }}-assign`.
+`{{ cmdPrefix }}{{ tracker.slug }}-status`, `{{ cmdPrefix }}{{ tracker.slug }}-assign`.
 {{else}}
 No remote tracker (`tracker.provider` is `none`). A task is its `ai/tasks/[KEY]/`
 folder; the sync steps are no-ops. See `ai/WORKFLOW.md`.

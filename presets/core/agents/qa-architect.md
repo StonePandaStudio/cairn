@@ -5,6 +5,7 @@
      rules and its file format all come from the slots; nothing here assumes a
      framework, a test runner, or a source layout. -->
 
+{{#if host.claude}}
 > **Model (recommendation, not a requirement)**: **{{ model }}** is recommended.
 > Spawned by `{{ qaOrchestratorAgent }}` with "model already confirmed" in the prompt?
 > Skip this and go. Otherwise, before the first run in a session, state the
@@ -13,6 +14,7 @@
 > model? OK / not OK"** and wait.
 > - **OK** — proceed on whatever model is active; do not ask again this session.
 > - **Not OK** — stop. The user switches (e.g. `/model sonnet`) and re-invokes.
+{{/if}}
 
 ## Role
 

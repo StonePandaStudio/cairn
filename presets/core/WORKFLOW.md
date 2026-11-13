@@ -100,13 +100,13 @@ moment the file is edited. Post a digest, never the file:
   issue moves to `{{ tracker.inProgressStage }}`.{{/if}}
 - **`plan_task`** — no tracker sync. Nothing from the plan is posted.
 {{#if workspace}}
-- **Exception: `/request-change`.** The receiving repo has no local copy of the request,
+- **Exception: `{{ cmdPrefix }}request-change`.** The receiving repo has no local copy of the request,
   so its issue carries the full What / Why / Acceptance. Keep them tight anyway.
 {{/if}}
 
 {{#if tracker.moveToReview}}Stage moves after `{{ tracker.reviewStageName }}` are manual{{else}}Later stage moves are manual{{/if}} — the tracker UI,
-`/{{ tracker.slug }}-status`, or `npx cairn tracker close` (closes the parent and
-every subtask together). Assignee changes: `/{{ tracker.slug }}-assign`. Both
+`{{ cmdPrefix }}{{ tracker.slug }}-status`, or `npx cairn tracker close` (closes the parent and
+every subtask together). Assignee changes: `{{ cmdPrefix }}{{ tracker.slug }}-assign`. Both
 commands are manual-trigger only, never called by a workflow step.
 
 {{#if tracker.movesStage}}

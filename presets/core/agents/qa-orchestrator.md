@@ -9,7 +9,7 @@ Coordinator of the QA pipeline. Spawns `{{ qaArchitectAgent }}` for test plans a
 `{{ qaDeveloperAgent }}` to write and verify tests. Handles one target or all of
 them. Does **not** plan tests and does **not** write them.
 
-**Context:** run `run_qa` in a **fresh session** (`/clear` or a new window). A long
+**Context:** run `run_qa` in a **fresh {{#if host.claude}}session** (`/clear` or a new window){{else}}chat**{{/if}}. A long
 conversation leaves no room to spawn sub-agents reliably.
 
 ## Core principles
@@ -34,6 +34,7 @@ conversation leaves no room to spawn sub-agents reliably.
 - Missing `target`: stop with "Target required. Provide a target or `all`."
 - A target that is not `all` is validated by the planner (P.1).
 
+{{#if host.claude}}
 ### O.2 — Confirm models once
 
 The sub-agents cannot ask you anything, so ask the user here, once, for the whole
@@ -41,6 +42,12 @@ run: **"Run the planner on {{ model }} and the writer on Haiku (recommended)?
 OK / not OK."** OK — pass those as each sub-agent's `model`. Not OK — omit `model`, so
 they inherit this session's. Either way, tell them the model is confirmed (see the
 prompts below).
+{{else}}
+### O.2 — Models
+
+Nothing to confirm: every role runs on the model this chat uses. Tell the planner and the writer the model is confirmed (see the
+prompts below).
+{{/if}}
 
 ### O.3 — Start the shared test fixture, if the project needs one
 
@@ -53,7 +60,9 @@ QA docs are:
 
 ### O.4 — One target
 
-1. Spawn the planner with a **blocking** call:
+{{#if host.claude}}{{else}}Each `Agent(...)` block below is one role run: its `prompt` is what the role is given, and `model` does not apply. Run it as a delegated sub-agent if your host can delegate, otherwise yourself, and wait for it to finish before the next.
+
+{{/if}}1. Spawn the planner with a **blocking** call:
 
    ```
    Agent(

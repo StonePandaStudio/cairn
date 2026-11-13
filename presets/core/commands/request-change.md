@@ -16,7 +16,7 @@ target isn't in that table, stop and say so. If the source task is omitted, ask 
 task this serves; if there is none, say the request will be unlinked.
 
 1. **Verify the gap.** Read the target repo (read-only) at the file that owns the
-   contract — its `CLAUDE.md`, `ai/contexts/**`, then the code — and confirm the thing is
+   contract — its `{{ guideFile }}`, `ai/contexts/**`, then the code — and confirm the thing is
    really missing or really different. If it already exists, stop and tell the user where.
 2. **Draft the request** with the user, and write it to
    `ai/tasks/[source-task]/requests/[target]-[slug].md` (a local record; commit it with the
@@ -42,7 +42,7 @@ task this serves; if there is none, say the request will be unlinked.
    the new key, the repo, and what it unblocks. `plan_task` must treat it as a blocker
    or an explicit assumption.
 6. **Tell the user** the new key and that the target repo picks it up with
-   `/create-brief [new-key] 1` — that seeds its brief from this issue.
+   `{{ cmdPrefix }}create-brief [new-key] 1` — that seeds its brief from this issue.
 
 Do not edit anything in the target repo. Do not mock the missing contract in this repo
 without saying so in the plan.

@@ -4,16 +4,16 @@ description: "Cairn workflow: Fix what a code review found, then re-review"
 ---
 
 Read `ai/AGENTS.md` and follow the Cairn procedure below using the task and arguments from the user’s request.
-Cairn docs use Claude command names. In Codex, treat those names as references to the corresponding skills.
-Use the current Codex model and skip Claude model selection. For workflow decisions that require user input, ask in chat and wait for the answer.
-When the procedure recommends a fresh Claude session, use a fresh Codex chat for the same context reset.
+Use the current Codex model. For workflow decisions that require user input, ask in chat and wait for the answer.
+When the procedure recommends a fresh chat, start a fresh Codex chat for the same context reset.
 For code-scout work, follow the read-only search procedure in `.agents/code-scout.md`. Use the `cairn` MCP server’s `code_references` and `code_symbol` tools for named symbols when available, with the scout’s text-search fallback and verification rules.
 For other Cairn MCP calls, resolve the tool by its name under the `cairn` server. Preserve any user confirmation required by the role docs before writing.
-For orchestration steps that specify the Claude Agent tool, use Codex delegation when permitted. Otherwise run the named roles sequentially, checking each required output before moving on.
+Where a step delegates to a sub-agent, use Codex delegation when permitted. Otherwise run the named roles sequentially, checking each required output before moving on.
 
 You are the **fix-review orchestrator**. You chain the agents; you do not plan, edit
-source, or review yourself. Everything below happens in this session by spawning
-sub-agents with the `Agent` tool, each call **blocking**.
+source, or review yourself. Everything below happens in this chat by running one role at a time: a delegated
+sub-agent if your host can delegate, otherwise yourself. Each `Agent(...)` block below is one role run: its
+`prompt` is what the role is given, and `model` does not apply. Wait for each run to finish before the next.
 
 Parse `the arguments supplied with this skill`: first token is the task ID (e.g. TASK-210), second is the step
 number, the rest are items and flags.
@@ -25,17 +25,14 @@ number, the rest are items and flags.
 
 ## 1. Check the inputs
 
-- Missing task or step: stop with "Usage: `/fix-review [task] [step] [blockers|all|B1 S2 …] [--replan]`".
-- `ai/tasks/[task]/review-step-[step].md` must exist. If not, stop: "Run `/code-review [task] [step]` first."
+- Missing task or step: stop with "Usage: `$fix-review [task] [step] [blockers|all|B1 S2 …] [--replan]`".
+- `ai/tasks/[task]/review-step-[step].md` must exist. If not, stop: "Run `$code-review [task] [step]` first."
 - Read the review in full and resolve the items to a list of findings. If it is empty (no
   blockers when `blockers` was asked, or none left), stop: "Nothing to fix."
 
-## 2. Confirm models once
+## 2. Models
 
-The sub-agents cannot ask anything, so ask here, once, with the `AskUserQuestion` tool
-(options **OK** / **Not OK**): **"Run NestjsArchitectAgent and NestjsReviewerAgent on Sonnet and
-NestjsDeveloperAgent on Haiku (recommended)?"** In direct mode leave out the architect.
-OK — pass those as each sub-agent's `model`. Not OK — omit `model`, so they inherit this session's.
+Nothing to confirm: every role runs on the model this chat uses.
 
 ## 3. Fix
 
@@ -117,8 +114,8 @@ Mode: [replan | direct]. Applied: [IDs fixed]. Skipped: [IDs, with reason].
 Re-review: [Summary line].
 ```
 
-If blockers remain, say so and suggest `/fix-review [task] [step] blockers --replan` when
-this pass was direct, or the manual path (`/plan-task`, `/execute-plan`) when it was already
+If blockers remain, say so and suggest `$fix-review [task] [step] blockers --replan` when
+this pass was direct, or the manual path (`$plan-task`, `$execute-plan`) when it was already
 a replan. **One round only** — never start a second fix pass on your own.
 
 ## What this command does NOT do

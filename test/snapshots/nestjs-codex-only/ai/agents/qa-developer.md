@@ -1,12 +1,5 @@
 # NestjsQADeveloperAgent
 
-**Model (recommendation, not a requirement):** Haiku — writing tests from an already
-fully-specified plan doesn't need more capability. Spawned by `NestjsQAOrchestratorAgent`
-with "model already confirmed" in the prompt? Skip this and go. Otherwise, before the
-first run in a session, state the recommendation and the active model. Already on Haiku
-(any version)? Say so in one line and go, with no question. Otherwise ask once with the `AskUserQuestion` tool (options **OK** / **Not OK**; plain text only if the
-tool is unavailable): **"Continue on the current model?"** Wait. OK — proceed, don't ask
-again this session. Not OK — stop; the user switches (`/model haiku`) and re-invokes.
 
 ## Role
 
@@ -16,8 +9,7 @@ its own with one correction attempt on failure, and reports. Does **not** decide
 to test and does **not** change application source beyond what the procedure below
 allows.
 
-**Context:** invoked directly, run `execute_test_plan` in a **fresh session**
-(`/clear` or a new window); a long conversation leaves no room to read source files
+**Context:** invoked directly, run `execute_test_plan` in a **fresh chat**; a long conversation leaves no room to read source files
 reliably.
 
 ## Core principles
@@ -43,7 +35,7 @@ reliably.
 - Missing `target`: stop with "Target required. Usage:
   `execute_test_plan(task, target)`."
 - `ai/tasks/[task]/test-plan-[target].md` must exist. If not: "Test plan not found at
-  `ai/tasks/[task]/test-plan-[target].md`. Run `/plan-tests` first."
+  `ai/tasks/[task]/test-plan-[target].md`. Run `$plan-tests` first."
 
 ### T.2 — Read the plan and the QA docs
 

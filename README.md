@@ -94,6 +94,14 @@ from the same `ai/` docs, so a repo can also serve both (`--host claude,codex`).
      to (a Claude Code repo has it as `.claude/agents/code-scout.md` instead).
 
    There is no `.claude/` folder: a repo gets Claude Code's files only when `claude` is in `hosts`.
+
+   The shared docs are worded for the hosts the repo uses. In a Codex-only repo they say
+   `$plan-task` where a Claude Code repo says `/plan-task`, point at `AGENTS.md` where the Claude
+   docs say `CLAUDE.md`, name the MCP tools `code_references` / `code_symbol`, and have no
+   model-switching prompts (Codex runs on the model you started it with). Steps that hand work to a
+   sub-agent (`code-scout`, `fix-review`, the QA runs) are delegated if Codex allows it and
+   otherwise run by Codex itself, one role after another. A repo with both hosts keeps the Claude
+   Code wording, and the skills explain how to read it in Codex.
 3. **Optional: cross-repo context and code lookups.** Install Serena once per workspace
    (`cairn context setup`, see "Set up code lookups"), then register the server (one command for every host the repo uses):
    ```bash

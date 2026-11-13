@@ -27,17 +27,17 @@ Mode A happens before Mode B on every task. If Mode B is invoked and `descriptio
 The workflow for a task, in order (who writes which file: `ai/WORKFLOW.md`):
 
 ```
-/create-brief [task] [step]  — creates the task brief scaffold for you to fill in
-/enrich-description [task] [step]  — iterative discussion, then writes the enriched description
-/plan-task [task] [step]  — produces the implementation plan and any context-doc updates
-/execute-plan [task] [step]  — implements the plan (Haiku recommended)
-/code-review [task] [step]  — checks the result against the plan and the guidelines
+$create-brief [task] [step]  — creates the task brief scaffold for you to fill in
+$enrich-description [task] [step]  — iterative discussion, then writes the enriched description
+$plan-task [task] [step]  — produces the implementation plan and any context-doc updates
+$execute-plan [task] [step]  — implements the plan
+$code-review [task] [step]  — checks the result against the plan and the guidelines
 ```
 
 Elsewhere these docs shorten a step to its function name, such as `plan_task(task, step)`. That is
 shorthand for you, not for the user. Whenever you tell the user what to run next or which model
-to use for it, write the slash command with the real values filled in, e.g.
-`/execute-plan TASK-25 2`, never `execute_plan(...)`.
+to use for it, write the command with the real values filled in, e.g.
+`$execute-plan TASK-25 2`, never `execute_plan(...)`.
 
 `brief-step-[N].md` is the user's and is never modified after creation. `description-step-[N].md` and `plan-step-[N].md` are yours and may be revised. `review-step-[N].md` is the reviewer's and is overwritten on each re-review.
 
@@ -50,7 +50,7 @@ to use for it, write the slash command with the real values filled in, e.g.
 **Invocation semantics.** This tool is iterative and conversational — it opens a discussion loop with the user and only "returns" once the user explicitly confirms the description is ready. Do not treat it as a single-shot call.
 
 **Edge cases on invocation:**
-- **No brief file yet.** Ask the user to run `/create-brief [task] [step]` first (a legacy task with only a description skips Mode A entirely, see above).
+- **No brief file yet.** Ask the user to run `$create-brief [task] [step]` first (a legacy task with only a description skips Mode A entirely, see above).
 - **Brief exists, no description yet.** The normal case — run the full discussion flow (A.1–A.4) and write `description-step-[step].md`.
 - **Description already exists.** Summarize what's there and confirm with the user whether it's ready for `plan_task`, rather than redoing the whole discussion. Only re-enter full discussion if the user asks or if the enriched description has drifted from the code.
 
@@ -164,22 +164,19 @@ from; the developer reads it.
 - **Create** a new context file when the task adds an area that doesn't yet have one. Follow the shape of existing docs. If it is about one named code symbol, add `describes: <kind> <Symbol>` to its frontmatter (`describes: entity Invoice`; the bare declared name, never `Class/method`; a list for several). When the plan renames or removes a described symbol, update or drop that line in the same step, so `cairn context check` does not report `BROKEN_ANCHOR`.
 - **Defer to the developer** any file that can only be finalized after implementation: list it in the plan's "Context Docs to Update" with *When* = `after implementation`.
 
-#### Before returning — fresh session and model
+#### Before returning — fresh chat
 
-Remind the user:
-
-1. **Start a fresh session** — `/clear` or a new window. Planning conversations crowd out the developer agent's ability to read the plan and call tools reliably; this is the most common cause of silent execute-plan failures.
-2. **Haiku is recommended for `/execute-plan [task] [step]`** (`/model haiku`), with the real task and step filled in — a suggestion only; `NestjsDeveloperAgent` asks for an OK / not OK on the active model itself.
+Remind the user to **start a fresh chat** before `$execute-plan [task] [step]`, with the real task and step filled in. Planning conversations crowd out the developer agent's ability to read the plan and call tools reliably; this is the most common cause of silent execute-plan failures.
 
 Do not omit this reminder.
 
-**End state of Mode B:** plan file + updated/new context docs + fresh-session / Haiku-recommendation reminder delivered.
+**End state of Mode B:** plan file + updated/new context docs + fresh-chat reminder delivered.
 
 ---
 
 ## Code discovery
 
-Do not read through the source tree yourself to find analogs, callers or tests — that fills your context with files you only needed the location of. Spawn the `code-scout` subagent (`.agents/code-scout.md`, read-only, runs on Haiku) with the Agent tool and read what it reports back.
+Do not read through the source tree yourself to find analogs, callers or tests — that fills your context with files you only needed the location of. Run the read-only code-scout procedure (`.agents/code-scout.md`) and read what it reports back: as a delegated sub-agent if your host can delegate, otherwise yourself, one question at a time. The `Agent(...)` block below shows the shape of one search; its `prompt` is the question to ask.
 
 ```
 Agent(
@@ -192,7 +189,7 @@ Agent(
 ```
 
 - **Self-contained prompt.** The scout has not seen the discussion. Name the task and step, say what is being built, and ask concrete questions; it cannot ask you back.
-- **Parallel for independent questions.** Put several `Agent` calls in one message (analogs of the pattern, callers of the entity, tests that cover it) instead of one broad question.
+- **Parallel for independent questions.** Run several searches side by side when you can delegate (analogs of the pattern, callers of the entity, tests that cover it) instead of one broad question.
 - **It locates, you decide.** The report is `file:line` and a reason. Open the few files that matter yourself before building a plan on them, and never prescribe a pattern from the scout's one-line description alone.
 - **Use it in both modes.** Mode A: what already exists and what constrains the change. Mode B: the existing analog the checklist below requires, and the files the plan will touch.
 - **Callers of a named symbol.** The scout uses the `code_references` tool (MCP server `cairn`, language-server based) when it is registered, and Grep otherwise. If you ask "who calls `X/y`", say it is a symbol so the scout takes that route. A grep-only answer to a caller question can miss aliased imports and injected services, and the tool can miss string-name, token or template use, so treat "no callers found" from either as unproven for a delete, rename or signature change: ask the scout to run both.

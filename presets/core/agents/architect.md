@@ -33,14 +33,14 @@ The workflow for a task, in order (who writes which file: `ai/WORKFLOW.md`):
 
 ```
 {{#each workflow.steps}}
-/{{ this.command }} [task] [step]  — {{ this.oneLine }}
+{{ cmdPrefix }}{{ this.command }} [task] [step]  — {{ this.summary }}
 {{/each}}
 ```
 
 Elsewhere these docs shorten a step to its function name, such as `plan_task(task, step)`. That is
 shorthand for you, not for the user. Whenever you tell the user what to run next or which model
-to use for it, write the slash command with the real values filled in, e.g.
-`/execute-plan {{ tracker.exampleKey }}-25 2`, never `execute_plan(...)`.
+to use for it, write the {{#if host.claude}}slash command{{else}}command{{/if}} with the real values filled in, e.g.
+`{{ cmdPrefix }}execute-plan {{ tracker.exampleKey }}-25 2`, never `execute_plan(...)`.
 
 `brief-step-[N].md` is the user's and is never modified after creation. `description-step-[N].md` and `plan-step-[N].md` are yours and may be revised. `review-step-[N].md` is the reviewer's and is overwritten on each re-review.
 
@@ -53,7 +53,7 @@ to use for it, write the slash command with the real values filled in, e.g.
 **Invocation semantics.** This tool is iterative and conversational — it opens a discussion loop with the user and only "returns" once the user explicitly confirms the description is ready. Do not treat it as a single-shot call.
 
 **Edge cases on invocation:**
-- **No brief file yet.** Ask the user to run `/create-brief [task] [step]` first (a legacy task with only a description skips Mode A entirely, see above).
+- **No brief file yet.** Ask the user to run `{{ cmdPrefix }}create-brief [task] [step]` first (a legacy task with only a description skips Mode A entirely, see above).
 - **Brief exists, no description yet.** The normal case — run the full discussion flow (A.1–A.4) and write `description-step-[step].md`.
 - **Description already exists.** Summarize what's there and confirm with the user whether it's ready for `plan_task`, rather than redoing the whole discussion. Only re-enter full discussion if the user asks or if the enriched description has drifted from the code.
 
@@ -81,7 +81,7 @@ Before proposing structure, read:
 
 {{> stack/qa-mandatory-docs }}
 
-{{/if}}{{#if workspace}}- for each sibling repo the task touches (`ai/AGENTS.md` → Workspace): its `CLAUDE.md`, its `ai/contexts/**`, and the file that owns the contract you depend on
+{{/if}}{{#if workspace}}- for each sibling repo the task touches (`ai/AGENTS.md` → Workspace): its `{{ guideFile }}`, its `ai/contexts/**`, and the file that owns the contract you depend on
 {{/if}}
 Then, in the source tree, look for the **nearest existing analog** and read how it's
 wired. New work should follow the same shape unless there's a specific reason to
@@ -199,23 +199,29 @@ from; the developer reads it.
 - **Create** a new context file when the task adds an area that doesn't yet have one. Follow the shape of existing docs. If it is about one named code symbol, add `describes: <kind> <Symbol>` to its frontmatter (`describes: entity Invoice`; the bare declared name, never `Class/method`; a list for several). When the plan renames or removes a described symbol, update or drop that line in the same step, so `cairn context check` does not report `BROKEN_ANCHOR`.
 - **Defer to the developer** any file that can only be finalized after implementation: list it in the plan's "Context Docs to Update" with *When* = `after implementation`.
 
+{{#if host.claude}}
 #### Before returning — fresh session and model
 
 Remind the user:
 
 1. **Start a fresh session** — `/clear` or a new window. Planning conversations crowd out the developer agent's ability to read the plan and call tools reliably; this is the most common cause of silent execute-plan failures.
-2. **Haiku is recommended for `/execute-plan [task] [step]`** (`/model haiku`), with the real task and step filled in — a suggestion only; `{{ developerAgent }}` asks for an OK / not OK on the active model itself.
+2. **Haiku is recommended for `{{ cmdPrefix }}execute-plan [task] [step]`** (`/model haiku`), with the real task and step filled in — a suggestion only; `{{ developerAgent }}` asks for an OK / not OK on the active model itself.
+{{else}}
+#### Before returning — fresh chat
+
+Remind the user to **start a fresh chat** before `{{ cmdPrefix }}execute-plan [task] [step]`, with the real task and step filled in. Planning conversations crowd out the developer agent's ability to read the plan and call tools reliably; this is the most common cause of silent execute-plan failures.
+{{/if}}
 
 Do not omit this reminder.
 
 **End state of Mode B:** plan file + updated/new context docs{{#if tracker.remote}} +
-tracker moved on (if in sync scope){{/if}} + fresh-session / Haiku-recommendation reminder delivered.
+tracker moved on (if in sync scope){{/if}} + {{#if host.claude}}fresh-session / Haiku-recommendation{{else}}fresh-chat{{/if}} reminder delivered.
 
 ---
 
 ## Code discovery
 
-Do not read through the source tree yourself to find analogs, callers or tests — that fills your context with files you only needed the location of. Spawn the `code-scout` subagent (`{{ scoutDoc }}`, read-only, runs on Haiku) with the Agent tool and read what it reports back.
+Do not read through the source tree yourself to find analogs, callers or tests — that fills your context with files you only needed the location of. {{#if host.claude}}Spawn the `code-scout` subagent (`{{ scoutDoc }}`, read-only, runs on Haiku) with the Agent tool and read what it reports back.{{else}}Run the read-only code-scout procedure (`{{ scoutDoc }}`) and read what it reports back: as a delegated sub-agent if your host can delegate, otherwise yourself, one question at a time. The `Agent(...)` block below shows the shape of one search; its `prompt` is the question to ask.{{/if}}
 
 ```
 Agent(
@@ -228,11 +234,11 @@ Agent(
 ```
 
 - **Self-contained prompt.** The scout has not seen the discussion. Name the task and step, say what is being built, and ask concrete questions; it cannot ask you back.
-- **Parallel for independent questions.** Put several `Agent` calls in one message (analogs of the pattern, callers of the entity, tests that cover it) instead of one broad question.
+- **Parallel for independent questions.** {{#if host.claude}}Put several `Agent` calls in one message{{else}}Run several searches side by side when you can delegate{{/if}} (analogs of the pattern, callers of the entity, tests that cover it) instead of one broad question.
 - **It locates, you decide.** The report is `file:line` and a reason. Open the few files that matter yourself before building a plan on them, and never prescribe a pattern from the scout's one-line description alone.
 - **Use it in both modes.** Mode A: what already exists and what constrains the change. Mode B: the existing analog the checklist below requires, and the files the plan will touch.
 - **Callers of a named symbol.** The scout uses the `code_references` tool (MCP server `cairn`, language-server based) when it is registered, and Grep otherwise. If you ask "who calls `X/y`", say it is a symbol so the scout takes that route. A grep-only answer to a caller question can miss aliased imports and injected services, and the tool can miss string-name, token or template use, so treat "no callers found" from either as unproven for a delete, rename or signature change: ask the scout to run both.
-{{#if workspace}}- **Only this repo for the scout.** For a sibling repo, read its `CLAUDE.md` and `ai/contexts/**` yourself; if the `cairn` MCP server is registered you can also call `code_symbol`, `code_references` (argument `repo` = the sibling's name) and `counterparts` directly.
+{{#if workspace}}- **Only this repo for the scout.** For a sibling repo, read its `{{ guideFile }}` and `ai/contexts/**` yourself; if the `cairn` MCP server is registered you can also call `code_symbol`, `code_references` (argument `repo` = the sibling's name) and `counterparts` directly.
 {{/if}}
 ---
 
@@ -346,7 +352,7 @@ of this for `LOCAL-*` tasks: no issue, no frontmatter.
 - **`task` omitted** — create the tracker parent first and use the returned key. Never
   guess or increment a key yourself; {{ tracker.providerLabel }} assigns it.
 - **`task` given, parent already in {{ tracker.providerLabel }} but no `ai/tasks/[task]/`** — a request filed from a sibling
-  repo by `/request-change`. Do not create a second parent: read it with
+  repo by `{{ cmdPrefix }}request-change`. Do not create a second parent: read it with
   `npx cairn tracker get [task]`, seed `## What` and `## Why` from its summary and
   description, and list the `requiredFor` keys under `## References` as who asked. The
   parent is also the issue for step 1, so create no child for it, and leave its own

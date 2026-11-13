@@ -4364,14 +4364,40 @@ test('hosts: a Codex-only repo gets no .claude/ folder; the scout procedure move
   assert.match(scout, /^# code-scout/);
   assert.match(scout, /read-only code scout/);
   assert.match(codex.get('.agents/skills/plan-task/SKILL.md'), /search procedure in `\.agents\/code-scout\.md`/);
-  assert.match(codex.get('ai/agents/developer.md'), /`code-scout` subagent \(`\.agents\/code-scout\.md`/);
+  assert.match(codex.get('ai/agents/developer.md'), /code-scout procedure \(`\.agents\/code-scout\.md`\)/);
   assert.ok(![...codex.values()].some((c) => c.includes('.claude/')), 'nothing in a Codex-only repo points at .claude/');
+
+
+  // the wording follows the host: Codex invocations, no Claude Code tools, no model switching
+  assert.match(codex.get('ai/AGENTS.md'), /\$plan-task\b/);
+  assert.doesNotMatch(codex.get('ai/AGENTS.md'), /\/plan-task|\/execute-plan/);
+  const FORBIDDEN = /Claude|CLAUDE\.md|\/model |\/clear|AskUserQuestion|`Skill`|mcp__|ToolSearch|\bHaiku\b|\bSonnet\b|\bOpus\b|slash command|\.claude\//;
+  const leaks = [...codex].filter(([, c]) => FORBIDDEN.test(c)).map(([f]) => f);
+  assert.deepStrictEqual(leaks, [], 'Claude Code wording leaked into a Codex-only repo');
+  assert.match(codex.get('ai/agents/developer.md'), /fresh chat\*\*/);
+  assert.doesNotMatch(codex.get('ai/agents/developer.md'), /OK \/ Not OK|Continue on the current model/);
+  assert.match(codex.get('ai/agents/reviewer.md'), /run the `\$fix-review` skill/);
+  const { buildContext } = require('../lib/render');
+  const vocab = (hosts) => buildContext({ ...base, hosts }, 'presets');
+  assert.deepStrictEqual(
+    [vocab(['codex']).guideFile, vocab(['codex']).cmdPrefix, vocab(['codex']).tool.codeReferences],
+    ['AGENTS.md', '$', 'code_references'],
+  );
+  assert.deepStrictEqual(
+    [vocab(['claude', 'codex']).guideFile, vocab(['claude', 'codex']).cmdPrefix, vocab(['claude']).tool.codeReferences],
+    ['CLAUDE.md', '/', 'mcp__cairn__code_references'],
+  );
+  assert.match(codex.get('.agents/skills/execute-plan/SKILL.md'), /description: "Cairn workflow: implements the plan"/);
+  assert.doesNotMatch(codex.get('.agents/skills/plan-task/SKILL.md'), /Claude/);
+  assert.match(codex.get('.agents/skills/plan-task/SKILL.md'), /Use the current Codex model\. For workflow decisions/);
 
   const both = render(['claude', 'codex']);
   assert.ok(both.has('.claude/commands/plan-task.md') && both.has('.claude/agents/code-scout.md'));
   assert.ok(!both.has('.agents/code-scout.md'), 'one scout doc: the Claude one');
   assert.match(both.get('.agents/skills/plan-task/SKILL.md'), /search procedure in `\.claude\/agents\/code-scout\.md`/);
   assert.match(both.get('ai/agents/developer.md'), /`\.claude\/agents\/code-scout\.md`/);
+  assert.match(both.get('ai/agents/architect.md'), /\/plan-task \[task\] \[step\]/);
+  assert.match(both.get('.agents/skills/plan-task/SKILL.md'), /Cairn docs use Claude command names/);
 
   const claude = render(['claude']);
   assert.ok(![...claude.keys()].some((f) => f.startsWith('.agents/') || f === 'AGENTS.md'));
