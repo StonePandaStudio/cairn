@@ -165,8 +165,11 @@ search, so an agent can call them without loading them first. A repo registered 
 version has the entry without it: `cairn context register --force` updates it. Start Claude Code at the repo root: from a subfolder Claude Code runs
 the server from that subfolder and the relative path no longer resolves.
 
-**Codex.** Add the same server to the repo’s `.codex/config.toml` using a
-project-scoped entry. Replace `cwd` with the absolute path to that repo.
+**Codex.** `cairn context register --codex` also writes the server into each repo's
+project-scoped `.codex/config.toml` (a `[mcp_servers.cairn]` table; other servers and
+settings in the file are kept, and a different `cairn` table is left alone unless
+`--force`). Codex needs an absolute `cwd`, so that file is specific to the machine:
+each checkout runs the command itself and the file is not committed. By hand:
 
 ```toml
 [mcp_servers.cairn]
@@ -178,7 +181,7 @@ args = ["node_modules/@stonepandastudio/cairn/bin/cairn.js", "context", "serve",
 Adjust the `repos.json` path relative to `cwd`. For a standalone repo without
 `repos.json`, omit the final two arguments. Reopen the project in Codex and
 check that the `cairn` server is available. In the Codex CLI, use `/mcp` to see
-the active servers. Each checkout needs its own `cwd`.
+the active servers.
 
 **Existing docs (brownfield, once).** Docs written before cairn have no frontmatter, so
 `check` can say nothing about them:
@@ -392,9 +395,12 @@ Generated files are **committed**, not gitignored. Claude Code discovers
 
 ### Use the workflow in Codex
 
-Set `"codexSkills": true` in `cairn.config.json`, then run `npx cairn sync`
-in an existing Cairn repo or `npx cairn render` for the first render. Commit
-the generated `.agents/skills/` files with the rest of the scaffold.
+Pass `--codex` to `cairn init` for a new repo, or set `"codexSkills": true` in
+`cairn.config.json`, then run `npx cairn sync` in an existing Cairn repo or
+`npx cairn render` for the first render. Commit the generated `.agents/skills/`
+files with the rest of the scaffold. The same option renders a short root
+`AGENTS.md` that points Codex at `ai/AGENTS.md` and the skills; a repo that
+already has its own root `AGENTS.md` keeps it — add the pointer by hand.
 
 Open Codex in the repo and invoke `$create-brief Add CSV export`. The next
 steps are `$enrich-description`, `$plan-task`, `$execute-plan`, and

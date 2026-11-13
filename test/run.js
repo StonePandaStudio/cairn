@@ -3014,6 +3014,7 @@ const SNAPSHOT_CASES = {
   },
   'nextjs-drizzle-youtrack': { stack: ['nextjs', 'drizzle'], tracker: { provider: 'youtrack', projectKey: 'CI' } },
   'react-css-modules-none': { stack: ['react', 'css-modules'], tracker: { provider: 'none' } },
+  'nestjs-typeorm-codex': { stack: ['nestjs', 'typeorm'], tracker: { provider: 'none' }, codexSkills: true },
   'spring-jpa-flyway-docker-none': { stack: ['spring', 'jpa-flyway', 'docker'], tracker: { provider: 'none' } },
   'spring-jpa-flyway-none': { stack: ['spring', 'jpa-flyway'], tracker: { provider: 'none' } },
 };
@@ -4148,6 +4149,77 @@ test('register: CLI writes every repo and exits non-zero only when something was
   const second = run();
   assert.strictEqual(second.status, 1);
   assert.deepStrictEqual(JSON.parse(second.stdout).map((r) => r.action), ['unchanged', 'differs']);
+});
+
+test('register --codex: writes .codex/config.toml with an absolute cwd, merges, is idempotent, leaves a different entry alone', () => {
+  const { repos, config } = registerWs();
+  const file = path.join(repos[0].path, '.codex', 'config.toml');
+  const first = registerMod.registerCodexRepo(repos[0], config);
+  assert.strictEqual(first.action, 'created');
+  const text = fs.readFileSync(file, 'utf8');
+  assert.match(text, /^\[mcp_servers\.cairn\]$/m);
+  assert.match(text, /^command = "node"$/m);
+  assert.ok(text.includes(`cwd = ${JSON.stringify(repos[0].path.replace(/\\/g, '/'))}`), 'cwd is the absolute repo path');
+  assert.match(text, /"context", "serve", "--config", "\.\.\/repos\.json"\]/);
+  assert.strictEqual(registerMod.registerCodexRepo(repos[0], config).action, 'unchanged');
+
+  // another server and a comment are kept; a different cairn table is left alone until --force
+  fs.writeFileSync(file, '# mine\n[mcp_servers.figma]\nurl = "https://x"\n\n[mcp_servers.cairn]\ncommand = "other"\n\n[mcp_servers.after]\nenabled = false\n');
+  const differs = registerMod.registerCodexRepo(repos[0], config);
+  assert.strictEqual(differs.action, 'differs');
+  assert.match(fs.readFileSync(file, 'utf8'), /command = "other"/);
+  assert.strictEqual(registerMod.registerCodexRepo(repos[0], config, { force: true }).action, 'replaced');
+  const forced = fs.readFileSync(file, 'utf8');
+  assert.match(forced, /^# mine$/m);
+  assert.match(forced, /\[mcp_servers\.figma\]\nurl = "https:\/\/x"/);
+  assert.match(forced, /\[mcp_servers\.after\]\nenabled = false/);
+  assert.doesNotMatch(forced, /command = "other"/);
+  assert.strictEqual(registerMod.registerCodexRepo(repos[0], config).action, 'unchanged');
+
+  // appended to a file that has other tables; dry run writes nothing
+  fs.writeFileSync(file, '[mcp_servers.figma]\nurl = "https://x"');
+  assert.strictEqual(registerMod.registerCodexRepo(repos[0], config, { dryRun: true }).action, 'added');
+  assert.ok(!fs.readFileSync(file, 'utf8').includes('cairn'));
+  assert.strictEqual(registerMod.registerCodexRepo(repos[0], config).action, 'added');
+  assert.match(fs.readFileSync(file, 'utf8'), /url = "https:\/\/x"\n\n\[mcp_servers\.cairn\]\n/);
+});
+
+test('register --codex: the CLI writes both files only when asked', () => {
+  const { repos, config } = registerWs();
+  const bin = path.join(__dirname, '..', 'bin', 'cairn.js');
+  const run = (extra) => spawnSync(process.execPath, [bin, 'context', 'register', '--config', config, '--json', ...extra], { encoding: 'utf8' });
+  assert.strictEqual(run([]).status, 0);
+  assert.ok(!fs.existsSync(path.join(repos[0].path, '.codex')));
+  const out = run(['--codex']);
+  assert.strictEqual(out.status, 0, out.stderr);
+  assert.deepStrictEqual(JSON.parse(out.stdout).map((r) => [r.repo, r.target || 'claude', r.action]), [
+    ['backend', 'claude', 'unchanged'],
+    ['backend', 'codex', 'created'],
+    ['frontend', 'claude', 'unchanged'],
+    ['frontend', 'codex', 'created'],
+  ]);
+});
+
+atest('init --codex: sets codexSkills and --render writes the skills and a root AGENTS.md pointer', async () => {
+  const { main: init } = require('../lib/init');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cairn-initcodex-'));
+  assert.strictEqual(init(['--repo', dir, '--stack', 'nestjs', '--tracker', 'none', '--codex', '--render', '--no-color']), 0);
+  assert.strictEqual(JSON.parse(fs.readFileSync(path.join(dir, 'cairn.config.json'), 'utf8')).codexSkills, true);
+  assert.ok(fs.existsSync(path.join(dir, '.agents', 'skills', 'create-brief', 'SKILL.md')));
+  assert.match(fs.readFileSync(path.join(dir, 'AGENTS.md'), 'utf8'), /ai\/AGENTS\.md/);
+  const plain = fs.mkdtempSync(path.join(os.tmpdir(), 'cairn-initplain-'));
+  assert.strictEqual(init(['--repo', plain, '--stack', 'nestjs', '--tracker', 'none', '--render', '--no-color']), 0);
+  assert.ok(!fs.existsSync(path.join(plain, 'AGENTS.md')));
+});
+
+test('render: a root AGENTS.md the repo already has is kept when Codex skills are enabled', () => {
+  const { planRender } = require('../lib/render');
+  const repo = fs.mkdtempSync(path.join(os.tmpdir(), 'cairn-rootagents-'));
+  fs.writeFileSync(path.join(repo, 'AGENTS.md'), 'my own rules\n');
+  const config = { stack: ['nestjs'], tracker: { provider: 'none' }, codexSkills: true };
+  const plan = planRender({ config, presetsDir: 'presets', repoPath: repo });
+  assert.ok(!plan.planned.some(([rel]) => rel === 'AGENTS.md'));
+  assert.ok(plan.kept.some((k) => k.rel === 'AGENTS.md' && /not written by cairn/.test(k.reason)));
 });
 
 atest('setup warm-up: one throwaway lookup per repo starts its language server; a missing provider is reported, not thrown', async () => {
