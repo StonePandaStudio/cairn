@@ -214,10 +214,29 @@ The code base exists; the AI workflow and its docs do not (or only as hand-copie
    - With `codex` in `hosts`, a root `AGENTS.md` the repo already has is kept, not overwritten
      (`render` reports it as "already on disk, not written by cairn"). Add a pointer to it by
      hand: read `ai/AGENTS.md`, and start workflow steps with the `$` skills in `.agents/skills/`.
-3. **Optional, before `/discover`: list the docs you already have.** If the repo has its own
-   documentation outside `ai/contexts/` (a `docum/` or `docs/` folder, an architecture file), name it
-   in `cairn.config.json` so the agents read it; see "Existing docs as a knowledge source" below.
-4. **Draft the context docs.** In Claude Code (or Codex, with `$discover`), inside the repo:
+3. **Install the code tools** (once per workspace; a few minutes, about 170 MB, never global):
+   ```bash
+   npx cairn context install-tools
+   ```
+   Discovery confirms the code behind each doc (`describes:`) with `code_symbol`, so the tools
+   come before `/discover`. See "Set up code lookups".
+4. **Register the MCP server**, so the agents can reach those tools (one command for every host
+   the repo uses; Claude Code asks you to approve the server the first time):
+   ```bash
+   npx cairn context register
+   ```
+5. **Optional: list the docs you already have.** If the repo has its own documentation outside
+   `ai/contexts/` (a `docum/` or `docs/` folder, an architecture file), name it so the agents read it
+   and `/discover` carries what it knows into the contexts; then `npx cairn sync`. See "Existing docs
+   as a knowledge source" below.
+   ```bash
+   npx cairn docs add docum
+   npx cairn sync
+   ```
+6. **Only if `ai/contexts/` already holds hand-written docs without frontmatter:** run
+   `npx cairn context add-frontmatter` (dry run first; see "Old `ai/contexts/` docs"). A repo
+   whose contexts do not exist yet skips this.
+7. **Draft the context docs.** In Claude Code (or Codex, with `$discover`), inside the repo:
    ```
    /discover            # whole repo
    /discover <area>     # or one area at a time
@@ -226,14 +245,16 @@ The code base exists; the AI workflow and its docs do not (or only as hand-copie
    the confirmed ones as `status: draft` plus `ai/discovery-report.md`. Safe to re-run. Review
    the drafts and change `status` when you accept them. See "Starting on an existing code
    base: `/discover`".
-5. **Optional, tests for code that exists:** `/plan-tests`, `/execute-test-plan`, `/run-qa`
+8. **Optional, tests for code that exists:** `/plan-tests`, `/execute-test-plan`, `/run-qa`
    (`$plan-tests`, … in Codex; stacks that ship the QA slots only). See "QA pipeline for
    existing code".
-6. **Commit** `cairn.config.json`, `_cairn/`, `ai/` and `.claude/` (and `.agents/skills/`
-   with the root `AGENTS.md` if Codex is on).
+9. **Commit** `cairn.config.json`, `_cairn/` (its `tools/` and `cache/` are gitignored), `ai/` and
+   `.claude/` (and `.agents/skills/` with the root `AGENTS.md` if Codex is on). The Codex
+   `.codex/config.toml` written by `register` is per machine and is not committed.
 
-For a group of repos, do this in each repo, then `cairn workspace init` / `add` as in the
-section above and `cairn sync` in each repo. `cairn doctor`, run from the workspace folder,
+For a group of repos, do steps 1–2 in each repo, then `cairn workspace init` / `add` as in the
+section above and `cairn sync` in each repo. Then run steps 3–4 once from the workspace folder
+(they cover every repo of the workspace), and steps 5–9 per repo. `cairn doctor`, run from the workspace folder,
 shows where the copies disagree before you start reconciling them.
 
 ### Existing docs as a knowledge source
@@ -282,7 +303,7 @@ repo that has not rendered yet). What changes:
 
 cairn never parses these files. They stay where they are, and `cairn context check` does not see them.
 To link them across repos, or to have `check` verify them, move or copy a doc into
-`ai/contexts/<category>/<name>.md` (see "Set up code lookups", "Existing docs (brownfield, once)").
+`ai/contexts/<category>/<name>.md` (see "Set up code lookups", "Old `ai/contexts/` docs").
 Keep the table short: a doc nobody needs for a task only costs context.
 
 ## Update cairn in a repo that already has it
@@ -330,8 +351,9 @@ Exit `3` means conflicts in some repo, `1` an update failed or was blocked. Afte
 
 ## Set up code lookups (once per workspace)
 
-Optional: everything else works without it. It lets agents in any repo ask about the others
-and look up symbols and references.
+Optional, but do it before `/discover` on an existing code base: discovery confirms each doc's
+code anchor with these tools. Everything else works without them. They let agents in any repo ask
+about the others and look up symbols and references.
 
 **One repo only?** Run the same commands from inside it: with no `repos.json` and no
 `--config`, that repo alone is the workspace (tools in `<repo>/_cairn/tools/`, and
@@ -472,6 +494,9 @@ agents are told to read `notes` and to run one Grep before a delete, rename or s
 
 Once the repos are set up (see the sections above), a normal day looks like this. Step 1
 applies to a group of repos; the rest apply to any repo.
+
+The one-time setup is in "Start on a new repo", "Start on a repo that already has code" and
+"Set up code lookups". New project docs are added with `cairn docs add`, then `cairn sync`.
 
 1. **Check the group is in step.** From the folder holding `repos.json`:
    ```bash
