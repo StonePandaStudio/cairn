@@ -111,11 +111,11 @@ repo / workspace / versions; `lib/shell/cli.js` offers the actions that apply an
 prompter is in `lib/wizard/prompt.js` (raw keypresses, no dependency; numbered lines when piped).
 - ✅ Step 1: state detection. ✅ Step 2: hub with "Set up this folder / another repo" (the wizard flow).
 - ✅ Workspace create/extend, and upgrade (report, then apply with a repo subset and `--bump-pin`);
-  `lib/shell/actions.js`, shared plan helpers in `lib/wizard/plan.js`. Upgrade is offered only with a
-  workspace, because `cairn upgrade` needs a repos.json (a lone managed repo has no upgrade item yet).
+  `lib/shell/actions.js`, shared plan helpers in `lib/wizard/plan.js`. Upgrade is offered for a
+  workspace; a lone managed repo upgrades too (`cairn upgrade` with no repos.json treats the cairn repo it is inside as a workspace of one).
 - ✅ Sync (preview then merge), docs (list/add/remove, then sync), doctor, contexts (check, register,
   install-tools): `lib/shell/repo-actions.js`.
-- Next: a single-repo upgrade path, stack detection as a pre-fill, `workspace remove` and `override` in the
+- Next: stack detection as a pre-fill, `workspace remove` and `override` in the
   shell, then the host-side commands.
 - ✅ Back: Esc (TTY) or `<` (piped) throws `Back` (lib/errors.js); flows are step lists (lib/wizard/steps.js) that
   re-ask the previous step with its old answer as the default; Back at the first step returns to the menu,

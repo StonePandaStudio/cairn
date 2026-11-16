@@ -5111,10 +5111,10 @@ test('single repo: with no repos.json, the current repo alone is the workspace (
     return repo;
   }
 
-  test('repo actions: a lone managed repo gets sync, docs and context but no upgrade or doctor', () => {
+  test('repo actions: a lone managed repo gets upgrade, sync, docs and context but no doctor', () => {
     const repo = managedRepo();
     const menu = buildMenu(detectState(repo, '0.17.0')).map((m) => m.value);
-    assert.deepStrictEqual(menu, ['sync', 'workspace', 'docs', 'context', 'init-other', 'agent-commands', 'quit']);
+    assert.deepStrictEqual(menu, ['upgrade', 'sync', 'workspace', 'docs', 'context', 'init-other', 'agent-commands', 'quit']);
     assert.deepStrictEqual(managedRepos(detectState(repo, '0.17.0')).map((r) => r.path), [repo]);
   });
 
@@ -5637,6 +5637,67 @@ test('single repo: with no repos.json, the current repo alone is the workspace (
     const r = spawnSync(process.execPath, [bin, 'init', '--repo', tmpRepo(), '--stack', 'unknown', '--no-color'], { encoding: 'utf8', env: { ...process.env, CAIRN_HOME: home } });
     assert.strictEqual(r.status, 0, r.stderr);
     assert.deepStrictEqual(fs.readdirSync(home), []);
+  });
+}
+
+// ------------------------------------------------------ upgrade of a lone repo
+
+{
+  const { spawnSync } = require('child_process');
+  const { detectState } = require('../lib/shell/state');
+  const { buildMenu } = require('../lib/shell/cli');
+  const { upgradeAction, buildUpgradeApply } = require('../lib/shell/actions');
+  const bin = path.join(__dirname, '..', 'bin', 'cairn.js');
+
+  function managed() {
+    const repo = tmpRepo();
+    fs.writeFileSync(path.join(repo, 'cairn.config.json'), JSON.stringify({ cairn: '0.17.0', stack: ['unknown'] }));
+    return repo;
+  }
+
+  test('lone upgrade: `cairn upgrade` in a cairn repo with no repos.json reports on that repo', () => {
+    const repo = managed();
+    fs.mkdirSync(path.join(repo, 'src'));
+    for (const cwd of [repo, path.join(repo, 'src')]) {
+      const r = spawnSync(process.execPath, [bin, 'upgrade', '--no-color'], { cwd, encoding: 'utf8' });
+      assert.strictEqual(r.status, 0, r.stderr);
+      assert.ok(r.stdout.includes(path.basename(repo)), r.stdout);
+      assert.ok(r.stdout.includes('report only'));
+    }
+  });
+
+  test('lone upgrade: outside a cairn repo, or with an explicit missing --config, it is still the clear error', () => {
+    const bare = spawnSync(process.execPath, [bin, 'upgrade'], { cwd: tmpRepo(), encoding: 'utf8' });
+    assert.strictEqual(bare.status, 2);
+    const explicit = spawnSync(process.execPath, [bin, 'upgrade', '--config', 'nope.json'], { cwd: managed(), encoding: 'utf8' });
+    assert.strictEqual(explicit.status, 2);
+  });
+
+  test('lone upgrade: the shell offers it for a lone cairn repo, labelled for the repo', () => {
+    const repo = managed();
+    const item = buildMenu(detectState(repo, '0.17.0')).find((m) => m.value === 'upgrade');
+    assert.strictEqual(item.label, 'Upgrade cairn in this repo');
+    assert.ok(!buildMenu(detectState(tmpRepo(), '0.17.0')).some((m) => m.value === 'upgrade'));
+    assert.deepStrictEqual(buildUpgradeApply({ repos: ['x'], all: true, bumpPin: true, cwd: '/r' }), {
+      label: 'update cairn in each repo, then sync it',
+      argv: ['upgrade', '--apply', '--bump-pin'],
+      cwd: '/r',
+    });
+  });
+
+  atest('lone upgrade: the action runs from the repo, asks no repo question, and applies', async () => {
+    const repo = managed();
+    const state = detectState(repo, '0.17.0');
+    const calls = [];
+    const asked = [];
+    const answers = ['y', 'y', '']; // apply, bump-pin, run now
+    const p = {
+      write() {},
+      confirm: async (t, def) => { asked.push(t.trim()); const a = answers.shift(); return a === '' ? def : a === 'y'; },
+      multi: async () => { throw new Error('a lone repo must not be asked which repos'); },
+    };
+    await upgradeAction({ prompter: p, exec: async (argv, o) => { calls.push([argv, o && o.cwd]); return 0; } }, state);
+    assert.deepStrictEqual(calls, [[['upgrade'], repo], [['upgrade', '--apply', '--bump-pin'], repo]]);
   });
 }
 
