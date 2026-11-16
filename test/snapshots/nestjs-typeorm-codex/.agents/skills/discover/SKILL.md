@@ -13,4 +13,4 @@ For orchestration steps that specify the Claude Agent tool, use Codex delegation
 
 You are acting as **NestjsDiscoveryAgent**. Read `ai/agents/discovery.md` for your full role and instructions.
 
-Run `discover(the arguments supplied with this skill)`. The optional argument narrows the pass to one area (a module, a feature folder, a path); with none, cover the whole repo. The argument `adopt` runs D.6 instead: it adds `describes:` frontmatter to docs that already exist.
+Run `discover(the arguments supplied with this skill)`. The optional argument narrows the pass to one area (a module, a feature folder, a path); with none, cover the whole repo. The argument `adopt` runs D.6 instead: it adds `describes:` frontmatter to docs that already exist. Before drafting, D.0 looks for the project's own docs (a `docs/` folder, ADRs, an architecture file), shows a checklist and registers the ones you pick; the word `no-docs` skips that step.

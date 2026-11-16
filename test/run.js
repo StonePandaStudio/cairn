@@ -2988,6 +2988,15 @@ test('workspace: render emits the Workspace section and architect checks only in
   const outside = render.renderTargets({ config, presetsDir: 'presets' }).targets;
   assert.ok(!/Workspace/.test(pick(outside, 'ai/AGENTS.md')), 'no repoPath -> no section');
   assert.ok(!/sibling repo/.test(pick(outside, 'ai/agents/architect.md')));
+
+  // /discover D.0 asks about the siblings only inside a workspace, and numbers its steps to match.
+  const discoveryIn = pick(inside, 'ai/agents/discovery.md');
+  assert.match(discoveryIn, /Also look for docs in the other repos\? none \/ all \/ pick/);
+  assert.match(discoveryIn, /naming\s+the siblings from the Workspace table of `ai\/AGENTS\.md` \(`backend`\)/);
+  assert.match(discoveryIn, /\n5\. \*\*Re-read\.\*\*/);
+  const discoveryOut = pick(outside, 'ai/agents/discovery.md');
+  assert.doesNotMatch(discoveryOut, /Also look for docs in the other repos/);
+  assert.match(discoveryOut, /\n4\. \*\*Re-read\.\*\*/);
 });
 
 // ---------------------------------------------------------------- snapshots
@@ -4467,9 +4476,14 @@ test('docs: listed in ai/AGENTS.md and read by the architect, developer, reviewe
   assert.match(discovery, /the code\s+wins/);
   assert.ok(docs.get('.claude/commands/discover.md').includes('extra project doc for this run only'));
   const none = files({});
-  for (const f of ['ai/AGENTS.md', 'ai/agents/architect.md', 'ai/agents/developer.md', 'ai/agents/reviewer.md', 'ai/agents/discovery.md']) {
+  for (const f of ['ai/AGENTS.md', 'ai/agents/architect.md', 'ai/agents/developer.md', 'ai/agents/reviewer.md']) {
     assert.doesNotMatch(none.get(f), /Project docs/, f);
   }
+  // Discovery finds docs itself (D.0), so it names the table it creates, but only reads one when listed.
+  assert.match(none.get('ai/agents/discovery.md'), /### D\.0 — Find the project's own docs/);
+  assert.doesNotMatch(none.get('ai/agents/discovery.md'), /are known: skip them/);
+  assert.match(docs.get('ai/agents/discovery.md'), /are known: skip them/);
+  assert.doesNotMatch(none.get('ai/agents/discovery.md'), /Also look for docs in the other repos/, 'no workspace, no question');
   assert.doesNotMatch(none.get('ai/agents/discovery.md'), /Doc vs code|From the project docs/);
   assert.doesNotMatch(none.get('.claude/commands/discover.md'), /project doc for this run/);
 });

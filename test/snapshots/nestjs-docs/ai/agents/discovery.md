@@ -23,12 +23,47 @@ the reading (see D.2) rather than doing it in the main session.
    under `## References`.
 3. **Idempotent.** A re-run adds only what is missing. It never overwrites, merges
    into or renames a file that exists, whoever wrote it (D.6 adds frontmatter lines only).
-4. **Propose, then write.** The list of contexts to create is confirmed by the user
-   before any file is written.
+4. **Propose, then write.** The docs to register (D.0) and the list of contexts to create
+   (D.3) are each confirmed by the user before anything is written.
 
 ---
 
 ## Workflow (`discover(area)`)
+
+### D.0 — Find the project's own docs (skip for `discover adopt`, or when `$ARGUMENTS` has `no-docs`)
+
+Teams keep knowledge outside `ai/contexts/`: an architecture file, a `docs/` or `docum/` folder,
+decision records. Find it, let the user choose what counts, and register it, so D.1 onward can read it.
+This step only reads, until the user confirms.
+The docs already listed in `ai/AGENTS.md` § Project docs are known: skip them, and show only
+what is new, marked `already added` if you mention one.
+1. **Scan** this repo as below.
+   - Directories named `docs`, `doc`, `docum`, `documentation`, `wiki`, `adr`, `decisions`, `rfc`,
+     `design`, `specs`, `architecture`, plus root files such as `README*`, `ARCHITECTURE.md`,
+     `CONTRIBUTING.md`, `DESIGN.md`, and any other directory holding several `.md` files.
+   - Skip `node_modules`, `dist`, `build`, `coverage`, `vendor`, `.git`, `_cairn`, `ai/`, `.claude`,
+     `.agents`, changelogs, licenses and generated API docs (typedoc, swagger output). Go at most three
+     levels deep and list at most 30 candidates; say when you cut the list.
+   - Per candidate, note its path, the number of `.md` files, the first heading of a sample, and the
+     last git change (`git log -1 --format=%cs -- <path>`), so a stale one is visible.
+   - Files that are not Markdown (HTML, PDF, docx) are listed as *found, not readable yet*; do not
+     read them and do not add them.
+2. **Show a checklist and wait.** A numbered list: path, file count, heading
+   sample, last change, and a one-line guess at what it is about. Pre-check the ones that are clearly
+   project docs; leave a stale, tiny or unclear one unchecked. A folder is one line: say whether you
+   would add it as one entry per file (the default) or as a single entry. The user answers with
+   something like "all except 3, 5", "only 1, 2" or "none". No answer means nothing is added.
+3. **Register what was chosen.** Run `npx cairn docs add <paths…> --dry-run`, show the result, and on
+   a yes run it for real (`--no-expand` for a folder kept as one entry; `--about` and `--when` only when
+   you know better than the first heading). A path in a sibling repo is written from this repo
+   (`../docs/adr`). Only this repo's `cairn.config.json` changes. Then run `npx cairn sync`, which
+   carries the **Project docs** table into `ai/AGENTS.md`.
+4. **Re-read.** After `sync`, read `ai/agents/discovery.md` again (it now has the doc-aware steps
+   below) and `ai/AGENTS.md` § Project docs, then continue at D.1. If `docs add` or `sync` fails or
+   reports a conflict, say so, stop registering, and carry on with the chosen docs for this run only,
+   as if they were extra paths in `$ARGUMENTS`; the user fixes the config afterwards.
+
+Nothing chosen, or nothing found: say so in one line and continue at D.1.
 
 ### D.1 — Take stock of what exists
 
@@ -174,7 +209,8 @@ the convention). This is the one case where an existing context is touched, and 
 
 ## What this agent does not do
 
-- Does not edit source, tests or config.
+- Does not edit source or tests. Config: the only change is the `docs` key, through
+  `npx cairn docs add` after the user confirmed the checklist in D.0, followed by `npx cairn sync`.
 - Does not edit, rename, delete or reorder an existing context, with one exception: in
   `discover adopt` (D.6) it may add frontmatter lines to a doc, with the user's
   confirmation, and nothing else. Off-convention docs are for `cairn context check`

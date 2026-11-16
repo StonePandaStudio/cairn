@@ -71,7 +71,7 @@ For a repo that has code and docs the sequence is: `context install-tools` → `
 `code_symbol`. Rewrite "Start on a repo that already has code", "Set up code lookups" and "Everyday
 workflow" to match, and state `add-frontmatter` as an "only if".
 
-**5. `/discover` finds the project docs itself (new step D.0).**
+**5. ✅ `/discover` finds the project docs itself (new step D.0).** Built; not yet tried on a real repo (spravaspis first).
 Depends on item 2 (`docs add`). Today discovery only reads docs already listed under `docs`.
 - **Scan, read-only.** Candidate dirs: `docs`, `doc`, `docum`, `documentation`, `wiki`, `adr`,
   `decisions`, `rfc`, `design`, `specs`, `architecture`; root files `README*`, `ARCHITECTURE.md`,

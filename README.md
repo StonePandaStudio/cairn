@@ -225,10 +225,10 @@ The code base exists; the AI workflow and its docs do not (or only as hand-copie
    ```bash
    npx cairn context register
    ```
-5. **Optional: list the docs you already have.** If the repo has its own documentation outside
-   `ai/contexts/` (a `docum/` or `docs/` folder, an architecture file), name it so the agents read it
-   and `/discover` carries what it knows into the contexts; then `npx cairn sync`. See "Existing docs
-   as a knowledge source" below.
+5. **Optional: list the docs you already have.** `/discover` looks for them itself (step 7), so
+   you can skip this. To do it up front, or to add a doc discovery would not find, name it so the
+   agents read it and `/discover` carries what it knows into the contexts. See "Existing docs as a
+   knowledge source" below.
    ```bash
    npx cairn docs add docum
    npx cairn sync
@@ -241,8 +241,10 @@ The code base exists; the AI workflow and its docs do not (or only as hand-copie
    /discover            # whole repo
    /discover <area>     # or one area at a time
    ```
-   `discovery` reads `ai/contexts/`, proposes a table of docs, waits for you, then writes only
-   the confirmed ones as `status: draft` plus `ai/discovery-report.md`. Safe to re-run. Review
+   `discovery` first looks for your project's own docs (a numbered checklist you answer with
+   "all except 3, 5" or "none"; in a workspace it asks whether to look in the other repos too) and
+   registers the ones you pick with `cairn docs add` and `cairn sync`. Then it reads `ai/contexts/`,
+   proposes a table of docs, waits for you, then writes only the confirmed ones as `status: draft` plus `ai/discovery-report.md`. Safe to re-run. Review
    the drafts and change `status` when you accept them. See "Starting on an existing code
    base: `/discover`".
 8. **Optional, tests for code that exists:** `/plan-tests`, `/execute-test-plan`, `/run-qa`
@@ -717,6 +719,16 @@ reporting completion; without it the agent finds the command in `package.json` o
 ### Starting on an existing code base: `/discover`
 
 `/discover [area]` runs the `discovery` agent, which drafts `ai/contexts/**` from the code.
+First (D.0) it looks for the project's own docs: directories such as `docs`, `docum`, `adr`,
+`decisions`, `specs`, `architecture` and root files such as `ARCHITECTURE.md`, skipping
+`node_modules`, build output, `ai/` and generated API docs. It shows a checklist with each
+candidate's file count, a heading sample and its last git change, so a stale one stands out, and
+waits for your pick. The picked paths go in through `cairn docs add` (a dry run first) and
+`cairn sync`; only this repo's `cairn.config.json` changes. In a workspace it asks once whether to
+look in the sibling repos as well (default: this repo only; with no one to ask, it does not);
+siblings are only read, and their docs are listed here as `../docs/adr`. Docs that are not
+Markdown are listed as found but not read. Pass `no-docs` to skip the step, as in `/discover no-docs`.
+
 Run it once before the first task on a repo whose contexts are empty or thin. It proposes a
 table of docs and waits for you, then writes only the confirmed ones, as
 `ai/contexts/<category>/<name>.md` with `type`, `source` and `status: draft` frontmatter (the
