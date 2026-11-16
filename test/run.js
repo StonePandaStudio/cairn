@@ -5782,27 +5782,20 @@ test('single repo: with no repos.json, the current repo alone is the workspace (
     assert.ok(['spring', 'react', 'jpa-flyway', 'docker'].every((n) => options.some((o) => o.value === n)));
   });
 
-  test('stack checklist: orderStack keeps list order, lets a chosen primary lead, and falls back to unknown', () => {
-    assert.deepStrictEqual(orderStack([], null), ['unknown']);
-    assert.deepStrictEqual(orderStack(['docker', 'react'], null), ['react', 'docker']);
-    assert.deepStrictEqual(orderStack(['docker', 'react', 'spring', 'jpa-flyway'], 'react'), ['react', 'spring', 'jpa-flyway', 'docker']);
-    assert.deepStrictEqual(orderStack(['docker', 'react', 'spring', 'jpa-flyway'], null), ['react', 'spring', 'jpa-flyway', 'docker'].sort((a, b) => options.findIndex((o) => o.value === a) - options.findIndex((o) => o.value === b)));
-    // a primary that was not ticked is ignored
-    assert.deepStrictEqual(orderStack(['react'], 'spring'), ['react']);
+  test('stack checklist: orderStack keeps list order and falls back to unknown', () => {
+    assert.deepStrictEqual(orderStack([]), ['unknown']);
+    assert.deepStrictEqual(orderStack(['docker', 'react']), ['react', 'docker']);
+    const all = ['docker', 'react', 'spring', 'jpa-flyway'];
+    assert.deepStrictEqual(orderStack(all), options.filter((o) => all.includes(o.value)).map((o) => o.value));
   });
 
-  atest('stack checklist: several frameworks ticked -> asks which is primary and puts it first', async () => {
-    const { p, ran } = await run(['', tick('spring', 'react', 'jpa-flyway', 'docker'), '2', ...rest]);
-    assert.ok(p.asked.some((t) => t.startsWith('Which is the primary stack')));
-    const stack = stackArg(ran[0]).split(',');
-    assert.strictEqual(stack.length, 4);
-    // the two frameworks are offered in list order; "2" is the second of them
-    const frameworks = options.filter((o) => o.kind === 'framework' && ['spring', 'react'].includes(o.value)).map((o) => o.value);
-    assert.strictEqual(stack[0], frameworks[1]);
-    assert.deepStrictEqual([...stack].sort(), ['docker', 'jpa-flyway', 'react', 'spring']);
+  atest('stack checklist: backend and frontend ticked together -> no primary question, both kept', async () => {
+    const { p, ran } = await run(['', tick('spring', 'react', 'jpa-flyway', 'docker'), ...rest]);
+    assert.ok(!p.asked.some((t) => t.startsWith('Which is the primary stack')));
+    assert.deepStrictEqual(stackArg(ran[0]).split(',').sort(), ['docker', 'jpa-flyway', 'react', 'spring']);
   });
 
-  atest('stack checklist: one framework needs no primary question; none ticked means unknown', async () => {
+  atest('stack checklist: single framework, none and add-ons only ticked means unknown', async () => {
     const one = await run(['', tick('nestjs', 'typeorm'), '', ...rest]); // validation stack default, then the rest
     assert.ok(!one.p.asked.some((t) => t.startsWith('Which is the primary stack')));
     assert.strictEqual(stackArg(one.ran[0]), 'nestjs,typeorm');
@@ -5812,13 +5805,6 @@ test('single repo: with no repos.json, the current repo alone is the workspace (
     assert.strictEqual(stackArg(addOnsOnly.ran[0]), 'docker');
   });
 
-  atest('stack checklist: going back from the primary question re-asks the checklist with the ticks kept', async () => {
-    const p = scripted(['', tick('spring', 'react'), 'BACK', '', '1', ...rest]); // back, keep ticks, primary 1
-    const ran = [];
-    await runWizard({ prompter: p, repo: tmpRepo(), home: process.env.CAIRN_HOME, exec: async (a) => { ran.push(a); return 0; } });
-    assert.strictEqual(p.asked.filter((t) => t.startsWith('Stack: tick')).length, 2);
-    assert.strictEqual(stackArg(ran[0]).split(',').length, 2);
-  });
 }
 
 // ------------------------------------------------------------------- runner
