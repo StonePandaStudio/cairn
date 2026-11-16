@@ -4885,8 +4885,8 @@ test('single repo: with no repos.json, the current repo alone is the workspace (
     const out = [];
     // line-mode style scripted prompter, same shape as the wizard tests use
     // menu 1 = "Set up this folder"; wizard: hosts, stack (none), tracker, workspace,
-    // render, register, tools, run-now (declined); then the menu again: 5 = quit
-    const script = ['1', '', 'none', '', 'n', '', '', '', 'n', '5'];
+    // render, register, tools, run-now (declined); then the menu again: 4 = quit
+    const script = ['1', '', 'none', '', 'n', '', '', '', 'n', '4'];
     const p = {
       write: (s) => out.push(s),
       ask: async (_t, def) => { const a = script.shift(); return a === '' && def !== undefined ? def : a; },
@@ -4898,7 +4898,7 @@ test('single repo: with no repos.json, the current repo alone is the workspace (
     const ran = [];
     const code = await runShell({ prompter: p, cwd: dir, exec: async (argv) => { ran.push(argv[0]); return 0; } });
     assert.strictEqual(code, 0);
-    // declined "Run these now" => nothing ran; the hub came back and quit (item 5 of the second menu = quit)
+    // declined "Run these now" => nothing ran; the hub came back and quit (item 4 of the second menu = quit)
     assert.deepStrictEqual(ran, []);
     assert.strictEqual(answers.filter((t) => t === 'What next?').length, 2);
   });
@@ -5111,6 +5111,21 @@ test('single repo: with no repos.json, the current repo alone is the workspace (
     const menu = buildMenu(detectState(repo, '0.17.0')).map((m) => m.value);
     assert.deepStrictEqual(menu, ['upgrade', 'sync', 'workspace', 'docs', 'context', 'init-other', 'agent-commands', 'quit']);
     assert.deepStrictEqual(managedRepos(detectState(repo, '0.17.0')).map((r) => r.path), [repo]);
+  });
+
+  test('repo actions: "set up another repo" appears only when "set up this folder" does not, and lists workspace repos not set up yet', () => {
+    const ws = tmpRepo();
+    const a = path.join(ws, 'a');
+    const b = path.join(ws, 'b');
+    for (const d of [a, b]) fs.mkdirSync(path.join(d, '.git'), { recursive: true });
+    fs.writeFileSync(path.join(a, 'cairn.config.json'), JSON.stringify({ cairn: '0.17.0', stack: ['unknown'] }));
+    fs.writeFileSync(path.join(ws, 'repos.json'), JSON.stringify({ repos: [{ name: 'a', path: './a' }, { name: 'b', path: './b' }] }));
+    // started in a (managed) with b pending: the item lists workspace repos
+    const inA = buildMenu(detectState(a, '0.17.0')).find((m) => m.value === 'init-other');
+    assert.strictEqual(inA.label, 'Set up a workspace repo');
+    // unmanaged folder: only "this folder"
+    const inB = buildMenu(detectState(b, '0.17.0')).map((m) => m.value);
+    assert.ok(inB.includes('init-here') && !inB.includes('init-other'));
   });
 
   atest('repo actions: sync previews first, applies only on yes, and explains a conflict', async () => {
