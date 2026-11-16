@@ -6,7 +6,7 @@ where we are in it.
 
 ## Next (2026-11-13) — command names, project docs in the flow, interactive tool
 
-Everything below lands in **0.17.0** (0.16.0 was skipped: the same changes were first numbered 0.16.0, never published; 0.15.0 is the last release), which is not published yet, so
+Everything below lands in **0.18.0** (0.16.0 and 0.17.0 were skipped: the same changes were first numbered 0.16.0 and 0.17.0, never published; 0.15.0 is the last release), which is not published yet, so
 renames cost nothing now and need only aliases for what 0.15.0 already shipped.
 
 ### Where we are
