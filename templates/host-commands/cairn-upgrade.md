@@ -14,6 +14,7 @@ Update the installed cairn in each repo of a workspace and merge the new preset 
 4. **Ask** whether to apply, for which repos, and whether to bump pins.
 5. **Apply.** `npx cairn upgrade --config <file> --apply [--bump-pin] [--repo <name> …]`. It runs the package manager's update (npm, yarn or pnpm, from the lockfile), then `cairn sync` in each repo. A repo whose cairn is a link to a checkout is synced, not updated.
 6. **Exit codes.** 0 all clean. 3 some repo has sync conflicts: the files hold git conflict markers; list them and help resolve, or take the template with `npx cairn sync --repo <path> --reset <file>` for a hand-edited agent doc. 1 an update failed or was blocked by a pin.
-7. **Leave git to the user:** `git diff` in each repo, then commit.
+7. **Refresh these skills too.** They belong to the cairn you just installed: run `npx cairn agent-commands install` so `/cairn-*` match it (a skill the user edited is kept, never overwritten).
+8. **Leave git to the user:** `git diff` in each repo, then commit.
 
 {{common}}

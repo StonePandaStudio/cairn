@@ -24,6 +24,11 @@ let passed = 0;
 let failed = 0;
 const only = process.argv[2];
 
+// The suite never touches the real home folder. User-level skills go to a temp home that already holds
+// them, so tests of other things are not asked about them; the agent-commands tests use homes of their own.
+process.env.CAIRN_HOME = fs.mkdtempSync(path.join(os.tmpdir(), 'cairn-home-'));
+require('../lib/host-commands').install({ hosts: ['claude', 'codex'] });
+
 function test(name, fn) {
   if (only && !name.includes(only)) return;
   try {
@@ -5549,6 +5554,89 @@ test('single repo: with no repos.json, the current repo alone is the workspace (
     const p = scripted(['2', '1', 'y']); // remove, claude, yes
     await agentCommandsAction({ prompter: p, exec: async (a) => { ran.push(a); return 0; } }, state);
     assert.deepStrictEqual(ran[1].slice(0, 4), ['agent-commands', 'remove', '--host', 'claude']);
+  });
+}
+
+// ------------------------------------- workflow commands and agent commands together
+
+{
+  const { spawnSync } = require('child_process');
+  const hc = require('../lib/host-commands');
+  const { runWizard } = require('../lib/wizard/cli');
+  const { listPresets } = require('../lib/presets');
+  const bin = path.join(__dirname, '..', 'bin', 'cairn.js');
+  const NONE_FW = String(listPresets().filter((x) => x.kind === 'framework').length + 1);
+
+  function scripted(answers) {
+    const asked = [];
+    const next = (t) => {
+      if (!answers.length) throw new Error(`asked more than the script answered (at: ${t})`);
+      asked.push(String(t).trim());
+      return answers.shift();
+    };
+    return {
+      asked,
+      write() {},
+      ask: async (t, def) => { const a = next(t); return a === '' && def !== undefined ? def : a; },
+      confirm: async (t, def) => { const a = next(t); return a === '' ? def : a === 'y'; },
+      choose: async (t, opts, def = 0) => { const a = next(t); return a === '' ? opts[def].value : opts[Number(a) - 1].value; },
+      multi: async (t, opts, defs = []) => {
+        const a = next(t);
+        if (a === '') return defs.map((i) => opts[i].value);
+        return a === 'none' ? [] : a.split(',').map((n) => opts[Number(n) - 1].value);
+      },
+      close() {},
+    };
+  }
+  // hosts, framework (none), add-ons, tracker, workspace n, render, register, tools, [agent commands], run now
+  const flow = (...mid) => ['', NONE_FW, 'none', '', 'n', '', '', '', ...mid, ''];
+
+  atest('together: init in the wizard also offers the agent commands when this machine lacks them', async () => {
+    const home = tmpRepo(); // nothing installed here
+    const ran = [];
+    const p = scripted(flow('')); // agent commands: default yes
+    await runWizard({ prompter: p, repo: tmpRepo(), home, exec: async (a) => { ran.push(a); return 0; } });
+    assert.ok(p.asked.some((t) => t.startsWith("Install cairn's own commands")));
+    assert.ok(ran[0].includes('--agent-commands'));
+  });
+
+  atest('together: the question is skipped once the commands are installed, and a "no" leaves the flag off', async () => {
+    const installed = tmpRepo();
+    hc.install({ hosts: ['claude'], home: installed });
+    const p1 = scripted(flow());
+    const ran1 = [];
+    await runWizard({ prompter: p1, repo: tmpRepo(), home: installed, exec: async (a) => { ran1.push(a); return 0; } });
+    assert.ok(!p1.asked.some((t) => t.startsWith("Install cairn's own commands")));
+    assert.ok(!ran1[0].includes('--agent-commands'));
+
+    const p2 = scripted(flow('n'));
+    const ran2 = [];
+    await runWizard({ prompter: p2, repo: tmpRepo(), home: tmpRepo(), exec: async (a) => { ran2.push(a); return 0; } });
+    assert.ok(!ran2[0].includes('--agent-commands'));
+  });
+
+  test('together: `init --agent-commands` installs the skills for exactly the repo\'s hosts', () => {
+    const home = tmpRepo();
+    const repo = tmpRepo();
+    const run = (args) => spawnSync(process.execPath, [bin, 'init', '--repo', repo, '--stack', 'unknown', '--no-color', ...args], { encoding: 'utf8', env: { ...process.env, CAIRN_HOME: home } });
+
+    const dry = run(['--host', 'claude', '--agent-commands', '--dry-run']);
+    assert.strictEqual(dry.status, 0, dry.stderr);
+    assert.ok(dry.stdout.includes('dry run'));
+    assert.deepStrictEqual(fs.readdirSync(home), []);
+
+    const real = run(['--host', 'claude', '--agent-commands']);
+    assert.strictEqual(real.status, 0, real.stderr);
+    assert.ok(real.stdout.includes('claude  6 new'));
+    assert.ok(fs.existsSync(path.join(home, '.claude', 'skills', 'cairn-init', 'SKILL.md')));
+    assert.ok(!fs.existsSync(path.join(home, '.agents')), 'a Claude-only repo must not install Codex skills');
+  });
+
+  test('together: plain `init` leaves the home folder alone', () => {
+    const home = tmpRepo();
+    const r = spawnSync(process.execPath, [bin, 'init', '--repo', tmpRepo(), '--stack', 'unknown', '--no-color'], { encoding: 'utf8', env: { ...process.env, CAIRN_HOME: home } });
+    assert.strictEqual(r.status, 0, r.stderr);
+    assert.deepStrictEqual(fs.readdirSync(home), []);
   });
 }
 

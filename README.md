@@ -340,8 +340,13 @@ npx cairn agent-commands remove
 Skills go to `~/.claude/skills/cairn-*/` and `~/.agents/skills/cairn-*/`. They ask in chat, preview before
 writing, never commit and are not started by the agent on its own. Re-run `install` after updating cairn:
 files cairn wrote are refreshed, a skill you edited is kept (`--force` replaces it). The shell offers the
-same ("Install agent commands"). These are different from the workflow commands (`/plan-task`,
-`/discover`, ...) that `cairn render` writes into a repo.
+same ("Install agent commands").
+
+These are different from the workflow commands (`/plan-task`, `/discover`, ...) that `cairn render` writes
+into each repo: those depend on the repo's own `ai/` docs and stack and are committed with it, while the
+`/cairn-*` ones are about cairn itself and live in your home folder. Setting up a repo installs both in one
+step: `cairn init --render --agent-commands` (the shell and wizard ask the same question when the agent
+commands are missing or older than this cairn).
 
 ## Update cairn in a repo that already has it
 
