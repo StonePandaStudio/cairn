@@ -36,7 +36,8 @@ This step only reads, until the user confirms.
    - Directories named `docs`, `doc`, `docum`, `documentation`, `wiki`, `adr`, `decisions`, `rfc`,
      `design`, `specs`, `architecture`, plus root files such as `ARCHITECTURE.md`,
      `CONTRIBUTING.md`, `DESIGN.md`, and any other directory holding several `.md` files. The root
-     `README.md` is not a candidate: D.1 reads it anyway.
+     `README.md` is not a candidate (D.1 reads it anyway), nor are the agent rule files `AGENTS.md`,
+     `CLAUDE.md` and `GEMINI.md`.
    - Skip `node_modules`, `dist`, `build`, `coverage`, `vendor`, `ai/`, any directory whose name starts
      with `.` or `_` (tool folders and generated output such as `_cairn`, `.claude`, `.agents`,
      `_bmad-output`), changelogs, licenses and generated API docs (typedoc, swagger output). A
