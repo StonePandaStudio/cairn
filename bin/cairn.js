@@ -15,6 +15,7 @@
 //   cairn docs            list the project's own docs for the agents (the "docs" key)
 //   cairn context         cross-repo authored context layer (prototype)
 //   cairn preset          what the bundled presets offer
+//   cairn agent-commands  cairn's own operations as skills for Claude Code / Codex
 //   cairn shell           interactive home for the setup commands (bare `cairn` in a terminal)
 
 const HELP = `cairn — shared AI workflow scaffolding
@@ -32,6 +33,7 @@ Usage: cairn <command> [options]
   docs <cmd> [...]      list the project's own docs for the agents (cairn docs --help)
   context <cmd> [...]   cross-repo authored context layer (cairn context --help)
   preset <cmd> [...]    what the bundled presets offer (cairn preset --help)
+  agent-commands <cmd>  cairn's own operations as skills for Claude Code / Codex (cairn agent-commands --help)
   shell [options]       interactive home for the setup commands (also: bare cairn in a terminal)
   version               print version
 
@@ -125,6 +127,10 @@ function main() {
           process.exitCode = 1;
         },
       );
+      return;
+
+    case 'agent-commands':
+      process.exitCode = require('../lib/host-commands/cli').main(rest);
       return;
 
     case 'preset':

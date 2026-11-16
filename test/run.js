@@ -4883,10 +4883,10 @@ test('single repo: with no repos.json, the current repo alone is the workspace (
     const out = [];
     // line-mode style scripted prompter, same shape as the wizard tests use
     // menu 1 = "Set up this folder"; wizard: hosts, framework (none), add-ons, tracker, workspace,
-    // render, register, tools, run-now (declined); then the menu again: 4 = quit
+    // render, register, tools, run-now (declined); then the menu again: 5 = quit
     const { listPresets } = require('../lib/presets');
     const none = String(listPresets().filter((x) => x.kind === 'framework').length + 1);
-    const script = ['1', '', none, 'none', '', 'n', '', '', '', 'n', '4'];
+    const script = ['1', '', none, 'none', '', 'n', '', '', '', 'n', '5'];
     const p = {
       write: (s) => out.push(s),
       ask: async (_t, def) => { const a = script.shift(); return a === '' && def !== undefined ? def : a; },
@@ -4898,7 +4898,7 @@ test('single repo: with no repos.json, the current repo alone is the workspace (
     const ran = [];
     const code = await runShell({ prompter: p, cwd: dir, exec: async (argv) => { ran.push(argv[0]); return 0; } });
     assert.strictEqual(code, 0);
-    // declined "Run these now" => nothing ran; the hub came back and quit (item 4 of the second menu = quit)
+    // declined "Run these now" => nothing ran; the hub came back and quit (item 5 of the second menu = quit)
     assert.deepStrictEqual(ran, []);
     assert.strictEqual(answers.filter((t) => t === 'What next?').length, 2);
   });
@@ -4990,7 +4990,7 @@ test('single repo: with no repos.json, the current repo alone is the workspace (
     // now it is a workspace: the menu offers to add, not to create, and offers an upgrade
     const after = detectState(ws, '0.17.0');
     const menu = buildMenu(after).map((m) => m.value);
-    assert.deepStrictEqual(menu, ['init-here', 'upgrade', 'sync', 'workspace', 'docs', 'context', 'doctor', 'init-other', 'quit']);
+    assert.deepStrictEqual(menu, ['init-here', 'upgrade', 'sync', 'workspace', 'docs', 'context', 'doctor', 'init-other', 'agent-commands', 'quit']);
     assert.strictEqual(buildMenu(after).find((m) => m.value === 'workspace').label, 'Add repos to the workspace');
     // a second pass only offers what is not in yet (nothing here), so it says so and runs nothing
     const ran = [];
@@ -5109,7 +5109,7 @@ test('single repo: with no repos.json, the current repo alone is the workspace (
   test('repo actions: a lone managed repo gets sync, docs and context but no upgrade or doctor', () => {
     const repo = managedRepo();
     const menu = buildMenu(detectState(repo, '0.17.0')).map((m) => m.value);
-    assert.deepStrictEqual(menu, ['sync', 'workspace', 'docs', 'context', 'init-other', 'quit']);
+    assert.deepStrictEqual(menu, ['sync', 'workspace', 'docs', 'context', 'init-other', 'agent-commands', 'quit']);
     assert.deepStrictEqual(managedRepos(detectState(repo, '0.17.0')).map((r) => r.path), [repo]);
   });
 
@@ -5369,6 +5369,186 @@ test('single repo: with no repos.json, the current repo alone is the workspace (
     await assert.rejects(line.ask('x'), (e) => e.isBack);
     assert.strictEqual(await line.ask('y'), 'keep');
     line.close();
+  });
+}
+
+// ------------------------------------------------------------ agent commands
+
+{
+  const { spawnSync } = require('child_process');
+  const hc = require('../lib/host-commands');
+  const { detectState } = require('../lib/shell/state');
+  const { buildMenu, describe } = require('../lib/shell/cli');
+  const { agentCommandsAction, overall } = require('../lib/shell/agent-actions');
+  const bin = path.join(__dirname, '..', 'bin', 'cairn.js');
+
+  const home = () => tmpRepo();
+  const cli = (h, ...args) => spawnSync(process.execPath, [bin, 'agent-commands', ...args, '--home', h, '--no-color'], { encoding: 'utf8' });
+
+  test('agent commands: the sources load, with the shared rules filled in', () => {
+    const cmds = hc.listCommands();
+    assert.deepStrictEqual(cmds.map((c) => c.name), ['cairn-doctor', 'cairn-init', 'cairn-sync', 'cairn-tools', 'cairn-upgrade', 'cairn-workspace']);
+    for (const c of cmds) {
+      assert.ok(c.description.length > 10, c.name);
+      assert.ok(c.body.includes('## Ground rules'), `${c.name} has no ground rules`);
+      assert.ok(!c.body.includes('{{'), `${c.name} has an unfilled placeholder`);
+    }
+  });
+
+  test('agent commands: every `npx cairn <command>` the skills name is a real command', () => {
+    const help = spawnSync(process.execPath, [bin, '--help'], { encoding: 'utf8' }).stdout;
+    const known = new Set([...help.matchAll(/^ {2}([a-z-]+)/gm)].map((m) => m[1]));
+    for (const c of hc.listCommands()) {
+      for (const m of c.body.matchAll(/npx cairn ([a-z-]+)/g)) {
+        assert.ok(known.has(m[1]), `${c.name} names \`cairn ${m[1]}\`, which is not a command`);
+      }
+    }
+  });
+
+  test('agent commands: a Claude skill and a Codex skill are written where each host reads them', () => {
+    const h = home();
+    const results = hc.install({ hosts: ['claude', 'codex'], home: h });
+    assert.ok(results.every((r) => r.status === 'new'));
+    const claude = fs.readFileSync(path.join(h, '.claude', 'skills', 'cairn-init', 'SKILL.md'), 'utf8');
+    const codex = fs.readFileSync(path.join(h, '.agents', 'skills', 'cairn-init', 'SKILL.md'), 'utf8');
+    assert.ok(/^---\nname: cairn-init\ndescription: ".+"\ndisable-model-invocation: true\n---\n/.test(claude));
+    assert.ok(/^---\nname: cairn-init\ndescription: ".+"\n---\n/.test(codex));
+    assert.ok(claude.includes('$ARGUMENTS'));
+    assert.ok(!codex.includes('$ARGUMENTS'));
+    assert.ok(fs.readFileSync(path.join(h, '.agents', 'skills', 'cairn-init', 'agents', 'openai.yaml'), 'utf8').includes('allow_implicit_invocation: false'));
+    assert.ok(!fs.existsSync(path.join(h, '.claude', 'skills', 'cairn-init', 'agents')));
+  });
+
+  test('agent commands: a second install changes nothing; an edited skill is kept unless forced', () => {
+    const h = home();
+    hc.install({ hosts: ['claude'], home: h });
+    assert.ok(hc.install({ hosts: ['claude'], home: h }).every((r) => r.status === 'unchanged'));
+    const file = path.join(h, '.claude', 'skills', 'cairn-sync', 'SKILL.md');
+    fs.appendFileSync(file, '\nmy own note\n');
+    const kept = hc.install({ hosts: ['claude'], home: h }).filter((r) => r.status !== 'unchanged');
+    assert.deepStrictEqual(kept.map((r) => [r.name, r.status]), [['cairn-sync', 'kept']]);
+    assert.ok(fs.readFileSync(file, 'utf8').includes('my own note'));
+    const forced = hc.install({ hosts: ['claude'], home: h, force: true }).filter((r) => r.status !== 'unchanged');
+    assert.deepStrictEqual(forced.map((r) => r.status), ['forced']);
+    assert.ok(!fs.readFileSync(file, 'utf8').includes('my own note'));
+  });
+
+  test('agent commands: a skill cairn wrote earlier is updated in place when the text changes', () => {
+    const h = home();
+    const older = hc.listCommands().map((c) => ({ ...c, body: c.body.replace('Ground rules', 'Old rules') }));
+    hc.install({ hosts: ['claude'], home: h, commands: older });
+    const rows = hc.status({ hosts: ['claude'], home: h });
+    assert.deepStrictEqual([rows[0].current, rows[0].outdated, rows[0].missing], [0, 6, 0]);
+    assert.ok(hc.install({ hosts: ['claude'], home: h }).every((r) => r.status === 'updated'));
+    assert.strictEqual(hc.status({ hosts: ['claude'], home: h })[0].current, 6);
+  });
+
+  test('agent commands: --dry-run writes nothing', () => {
+    const h = home();
+    const results = hc.install({ hosts: ['claude', 'codex'], home: h, dryRun: true });
+    assert.ok(results.every((r) => r.status === 'new'));
+    assert.deepStrictEqual(fs.readdirSync(h), []);
+  });
+
+  test('agent commands: remove deletes what cairn wrote and keeps an edited skill', () => {
+    const h = home();
+    hc.install({ hosts: ['claude', 'codex'], home: h });
+    fs.appendFileSync(path.join(h, '.claude', 'skills', 'cairn-doctor', 'SKILL.md'), 'edited');
+    const res = hc.remove({ hosts: ['claude', 'codex'], home: h });
+    assert.deepStrictEqual(res.filter((r) => r.status === 'kept').map((r) => r.name), ['cairn-doctor']);
+    assert.ok(!fs.existsSync(path.join(h, '.agents', 'skills', 'cairn-init')));
+    assert.ok(!fs.existsSync(path.join(h, '.claude', 'skills', 'cairn-init')));
+    assert.ok(fs.existsSync(path.join(h, '.claude', 'skills', 'cairn-doctor', 'SKILL.md')));
+  });
+
+  test('agent commands: hosts are detected from the home folder, claude when there is none', () => {
+    const h = home();
+    assert.deepStrictEqual(hc.detectHosts(h), ['claude']);
+    fs.mkdirSync(path.join(h, '.codex'));
+    assert.deepStrictEqual(hc.detectHosts(h), ['codex']);
+    fs.mkdirSync(path.join(h, '.claude'));
+    assert.deepStrictEqual(hc.detectHosts(h), ['claude', 'codex']);
+  });
+
+  test('agent commands: the CLI installs, lists, reports an edited skill with exit 3, and removes', () => {
+    const h = home();
+    const inst = cli(h, 'install', '--host', 'claude');
+    assert.strictEqual(inst.status, 0, inst.stderr);
+    assert.ok(inst.stdout.includes('6 new'));
+    assert.ok(cli(h, 'list', '--host', 'claude').stdout.includes('6/6 current'));
+    fs.appendFileSync(path.join(h, '.claude', 'skills', 'cairn-tools', 'SKILL.md'), 'x');
+    const again = cli(h, 'install', '--host', 'claude');
+    assert.strictEqual(again.status, 3);
+    assert.ok(again.stdout.includes('kept'));
+    assert.strictEqual(cli(h, 'install', '--host', 'nope').status, 2);
+    assert.strictEqual(cli(h, 'remove', '--host', 'claude', '--force').status, 0);
+    assert.ok(cli(h, 'list', '--host', 'claude').stdout.includes('0/6 current'));
+  });
+
+  function scripted(answers) {
+    const out = [];
+    const next = () => {
+      if (!answers.length) throw new Error('asked more than the script answered');
+      return answers.shift();
+    };
+    return {
+      out,
+      write: (s) => out.push(s),
+      ask: async (_t, def) => { const a = next(); return a === '' && def !== undefined ? def : a; },
+      confirm: async (_t, def) => { const a = next(); return a === '' ? def : a === 'y'; },
+      choose: async (_t, opts, def = 0) => { const a = next(); return a === '' ? opts[def].value : opts[Number(a) - 1].value; },
+      multi: async (_t, opts, defs = []) => {
+        const a = next();
+        if (a === '') return defs.map((i) => opts[i].value);
+        return a === 'none' ? [] : a.split(',').map((n) => opts[Number(n) - 1].value);
+      },
+      close() {},
+    };
+  }
+
+  test('agent commands: the shell shows the state and offers install, update or plain access', () => {
+    const h = home();
+    const proj = tmpRepo();
+    const none = detectState(proj, '0.17.0', h);
+    assert.strictEqual(overall(none.agentCommands), 'none');
+    assert.strictEqual(buildMenu(none).find((m) => m.value === 'agent-commands').label, 'Install agent commands');
+    assert.ok(describe(none).includes('not installed'));
+
+    hc.install({ hosts: ['claude'], home: h });
+    const ok = detectState(proj, '0.17.0', h);
+    assert.strictEqual(overall(ok.agentCommands), 'current');
+    assert.strictEqual(buildMenu(ok).find((m) => m.value === 'agent-commands').label, 'Agent commands');
+    assert.ok(describe(ok).includes('claude 6/6'));
+
+    fs.appendFileSync(path.join(h, '.claude', 'skills', 'cairn-sync', 'SKILL.md'), 'x');
+    const old = detectState(proj, '0.17.0', h);
+    assert.strictEqual(overall(old.agentCommands), 'outdated');
+    assert.strictEqual(buildMenu(old).find((m) => m.value === 'agent-commands').label, 'Update agent commands');
+  });
+
+  atest('agent commands: the shell action previews, then installs for the chosen hosts', async () => {
+    const h = home();
+    const state = detectState(tmpRepo(), '0.17.0', h);
+    const ran = [];
+    const p = scripted(['1,2', 'y']); // hosts: both; write them
+    await agentCommandsAction({ prompter: p, exec: async (a) => { ran.push(a); return 0; } }, state);
+    assert.deepStrictEqual(ran, [
+      ['agent-commands', 'install', '--host', 'claude,codex', '--home', h, '--dry-run'],
+      ['agent-commands', 'install', '--host', 'claude,codex', '--home', h],
+    ]);
+    const declined = [];
+    await agentCommandsAction({ prompter: scripted(['', 'n']), exec: async (a) => { declined.push(a); return 0; } }, state);
+    assert.strictEqual(declined.length, 1); // preview only
+  });
+
+  atest('agent commands: with skills installed the action asks install or remove; Back steps back', async () => {
+    const h = home();
+    hc.install({ hosts: ['claude'], home: h });
+    const state = detectState(tmpRepo(), '0.17.0', h);
+    const ran = [];
+    const p = scripted(['2', '1', 'y']); // remove, claude, yes
+    await agentCommandsAction({ prompter: p, exec: async (a) => { ran.push(a); return 0; } }, state);
+    assert.deepStrictEqual(ran[1].slice(0, 4), ['agent-commands', 'remove', '--host', 'claude']);
   });
 }
 

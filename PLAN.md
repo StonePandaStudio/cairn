@@ -123,7 +123,7 @@ prompter is in `lib/wizard/prompt.js` (raw keypresses, no dependency; numbered l
   A lone Esc waits ~500 ms (readline's escape timeout) to be told apart from an arrow key.
 - Each menu item must have a test asserting the argv it builds; the equivalent commands are always printed.
 - Not yet tried in a real terminal by anyone but the tests (PassThrough streams); check Windows Terminal.
-- Later: host-side commands (/cairn-init, /cairn-upgrade, ...) that call the same CLI non-interactively.
+- ✅ Host-side commands: `cairn agent-commands install|list|remove` writes skills (cairn-init, -workspace, -upgrade, -sync, -tools, -doctor) to ~/.claude/skills and ~/.agents/skills. Sources in templates/host-commands/, per-host location in each adapter's `userSkills`, files carry a hash marker so a hand-edited skill is kept. Shell item "Install agent commands" and a state line. A drift test checks every `npx cairn <cmd>` in the skills is a real command. Not yet verified inside a real Claude Code / Codex session. Possible later: project-scope copies, a `cairn-docs` skill, flags for non-interactive init so the agent need not assemble them.
 
 ### The interactive tool (install / upgrade wizard) — summary and notes
 

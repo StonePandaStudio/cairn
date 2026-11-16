@@ -317,6 +317,32 @@ To link them across repos, or to have `check` verify them, move or copy a doc in
 `ai/contexts/<category>/<name>.md` (see "Set up code lookups", "Old `ai/contexts/` docs").
 Keep the table short: a doc nobody needs for a task only costs context.
 
+## Run cairn from your agent (Claude Code, Codex)
+
+`cairn agent-commands install` writes cairn's own operations as skills into your home folder, once per
+machine, so they work in any repo, including one that has no cairn yet:
+
+| Claude Code | Codex | What the agent does |
+|---|---|---|
+| `/cairn-init` | `$cairn-init` | looks at the repo, proposes hosts / stack / tracker, previews `cairn init`, runs it, offers docs and MCP registration |
+| `/cairn-workspace` | `$cairn-workspace` | creates or extends `repos.json` from the repos next to it |
+| `/cairn-upgrade` | `$cairn-upgrade` | the upgrade report, then `--apply` for the repos you pick, conflicts explained |
+| `/cairn-sync` | `$cairn-sync` | preview, then the three-way merge; helps with conflicts |
+| `/cairn-tools` | `$cairn-tools` | registers the MCP server, checks the contexts, installs the code lookup tools |
+| `/cairn-doctor` | `$cairn-doctor` | the workspace drift report, read for you |
+
+```bash
+npx cairn agent-commands install            # the hosts found in your home folder (--host claude,codex)
+npx cairn agent-commands list               # what is installed, per host
+npx cairn agent-commands remove
+```
+
+Skills go to `~/.claude/skills/cairn-*/` and `~/.agents/skills/cairn-*/`. They ask in chat, preview before
+writing, never commit and are not started by the agent on its own. Re-run `install` after updating cairn:
+files cairn wrote are refreshed, a skill you edited is kept (`--force` replaces it). The shell offers the
+same ("Install agent commands"). These are different from the workflow commands (`/plan-task`,
+`/discover`, ...) that `cairn render` writes into a repo.
+
 ## Update cairn in a repo that already has it
 
 `cairn sync` is the upgrade path; it never silently overwrites anything. Edits you want to
