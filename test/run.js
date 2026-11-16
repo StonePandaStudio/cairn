@@ -4548,6 +4548,69 @@ test('context install-tools: the new name and the silent `setup` alias reach the
   assert.strictEqual(run('frobnicate').status, 2);
 });
 
+test('docs add|list|remove: file, folder, idempotence, formatting kept, missing path, outside path', () => {
+  const repo = fs.mkdtempSync(path.join(os.tmpdir(), 'cairn-docs-'));
+  fs.mkdirSync(path.join(repo, 'docum', 'sub'), { recursive: true });
+  fs.mkdirSync(path.join(repo, 'docum', 'node_modules'), { recursive: true });
+  fs.writeFileSync(path.join(repo, 'docum', 'arch.md'), '# Backend layers\n');
+  fs.writeFileSync(path.join(repo, 'docum', 'sub', 'intake.md'), '﻿## Приём заявок ##\n');
+  fs.writeFileSync(path.join(repo, 'docum', 'plain.md'), 'no heading\n');
+  fs.writeFileSync(path.join(repo, 'docum', 'node_modules', 'skip.md'), '# skip\n');
+  const original = '{\n    "stack": ["nestjs"],\n    "docs": ["docum/api.md"],\n    "model": "sonnet"\n}\n';
+  const cfgFile = path.join(repo, 'cairn.config.json');
+  fs.writeFileSync(cfgFile, original);
+  const bin = path.join(__dirname, '..', 'bin', 'cairn.js');
+  const run = (...a) => spawnSync(process.execPath, [bin, 'docs', ...a, '--no-color'], { cwd: repo, encoding: 'utf8' });
+
+  const dry = run('add', 'docum', '--dry-run');
+  assert.strictEqual(dry.status, 0, dry.stderr);
+  assert.strictEqual(fs.readFileSync(cfgFile, 'utf8'), original, 'dry run writes nothing');
+
+  const res = run('add', 'docum');
+  assert.strictEqual(res.status, 0, res.stderr);
+  const after = fs.readFileSync(cfgFile, 'utf8');
+  const cfg = JSON.parse(after);
+  assert.deepStrictEqual(cfg.docs, [
+    'docum/api.md',
+    { path: 'docum/arch.md', about: 'Backend layers' },
+    'docum/plain.md',
+    { path: 'docum/sub/intake.md', about: 'Приём заявок' },
+  ]);
+  assert.ok(after.includes('    "stack": ["nestjs"],\n'), 'other keys and the 4-space indent are kept');
+  assert.ok(after.includes('    "model": "sonnet"\n'));
+  assert.match(res.stdout, /cairn sync/);
+
+  const again = run('add', 'docum');
+  assert.match(again.stdout, /Nothing to add/);
+  assert.strictEqual(fs.readFileSync(cfgFile, 'utf8'), after, 'idempotent');
+
+  const one = run('add', 'docum', '--no-expand', '--about', 'the folder', '--when', 'anything changes');
+  assert.strictEqual(one.status, 0, one.stderr);
+  assert.deepStrictEqual(JSON.parse(fs.readFileSync(cfgFile, 'utf8')).docs.pop(),
+    { path: 'docum', about: 'the folder', when: 'anything changes' });
+
+  const miss = run('add', 'nope.md', '../elsewhere/adr');
+  assert.strictEqual(miss.status, 0, miss.stderr);
+  assert.match(miss.stdout, /missing\s+nope\.md/);
+  assert.ok(JSON.parse(fs.readFileSync(cfgFile, 'utf8')).docs.includes('../elsewhere/adr'));
+
+  assert.match(run('list').stdout, /docum\/arch\.md\s+Backend layers/);
+  assert.match(run('list').stdout, /nope\.md \(missing\)/);
+
+  const rm = run('remove', 'docum/sub');
+  assert.strictEqual(rm.status, 0, rm.stderr);
+  assert.ok(!JSON.parse(fs.readFileSync(cfgFile, 'utf8')).docs.some((d) => String(d.path || d).includes('docum/sub')));
+  assert.strictEqual(run('remove', 'never-listed').status, 2);
+
+  // No docs key yet: it is added as the last property, the rest untouched.
+  fs.writeFileSync(cfgFile, '{\n  "stack": ["react"]\n}\n');
+  assert.strictEqual(run('add', 'docum/arch.md').status, 0);
+  assert.strictEqual(fs.readFileSync(cfgFile, 'utf8'),
+    '{\n  "stack": ["react"],\n  "docs": [\n    { "path": "docum/arch.md", "about": "Backend layers" }\n  ]\n}\n');
+
+  assert.strictEqual(spawnSync(process.execPath, [bin, 'docs', 'add', 'x'], { cwd: os.tmpdir(), encoding: 'utf8' }).status, 2, 'no repo, no config');
+});
+
 test('single repo: with no repos.json, the current repo alone is the workspace (build, register without --config)', () => {
   const repo = fs.mkdtempSync(path.join(os.tmpdir(), 'cairn-single-'));
   fs.mkdirSync(path.join(repo, '.git'));

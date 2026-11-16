@@ -12,6 +12,7 @@
 //   cairn upgrade         update cairn in every workspace repo, then sync each
 //   cairn override        manage ai/local/, a repo's own additions to generated files
 //   cairn workspace       add / remove / list the repos in repos.json
+//   cairn docs            list the project's own docs for the agents (the "docs" key)
 //   cairn context         cross-repo authored context layer (prototype)
 //   cairn preset          what the bundled presets offer
 
@@ -27,6 +28,7 @@ Usage: cairn <command> [options]
   upgrade [options]     update cairn in every workspace repo, then sync (cairn upgrade --help)
   override <cmd> [...]  manage ai/local/, a repo's own additions to generated files (cairn override --help)
   workspace <cmd> [...] manage the repo list in repos.json (cairn workspace --help)
+  docs <cmd> [...]      list the project's own docs for the agents (cairn docs --help)
   context <cmd> [...]   cross-repo authored context layer (cairn context --help)
   preset <cmd> [...]    what the bundled presets offer (cairn preset --help)
   version               print version
@@ -68,6 +70,10 @@ function main() {
 
     case 'workspace':
       process.exitCode = require('../lib/workspace/cli').main(rest);
+      return;
+
+    case 'docs':
+      process.exitCode = require('../lib/docs-cli').main(rest);
       return;
 
     case 'context':

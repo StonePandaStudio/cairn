@@ -239,7 +239,19 @@ shows where the copies disagree before you start reconciling them.
 ### Existing docs as a knowledge source
 
 A repo's own documentation often lives outside `ai/contexts/`. cairn reads only
-`ai/contexts/**`, so list the rest under `docs` in `cairn.config.json`:
+`ai/contexts/**`, so list the rest under `docs` in `cairn.config.json`. Let cairn do it:
+
+```bash
+cairn docs add docum                 # a folder: one entry per .md file, "about" from its first heading
+cairn docs add docs/api.md --when "an endpoint changes"
+cairn docs list                      # the table, with missing paths flagged
+cairn docs remove docum/old.md       # a folder path drops the entries under it
+```
+
+`add` only touches the `docs` key (every other key and the file's formatting stay), skips a path that
+is already listed, takes `--about`, `--when`, `--no-expand` (keep a folder as one entry) and
+`--dry-run`, and warns about a path that does not exist. A path may point outside the repo
+(`../docs/adr`). Or write the key by hand:
 
 ```json
 "docs": [
