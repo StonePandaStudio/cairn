@@ -63,4 +63,4 @@ flowchart TB
     CLI -. "register: merge 'cairn' entry" .-> MCPJ["each repo's .mcp.json"]
     A1 & A2 & A3 -. "read at session start" .-> MCPJ
 
-    SHELL["cairn shell / wizard (interactive, no logic of its own)<br/>arrow-key prompts → argv → the ordinary commands<br/>init · workspace · upgrade · sync · docs · doctor · context<br/>lib/shell, lib/wizard"] -- "runs via each command's main" --> CLI
+    SHELL["cairn shell (interactive, no logic of its own)<br/>arrow-key prompts → argv → the ordinary commands<br/>init · workspace · upgrade · sync · docs · doctor · context<br/>lib/shell, lib/wizard"] -- "runs via each command's main" --> CLI

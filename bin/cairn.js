@@ -16,7 +16,6 @@
 //   cairn context         cross-repo authored context layer (prototype)
 //   cairn preset          what the bundled presets offer
 //   cairn shell           interactive home for the setup commands (bare `cairn` in a terminal)
-//   cairn wizard          interactive install for one repo
 
 const HELP = `cairn — shared AI workflow scaffolding
 
@@ -34,7 +33,6 @@ Usage: cairn <command> [options]
   context <cmd> [...]   cross-repo authored context layer (cairn context --help)
   preset <cmd> [...]    what the bundled presets offer (cairn preset --help)
   shell [options]       interactive home for the setup commands (also: bare cairn in a terminal)
-  wizard [options]      interactive install for one repo (cairn wizard --help)
   version               print version
 
 Run \`cairn <command> --help\` for command options.
@@ -114,7 +112,7 @@ function main() {
       );
       return;
 
-    case 'wizard':
+    case 'wizard': // silent alias: the install flow on its own (--repo, --dry-run); not in the docs
       Promise.resolve(require('../lib/wizard/cli').main(rest)).then(
         (code) => { process.exitCode = code; },
         (err) => {

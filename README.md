@@ -95,7 +95,7 @@ Prefer menus to flags? `npm i -D @stonepandastudio/cairn`, then run `npx cairn` 
 and offers the actions that apply, with arrow keys and enter. Esc goes back one step (and out of the shell
 from the main menu); ctrl+c quits. Piped, it uses numbered choices and `<` for back. "Set up
 this folder" asks about hosts, stack, tracker, workspace and docs, shows the plan, runs the commands
-below for you and prints them at the end. `cairn wizard [--dry-run]` is that one flow on its own.
+below for you and prints them at the end.
 It also creates or extends a workspace (`repos.json`: pick the repos next to it) and upgrades cairn across
 a workspace (the report first, then apply; it never commits). The rest of the day-to-day is there too: sync (preview, then merge), project docs (list, add, remove), contexts and code lookups (check, register, install-tools), and the workspace doctor.
 
