@@ -5701,6 +5701,45 @@ test('single repo: with no repos.json, the current repo alone is the workspace (
   });
 }
 
+// ---------------------------------------------- the shell's command runner
+
+{
+  const { COMMANDS, execCommand } = require('../lib/wizard/exec');
+  const { spawnSync } = require('child_process');
+  const bin = path.join(__dirname, '..', 'bin', 'cairn.js');
+
+  test('runner: every cairn command the shell and wizard build has an in-process runner', () => {
+    // Actions are tested with a stub runner, so a missing entry only shows up for a real user.
+    // Read the command names off the source: any `['<cairn command>', ...` array literal.
+    const help = spawnSync(process.execPath, [bin, '--help'], { encoding: 'utf8' }).stdout;
+    const known = new Set([...help.matchAll(/^ {2}([a-z-]+)/gm)].map((m) => m[1]));
+    const dirs = [path.join(__dirname, '..', 'lib', 'shell'), path.join(__dirname, '..', 'lib', 'wizard')];
+    const used = new Set();
+    for (const dir of dirs) {
+      for (const f of fs.readdirSync(dir).filter((n) => n.endsWith('.js') && n !== 'exec.js')) {
+        const src = fs.readFileSync(path.join(dir, f), 'utf8');
+        for (const m of src.matchAll(/\[\s*'([a-z-]+)'\s*[,\]]/g)) if (known.has(m[1])) used.add(m[1]);
+      }
+    }
+    assert.ok(used.has('upgrade') && used.has('doctor') && used.has('agent-commands'), `scan found only: ${[...used].join(', ')}`);
+    for (const name of used) assert.ok(COMMANDS[name], `the shell builds \`cairn ${name}\` but exec.js has no runner for it`);
+  });
+
+  atest('runner: upgrade and doctor really run through execCommand', async () => {
+    const repo = tmpRepo();
+    fs.writeFileSync(path.join(repo, 'cairn.config.json'), JSON.stringify({ cairn: '0.17.0', stack: ['unknown'] }));
+    const log = console.log;
+    console.log = () => {};
+    try {
+      assert.strictEqual(await execCommand(['upgrade'], { cwd: repo }), 0);
+      fs.writeFileSync(path.join(repo, 'repos.json'), JSON.stringify({ repos: [{ name: 'self', path: '.' }] }));
+      assert.strictEqual(typeof (await execCommand(['doctor', '--config', path.join(repo, 'repos.json')])), 'number');
+    } finally {
+      console.log = log;
+    }
+  });
+}
+
 // ------------------------------------------------------------------- runner
 
 (async () => {
