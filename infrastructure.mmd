@@ -25,8 +25,8 @@ flowchart TB
     subgraph WS["Workspace dir (holds repos.json)"]
         CFG["repos.json<br/>repos + optional codeSource"]
         subgraph TOOLDIR["_cairn/tools/ — gitignored, version-pinned per workspace"]
-            SBIN["serena/ venv + private home<br/>~170 MB · needs Python 3.11–3.14<br/>cairn context setup (default)"]
-            BIN["codebase-memory-mcp/ binary<br/>333 MB · optional<br/>setup --provider codebase-memory-mcp"]
+            SBIN["serena/ venv + private home<br/>~170 MB · needs Python 3.11–3.14<br/>cairn context install-tools (default)"]
+            BIN["codebase-memory-mcp/ binary<br/>333 MB · optional<br/>install-tools --provider codebase-memory-mcp"]
         end
     end
 
@@ -58,7 +58,7 @@ flowchart TB
     ONE -- "parses" --> S1 & S2
     ONE -- "writes / reads" --> C1 & C2
 
-    CLI["cairn CLI<br/>context setup (+ warm LS) · adopt · register · code · check<br/>no repos.json → current repo is the workspace"] -. "same facade" .-> CS
+    CLI["cairn CLI<br/>context install-tools (+ warm LS) · adopt · register · code · check<br/>no repos.json → current repo is the workspace"] -. "same facade" .-> CS
     CLI -. "npm install --prefix" .-> TOOLDIR
     CLI -. "register: merge 'cairn' entry" .-> MCPJ["each repo's .mcp.json"]
     A1 & A2 & A3 -. "read at session start" .-> MCPJ

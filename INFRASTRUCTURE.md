@@ -45,11 +45,11 @@ where files live on disk (`_cairn/tools/`, `_cairn/cache/`).
   times out and its process tree is killed, and everything stops on `close()`/exit (Serena
   exits on stdin EOF and takes its language servers with it; no leftovers measured on
   Windows).
-- **Read-only by construction.** `setup` writes `fixed_tools` into a private `SERENA_HOME`,
+- **Read-only by construction.** `install-tools` writes `fixed_tools` into a private `SERENA_HOME`,
   so Serena exposes only five read tools (no editing, shell or memory tools).
 - **Footprint:** a venv (~146 MB) plus ~27 MB per language server, inside the workspace's
   `_cairn/tools/`; Serena also writes `.serena/` into each repo it opens (gitignored by
-  `setup`). On Windows the workspace path must stay under ~125 chars (pip MAX_PATH).
+  `install-tools`). On Windows the workspace path must stay under ~125 chars (pip MAX_PATH).
 
 ## Trust limits of code answers
 
@@ -74,7 +74,7 @@ instead of the class), so anchors verify "a symbol of this name exists", not its
 
 `cairn sync` doing the MCP registration (for now `cairn context register` writes each repo's `.mcp.json` on demand), a Sourcegraph (HTTP)
 provider, the interactive form of `cairn context adopt` (conffile-style prompts; a non-interactive `adopt` exists), the `local` tracker provider, OpenAPI contract checks.
-`setup` warms each repo's language server once (a throwaway lookup per repo; `--no-warm`
+`install-tools` warms each repo's language server once (a throwaway lookup per repo; `--no-warm`
 skips it), so the one-time cold start does not land on an agent's first question.
 
 **Single repo:** with no `repos.json` and no `--config`, a current directory that is a git

@@ -1211,7 +1211,7 @@ Sources: [Riftmap on cross-repo context](https://riftmap.dev/blog/ai-coding-agen
   symbol. `codebase-memory-mcp` (`providers/codebase-memory.js`) is the **optional** second
   provider, for the architecture `summary`; it is not used for `references` because it does not
   resolve tsconfig `paths` aliases (20% recall, 0% on an alias-only repo). Both are installed
-  per workspace and version-pinned under `<workspace>/_cairn/tools/` (`cairn context setup`;
+  per workspace and version-pinned under `<workspace>/_cairn/tools/` (`cairn context install-tools`;
   never global, never a tool's own agent-config installer). `BROKEN_ANCHOR` is computed from
   `describes: <kind> <Symbol>`; no provider → `unknown` + hint. Only TypeScript/NestJS is
   verified; other languages are "supported by the provider, untested here". Cross-repo links

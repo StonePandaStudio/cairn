@@ -3442,7 +3442,7 @@ atest('codesource: not installed is `unknown` with a hint — never a throw', as
   assert.strictEqual(src.available(), false);
   const res = await src.symbol(repo, 'Invoice');
   assert.strictEqual(res.status, 'unknown');
-  assert.ok(/cairn context setup/.test(res.hint));
+  assert.ok(/cairn context install-tools/.test(res.hint));
 });
 
 atest('codesource: symbol found / missing, and a markdown Section never counts as a symbol', async () => {
@@ -3849,7 +3849,7 @@ atest('serena: not installed is `unknown` with a hint and nothing is spawned', a
   const res = await src.references({ name: 'r', path: ws }, 'A/b');
   assert.strictEqual(res.status, 'unknown');
   assert.ok(/no code provider available for references/.test(res.reason));
-  assert.ok(/cairn context setup/.test(res.hint));
+  assert.ok(/cairn context install-tools/.test(res.hint));
 });
 
 test('serena: test-file heuristic is provider-owned and covers common conventions', () => {
@@ -4045,7 +4045,7 @@ atest('serve: with no provider at all, code_references is `unknown` + hint — n
   const res = await call('code_references', { repo: 'backend', symbol: 'A/b' });
   assert.strictEqual(res.isError, false);
   assert.strictEqual(res.data.status, 'unknown');
-  assert.ok(/cairn context setup/.test(res.data.hint));
+  assert.ok(/cairn context install-tools/.test(res.data.hint));
   await server.close();
 });
 
@@ -4054,7 +4054,7 @@ atest('serve: with no code tool installed, code answers are `unknown` + hint, no
   const res = await call('code_symbol', { repo: 'backend', name: 'Invoice' });
   assert.strictEqual(res.isError, false);
   assert.strictEqual(res.data.status, 'unknown');
-  assert.ok(/cairn context setup/.test(res.data.hint));
+  assert.ok(/cairn context install-tools/.test(res.data.hint));
   assert.ok((await call('check', { code: true })).data.notChecked.includes('BROKEN_ANCHOR'));
   await server.close();
 });
@@ -4530,6 +4530,22 @@ atest('setup warm-up: one throwaway lookup per repo starts its language server; 
   const out2 = await require('../lib/context/cli').warmUp(none, [repo]);
   assert.strictEqual(out2[0].ok, false);
   assert.ok(out2[0].reason);
+});
+
+test('context install-tools: the new name and the silent `setup` alias reach the same command', () => {
+  const repo = fs.mkdtempSync(path.join(os.tmpdir(), 'cairn-alias-'));
+  fs.mkdirSync(path.join(repo, '.git'));
+  const bin = path.join(__dirname, '..', 'bin', 'cairn.js');
+  const run = (...a) => spawnSync(process.execPath, [bin, 'context', ...a], { cwd: repo, encoding: 'utf8' });
+  for (const name of ['install-tools', 'setup']) {
+    const res = run(name, '--provider', 'nope');
+    assert.strictEqual(res.status, 2, `${name}: ${res.stderr}`);
+    assert.match(res.stderr, /Unknown provider "nope"/);
+  }
+  const help = run('--help').stdout;
+  assert.match(help, /install-tools \[--provider/);
+  assert.ok(!/^\s+setup\b/m.test(help), 'help names only the new command');
+  assert.strictEqual(run('frobnicate').status, 2);
 });
 
 test('single repo: with no repos.json, the current repo alone is the workspace (build, register without --config)', () => {

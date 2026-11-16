@@ -166,7 +166,7 @@ from the same `ai/` docs, so a repo can also serve both (`--host claude,codex`).
    otherwise run by Codex itself, one role after another. A repo with both hosts keeps the Claude
    Code wording, and the skills explain how to read it in Codex.
 3. **Optional: cross-repo context and code lookups.** Install Serena once per workspace
-   (`cairn context setup`, see "Set up code lookups"), then register the server (one command for every host the repo uses):
+   (`cairn context install-tools`, see "Set up code lookups"), then register the server (one command for every host the repo uses):
    ```bash
    npx cairn context register
    ```
@@ -326,17 +326,17 @@ and look up symbols and references.
 `register` writes a `.mcp.json` whose server needs no `--config`).
 
 ```bash
-cairn context setup        # from the folder holding repos.json
+cairn context install-tools   # from the folder holding repos.json
 ```
 This installs a version-pinned [Serena](https://github.com/oraios/serena) into
 `_cairn/tools/serena/` (a Python 3.11–3.14 venv, about 170 MB, gitignored, never global,
 read-only) and gitignores the `.serena/` folder Serena writes into each repo. Serena fronts
 the repo's language server, so symbol and reference lookups work for any language it
 supports; only TypeScript/NestJS has been measured here. The first lookup in a new
-workspace takes about a minute while the language server installs and warms up; `setup`
+workspace takes about a minute while the language server installs and warms up; `install-tools`
 does that once for you (one throwaway lookup per repo, `--no-warm` to skip), so agents
 see fast answers from the start. On Windows keep the workspace path short (under about 125 characters, a pip
-limit). `cairn context setup --provider codebase-memory-mcp` adds an optional architecture
+limit). `cairn context install-tools --provider codebase-memory-mcp` adds an optional architecture
 summary tool. Then register the MCP server, so agents in any repo can ask about the others:
 ```bash
 cairn context register     # adds a "cairn" entry for each host a repo uses (merge; --force to replace)
