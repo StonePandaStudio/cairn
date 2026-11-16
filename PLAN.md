@@ -47,7 +47,11 @@ Fills the `docs` key without hand-editing JSON.
   formatting (the `workspace add` precedent). Validation reuses `normalizeDocs`.
 - `--dry-run`. Warns on a path that does not exist.
 - Prints `cairn sync` as the next step, which carries the Project docs section into `ai/AGENTS.md`.
-- Optional later: `cairn init` offers it when it finds a `docs/` or `docum/` folder.
+- Optional later: `cairn init` offers it when it finds a `docs/` or `docum/` folder. Superseded by
+  item 5 (discover finds the docs itself).
+- Must accept a path outside the repo (`../docs/adr/`, or a `repo:path` form) for docs that live in a
+  sibling repo (item 5). Check what `normalizeDocs` allows today. A source-only docs repo (no `ai/`,
+  no `cairn.config.json`) must be readable as a plain folder.
 
 **3. `cairn context add-frontmatter` (rename of `context adopt`).**
 The name says what it does: it adds `type:` (from the folder) and, with `--link-candidates`,
@@ -66,6 +70,35 @@ For a repo that has code and docs the sequence is: `context install-tools` → `
 `register` comes before `/discover` because discovery confirms `describes:` anchors with
 `code_symbol`. Rewrite "Start on a repo that already has code", "Set up code lookups" and "Everyday
 workflow" to match, and state `add-frontmatter` as an "only if".
+
+**5. `/discover` finds the project docs itself (new step D.0).**
+Depends on item 2 (`docs add`). Today discovery only reads docs already listed under `docs`.
+- **Scan, read-only.** Candidate dirs: `docs`, `doc`, `docum`, `documentation`, `wiki`, `adr`,
+  `decisions`, `rfc`, `design`, `specs`, `architecture`; root files `README*`, `ARCHITECTURE.md`,
+  `CONTRIBUTING.md`, `DESIGN.md`; any other dir holding several `.md` files. Exclude `node_modules`,
+  `dist`, `build`, `.git`, `_cairn`, `ai/`, `.claude`, `.agents`, `coverage`, `vendor`, CHANGELOG,
+  licenses, generated API docs (typedoc, swagger). Cap depth and the number of listed items.
+- **Workspace question.** If the repo is in a workspace (same detection as `doctor` / `context`),
+  ask once before scanning anything else: "Workspace has `backend`, `frontend`, `admin`, `docs`. Look
+  for docs in other repos too? [none / all / pick]". Default is this repo only. No workspace: no
+  question. Non-interactive run: "none", never scan outside the repo silently. The answer is not
+  remembered (a config key is a possible wizard follow-up).
+- **Checklist.** Numbered list grouped by repo: path, `.md` count, first-heading sample, last git
+  modification date (staleness), guessed `about`. High-confidence entries pre-checked. A folder is one
+  line with expand (one entry per file, the `docs add` default) or keep-as-one. The user replies
+  "all except 3, 5". Non-`.md` finds (HTML briefs, PDF, docx) are listed as "found, not readable yet",
+  not skipped silently. UTF-8 headings stay intact (spravaspis is Russian).
+- **Persist.** Confirmed entries are written with `cairn docs add` (never a JSON hand-edit), with a
+  `--dry-run` preview first, then `cairn sync`. Scan results are held in the session so discovery can
+  read the docs in the same run, before the Project docs table exists in `ai/AGENTS.md`.
+- **Writes stay local.** Only the current repo's `cairn.config.json` is edited. Sibling repos are
+  read, never written. Cross-repo entries in the same workspace may repeat in each repo, with
+  `about` / `when` tuned per repo.
+- **Cost.** Index by heading, read a doc in full only when a context needs it.
+- **Idempotent.** A re-run lists only new candidates and marks existing entries "already added".
+- Touches: `presets/core/agents/discovery.md` (new D.0), `commands/discover.md`, README ("Existing
+  docs as a knowledge source", and the item 4 order: `docs add` becomes optional because discover can
+  do it), snapshots. Trial on spravaspis (`docum/`) first.
 
 For 1–4: old names keep working without a deprecation note (they shipped); README and help use only
 the new names; one commit per item; tests for each alias and for `docs add` (file, folder,
