@@ -104,9 +104,24 @@ For 1–4: old names keep working without a deprecation note (they shipped); REA
 the new names; one commit per item; tests for each alias and for `docs add` (file, folder,
 idempotence, formatting preserved, missing path).
 
+### Interactive shell (`cairn shell`, bare `cairn` in a TTY) — decided 2026-11-16
+
+Replaces "wizard" as the target: a state-aware menu hub, not one flow. `lib/shell/state.js` detects
+repo / workspace / versions; `lib/shell/cli.js` offers the actions that apply and loops. Arrow-key
+prompter is in `lib/wizard/prompt.js` (raw keypresses, no dependency; numbered lines when piped).
+- ✅ Step 1: state detection. ✅ Step 2: hub with "Set up this folder / another repo" (the wizard flow).
+- ✅ Workspace create/extend, and upgrade (report, then apply with a repo subset and `--bump-pin`);
+  `lib/shell/actions.js`, shared plan helpers in `lib/wizard/plan.js`. Upgrade is offered only with a
+  workspace, because `cairn upgrade` needs a repos.json (a lone managed repo has no upgrade item yet).
+- Next, in order: sync, docs (add/list/remove), doctor, context tools (register, install-tools), a
+  single-repo upgrade path, then stack detection as a pre-fill.
+- Each menu item must have a test asserting the argv it builds; the equivalent commands are always printed.
+- Not yet tried in a real terminal by anyone but the tests (PassThrough streams); check Windows Terminal.
+- Later: host-side commands (/cairn-init, /cairn-upgrade, ...) that call the same CLI non-interactively.
+
 ### The interactive tool (install / upgrade wizard) — summary and notes
 
-**Status: not started.** Only the idea and an estimate exist. `INFRASTRUCTURE.md` already lists "the
+**Status: phase (a) built as `cairn wizard` (2026-11-16): zero-dependency prompt layer (`lib/wizard/prompt.js`, numbered choices, works piped), install flow without detection, `--dry-run`. Decided: no prompt library, command is `cairn wizard`, it prints `npm i -D` instead of running it, `register` is offered always. Not built: the upgrade flow (b) and stack detection (c). A repo that already has `cairn.config.json` is refused with a pointer to `sync` / `upgrade`.** Original note: only the idea and an estimate existed. `INFRASTRUCTURE.md` already lists "the
 interactive form of `cairn context adopt`" as a wish, so the need was noted before.
 
 **Shape (discussed, not decided in detail).**

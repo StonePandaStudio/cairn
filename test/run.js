@@ -4659,6 +4659,410 @@ test('single repo: with no repos.json, the current repo alone is the workspace (
   assert.strictEqual(spawnSync(process.execPath, [bin, 'context', 'build'], { cwd: bare, encoding: 'utf8' }).status, 2);
 });
 
+// ------------------------------------------------------------------- wizard
+
+{
+  const { runWizard, buildCommands } = require('../lib/wizard/cli');
+  const { createPrompter } = require('../lib/wizard/prompt');
+  const { listPresets } = require('../lib/presets');
+  const { listProviders } = require('../lib/tracker');
+  const { PassThrough } = require('stream');
+
+  const presets = listPresets();
+  const frameworks = presets.filter((x) => x.kind === 'framework');
+  const addOns = presets.filter((x) => x.kind !== 'framework');
+  const NONE_FRAMEWORK = String(frameworks.length + 1);
+
+  // Same interface as the real prompter, answers read from a list ('' takes the default).
+  function scripted(answers) {
+    const out = [];
+    const next = () => {
+      if (!answers.length) throw new Error('the wizard asked more than the script answered');
+      return answers.shift();
+    };
+    return {
+      out,
+      write: (s) => out.push(s),
+      ask: async (_t, def) => { const a = next(); return a === '' && def !== undefined ? def : a; },
+      confirm: async (_t, def) => { const a = next(); return a === '' ? def : a === 'y'; },
+      choose: async (_t, opts, def = 0) => { const a = next(); return a === '' ? opts[def].value : opts[Number(a) - 1].value; },
+      multi: async (_t, opts, defs = []) => {
+        const a = next();
+        if (a === '') return defs.map((i) => opts[i].value);
+        return a === 'none' ? [] : a.split(',').map((n) => opts[Number(n) - 1].value);
+      },
+      close() {},
+    };
+  }
+
+  // Answers for a run that ends at the "Run these now" question: no docs dir, no workspace.
+  const plain = (...tail) => ['', NONE_FRAMEWORK, 'none', '', 'n', '', '', '', ...tail];
+
+  atest('wizard: answers become the init, workspace, docs and register commands', async () => {
+    const repo = tmpRepo();
+    fs.mkdirSync(path.join(repo, 'docs'));
+    const ws = path.join(repo, '..', 'wizard-repos.json');
+    const ran = [];
+    const p = scripted([
+      '',                                                     // hosts: claude
+      String(frameworks.findIndex((x) => x.name === 'nestjs') + 1),
+      String(addOns.findIndex((x) => x.name === 'typeorm') + 1),
+      '',                                                     // validation stack default
+      String(listProviders().indexOf('youtrack') + 1),
+      'PROOF',
+      'y', ws,                                                // workspace
+      'y',                                                    // docs
+      '', '', '',                                             // render yes, register yes, tools no
+      '',                                                     // run now
+    ]);
+    const code = await runWizard({ prompter: p, repo, exec: async (argv, o) => { ran.push(argv); return 0; } });
+    assert.strictEqual(code, 0);
+    assert.deepStrictEqual(ran.map((a) => a.slice(0, 2).join(' ')), ['init --repo', 'workspace add', 'docs add', 'sync --repo', 'context register']);
+    const init = ran[0];
+    assert.strictEqual(init[init.indexOf('--stack') + 1], 'nestjs,typeorm');
+    assert.strictEqual(init[init.indexOf('--tracker') + 1], 'youtrack');
+    assert.strictEqual(init[init.indexOf('--project-key') + 1], 'PROOF');
+    assert.ok(init.includes('--render'));
+    assert.deepStrictEqual(ran[4].slice(-2), ['--config', ws]);
+  });
+
+  atest('wizard: refuses a repo that already has cairn.config.json', async () => {
+    const repo = tmpRepo();
+    fs.writeFileSync(path.join(repo, 'cairn.config.json'), '{}');
+    await assert.rejects(runWizard({ prompter: scripted([]), repo, exec: async () => 0 }), /already has/);
+  });
+
+  atest('wizard: --dry-run and a declined confirmation run nothing', async () => {
+    for (const [dryRun, tail] of [[true, []], [false, ['n']]]) {
+      const ran = [];
+      await runWizard({ prompter: scripted(plain(...tail)), repo: tmpRepo(), dryRun, exec: async (argv) => { ran.push(argv); return 0; } });
+      assert.strictEqual(ran.length, 0, `dryRun=${dryRun}`);
+    }
+  });
+
+  atest('wizard: stops at the first failing command and lists the rest', async () => {
+    const p = scripted(['', NONE_FRAMEWORK, 'none', '', 'n', '', '', '', '']);
+    const ran = [];
+    const code = await runWizard({ prompter: p, repo: tmpRepo(), exec: async (argv) => { ran.push(argv[0]); return ran.length === 1 ? 5 : 0; } });
+    assert.strictEqual(code, 5);
+    assert.deepStrictEqual(ran, ['init']);
+    assert.ok(p.out.join('').includes('Not run'));
+  });
+
+  test('wizard: without a workspace, context commands run from the repo', () => {
+    const cmds = buildCommands({ repo: '/r', hosts: ['claude'], stack: ['unknown'], validationStack: null, tracker: 'none', projectKey: null, workspace: null, docsDir: null, render: false, register: true, installTools: true });
+    assert.deepStrictEqual(cmds.map((c) => c.argv.slice(0, 2).join(' ')), ['init --repo', 'context register', 'context install-tools']);
+    assert.strictEqual(cmds[1].cwd, '/r');
+  });
+
+  atest('wizard: the real prompter keeps lines that arrive before the question', async () => {
+    const input = new PassThrough();
+    const p = createPrompter({ input, output: new PassThrough() });
+    input.write('first\n\n2\nnone\ny\nlast\n');
+    input.end();
+    assert.strictEqual(await p.ask('a'), 'first');
+    assert.strictEqual(await p.ask('b', 'dflt'), 'dflt');
+    assert.strictEqual(await p.choose('c', [{ value: 'x', label: 'x' }, { value: 'y', label: 'y' }]), 'y');
+    assert.deepStrictEqual(await p.multi('d', [{ value: 'x', label: 'x' }]), []);
+    assert.strictEqual(await p.confirm('e', false), true);
+    assert.strictEqual(await p.ask('f'), 'last');
+    await assert.rejects(p.ask('g'), /input ended/);
+    p.close();
+  });
+}
+
+// ------------------------------------------------------------------- shell
+
+{
+  const { createPrompter } = require('../lib/wizard/prompt');
+  const { detectState } = require('../lib/shell/state');
+  const { runShell, buildMenu, describe } = require('../lib/shell/cli');
+  const { PassThrough } = require('stream');
+
+  const DOWN = '\x1b[B';
+  const UP = '\x1b[A';
+
+  function ttyPrompter() {
+    const input = new PassThrough();
+    const output = new PassThrough();
+    let text = '';
+    output.on('data', (c) => { text += String(c); });
+    const p = createPrompter({ input, output, tty: true });
+    return { p, input, text: () => text };
+  }
+
+  atest('shell: arrow keys move and enter takes a choice', async () => {
+    const { p, input } = ttyPrompter();
+    const opts = [{ value: 'a', label: 'A' }, { value: 'b', label: 'B' }, { value: 'c', label: 'C' }];
+    const pending = p.choose('Pick', opts, 0);
+    input.write(DOWN + DOWN + UP + '\r');
+    assert.strictEqual(await pending, 'b');
+    const wrap = p.choose('Pick', opts, 0);
+    input.write(UP + '\r'); // wraps to the last
+    assert.strictEqual(await wrap, 'c');
+    p.close();
+  });
+
+  atest('shell: space toggles in a multi-select, a and n select all and none', async () => {
+    const { p, input } = ttyPrompter();
+    const opts = [{ value: 'a', label: 'A' }, { value: 'b', label: 'B' }, { value: 'c', label: 'C' }];
+    const first = p.multi('Pick', opts, [0]);
+    input.write(DOWN + ' ' + DOWN + ' ' + '\r'); // a stays, b and c toggled on
+    assert.deepStrictEqual(await first, ['a', 'b', 'c']);
+    const second = p.multi('Pick', opts, [0]);
+    input.write('n' + DOWN + ' ' + '\r');
+    assert.deepStrictEqual(await second, ['b']);
+    const third = p.multi('Pick', opts, []);
+    input.write('a\r');
+    assert.deepStrictEqual(await third, ['a', 'b', 'c']);
+    p.close();
+  });
+
+  atest('shell: text entry takes a default, edits with backspace, y/n confirm', async () => {
+    const { p, input } = ttyPrompter();
+    const typed = p.ask('Name', 'dflt');
+    input.write('abx\x7fc\r');
+    assert.strictEqual(await typed, 'abc');
+    const def = p.ask('Name', 'dflt');
+    input.write('\r');
+    assert.strictEqual(await def, 'dflt');
+    const yes = p.confirm('Sure', false);
+    input.write('x' + 'y');
+    assert.strictEqual(await yes, true);
+    const dflt = p.confirm('Sure', false);
+    input.write('\r');
+    assert.strictEqual(await dflt, false);
+    p.close();
+  });
+
+  atest('shell: ctrl+c cancels with a one-line error', async () => {
+    const { p, input } = ttyPrompter();
+    const pending = p.choose('Pick', [{ value: 'a', label: 'A' }]);
+    input.write('\x03');
+    await assert.rejects(pending, /cancelled/);
+    p.close();
+  });
+
+  test('shell: state detection tells a managed repo, a bare folder and a workspace apart', () => {
+    const ws = tmpRepo();
+    const repo = path.join(ws, 'backend');
+    fs.mkdirSync(path.join(repo, 'src'), { recursive: true });
+    fs.mkdirSync(path.join(ws, 'plain'));
+    fs.writeFileSync(path.join(repo, 'cairn.config.json'), JSON.stringify({ cairn: '0.1.0', stack: ['nestjs'], hosts: ['codex'] }));
+    fs.writeFileSync(path.join(ws, 'repos.json'), JSON.stringify({ repos: [{ name: 'backend', path: 'backend' }, { name: 'plain', path: 'plain' }, { name: 'gone', path: 'gone' }] }));
+
+    const inside = detectState(path.join(repo, 'src'), '0.2.0');
+    assert.strictEqual(inside.repo.managed, true);
+    assert.strictEqual(inside.repo.path, repo);
+    assert.deepStrictEqual(inside.repo.hosts, ['codex']);
+    assert.strictEqual(inside.workspace.repos.length, 3);
+    assert.deepStrictEqual(inside.workspace.repos.map((r) => [r.managed, r.exists]), [[true, true], [false, true], [false, false]]);
+    assert.ok(describe(inside).includes('stamped 0.1.0, running 0.2.0'));
+
+    const bare = detectState(path.join(ws, 'plain'), '0.2.0');
+    assert.strictEqual(bare.repo.managed, false);
+    assert.strictEqual(bare.workspace.file, path.join(ws, 'repos.json'));
+    assert.ok(buildMenu(bare).some((m) => m.value === 'init-here'));
+    assert.ok(!buildMenu(inside).some((m) => m.value === 'init-here'));
+
+    const alone = detectState(tmpRepo(), '0.2.0');
+    assert.strictEqual(alone.workspace, null);
+  });
+
+  test('shell: a broken repos.json is a note, not a crash', () => {
+    const dir = tmpRepo();
+    fs.writeFileSync(path.join(dir, 'repos.json'), '{ nope');
+    const st = detectState(dir, '0.2.0');
+    assert.ok(st.workspace.note);
+    assert.ok(describe(st).includes('!'));
+  });
+
+  atest('shell: the hub loops, runs an action through the wizard, and quits', async () => {
+    const dir = tmpRepo();
+    const answers = [];
+    const out = [];
+    // line-mode style scripted prompter, same shape as the wizard tests use
+    // menu 1 = "Set up this folder"; wizard: hosts, framework (none), add-ons, tracker, workspace,
+    // render, register, tools, run-now (declined); then the menu again: 4 = quit
+    const { listPresets } = require('../lib/presets');
+    const none = String(listPresets().filter((x) => x.kind === 'framework').length + 1);
+    const script = ['1', '', none, 'none', '', 'n', '', '', '', 'n', '4'];
+    const p = {
+      write: (s) => out.push(s),
+      ask: async (_t, def) => { const a = script.shift(); return a === '' && def !== undefined ? def : a; },
+      confirm: async (_t, def) => { const a = script.shift(); return a === '' ? def : a === 'y'; },
+      choose: async (t, opts, def = 0) => { const a = script.shift(); answers.push(t); return a === '' ? opts[def].value : opts[Number(a) - 1].value; },
+      multi: async (_t, opts, defs = []) => { const a = script.shift(); return a === '' ? defs.map((i) => opts[i].value) : a === 'none' ? [] : a.split(',').map((n) => opts[Number(n) - 1].value); },
+      close() {},
+    };
+    const ran = [];
+    const code = await runShell({ prompter: p, cwd: dir, exec: async (argv) => { ran.push(argv[0]); return 0; } });
+    assert.strictEqual(code, 0);
+    // declined "Run these now" => nothing ran; the hub came back and quit (item 4 of the second menu = quit)
+    assert.deepStrictEqual(ran, []);
+    assert.strictEqual(answers.filter((t) => t === 'What next?').length, 2);
+  });
+}
+
+// ------------------------------------------------------------ shell actions
+
+{
+  const { detectState } = require('../lib/shell/state');
+  const { buildMenu } = require('../lib/shell/cli');
+  const { workspaceAction, upgradeAction, findRepoCandidates, buildWorkspaceCommands, buildUpgradeApply } = require('../lib/shell/actions');
+  const { execCommand } = require('../lib/wizard/exec');
+
+  function scripted(answers) {
+    const out = [];
+    const next = () => {
+      if (!answers.length) throw new Error('the action asked more than the script answered');
+      return answers.shift();
+    };
+    return {
+      out,
+      write: (s) => out.push(s),
+      ask: async (_t, def) => { const a = next(); return a === '' && def !== undefined ? def : a; },
+      confirm: async (_t, def) => { const a = next(); return a === '' ? def : a === 'y'; },
+      choose: async (_t, opts, def = 0) => { const a = next(); return a === '' ? opts[def].value : opts[Number(a) - 1].value; },
+      multi: async (_t, opts, defs = []) => {
+        const a = next();
+        if (a === '') return defs.map((i) => opts[i].value);
+        return a === 'none' ? [] : a.split(',').map((n) => opts[Number(n) - 1].value);
+      },
+      close() {},
+    };
+  }
+
+  // A folder with sibling repos: a (cairn repo), b (plain git repo), c (not a repo), .hidden, node_modules.
+  function makeSiblings() {
+    const ws = tmpRepo();
+    for (const d of ['a', 'b', 'c', '.hidden', 'node_modules']) fs.mkdirSync(path.join(ws, d));
+    fs.mkdirSync(path.join(ws, 'a', '.git'));
+    fs.mkdirSync(path.join(ws, 'b', '.git'));
+    fs.mkdirSync(path.join(ws, '.hidden', '.git'));
+    fs.mkdirSync(path.join(ws, 'node_modules', '.git'));
+    fs.writeFileSync(path.join(ws, 'a', 'cairn.config.json'), JSON.stringify({ cairn: '0.17.0', stack: ['unknown'] }));
+    return ws;
+  }
+
+  // Runs fn with console output swallowed (the real commands print as they work).
+  async function quiet(fn) {
+    const log = console.log;
+    console.log = () => {};
+    try {
+      return await fn();
+    } finally {
+      console.log = log;
+    }
+  }
+
+  test('shell actions: repo candidates are git/cairn folders, not hidden, not already in', () => {
+    const ws = makeSiblings();
+    assert.deepStrictEqual(findRepoCandidates(ws, []).map((c) => c.name), ['a', 'b']);
+    assert.deepStrictEqual(findRepoCandidates(ws, [path.join(ws, 'a')]).map((c) => c.name), ['b']);
+  });
+
+  test('shell actions: workspace commands add each repo, and init an empty file only when none exists', () => {
+    const cmds = buildWorkspaceCommands({ file: '/w/repos.json', exists: false, repos: [{ path: '/w/a', stack: null }, { path: '/w/b', stack: 'nestjs' }] });
+    assert.deepStrictEqual(cmds.map((c) => c.argv), [
+      ['workspace', 'add', '/w/a', '--config', '/w/repos.json'],
+      ['workspace', 'add', '/w/b', '--config', '/w/repos.json', '--stack', 'nestjs'],
+    ]);
+    assert.deepStrictEqual(buildWorkspaceCommands({ file: '/w/repos.json', exists: false, repos: [] }).map((c) => c.argv), [['workspace', 'init', '--config', '/w/repos.json']]);
+    assert.deepStrictEqual(buildWorkspaceCommands({ file: '/w/repos.json', exists: true, repos: [] }), []);
+  });
+
+  atest('shell actions: create a workspace for real (no stub): repos.json lists what was picked', async () => {
+    const ws = makeSiblings();
+    const state = detectState(ws, '0.17.0');
+    assert.strictEqual(state.workspace, null);
+    const p = scripted([
+      '',            // workspace file: default <ws>/repos.json
+      '1,2',         // both candidates
+      '',            // no extra folder
+      'unknown',     // stack for b (a is a cairn repo)
+      '',            // run now
+    ]);
+    const code = await quiet(() => workspaceAction({ prompter: p, exec: execCommand }, state));
+    assert.strictEqual(code, 0);
+    const cfg = JSON.parse(fs.readFileSync(path.join(ws, 'repos.json'), 'utf8'));
+    assert.deepStrictEqual(cfg.repos.map((r) => r.name), ['a', 'b']);
+    // now it is a workspace: the menu offers to add, not to create, and offers an upgrade
+    const after = detectState(ws, '0.17.0');
+    const menu = buildMenu(after).map((m) => m.value);
+    assert.deepStrictEqual(menu, ['init-here', 'upgrade', 'workspace', 'init-other', 'quit']);
+    assert.strictEqual(buildMenu(after).find((m) => m.value === 'workspace').label, 'Add repos to the workspace');
+    // a second pass only offers what is not in yet (nothing here), so it says so and runs nothing
+    const ran = [];
+    const p2 = scripted(['', '']);
+    const code2 = await workspaceAction({ prompter: p2, exec: async (a) => { ran.push(a); return 0; } }, after);
+    assert.strictEqual(code2, 0);
+    assert.deepStrictEqual(ran, []);
+  });
+
+  atest('shell actions: an extra folder is checked, and a workspace with no repos is created empty', async () => {
+    const ws = tmpRepo();
+    const state = detectState(ws, '0.17.0');
+    const ran = [];
+    const p = scripted(['', path.join(ws, 'nope'), '', '']); // default file, a missing folder, finish, run
+    await workspaceAction({ prompter: p, exec: async (a) => { ran.push(a); return 0; } }, state);
+    assert.ok(p.out.join('').includes('not a folder'));
+    assert.deepStrictEqual(ran, [['workspace', 'init', '--config', path.join(ws, 'repos.json')]]);
+  });
+
+  function workspaceWith(names) {
+    const ws = tmpRepo();
+    const repos = names.map((n) => {
+      fs.mkdirSync(path.join(ws, n));
+      fs.writeFileSync(path.join(ws, n, 'cairn.config.json'), JSON.stringify({ cairn: '0.1.0', stack: ['unknown'] }));
+      return { name: n, path: n };
+    });
+    fs.writeFileSync(path.join(ws, 'repos.json'), JSON.stringify({ repos }));
+    return { ws, state: detectState(ws, '0.17.0') };
+  }
+
+  atest('shell actions: upgrade reports first, then applies to all repos with --bump-pin on request', async () => {
+    const { ws, state } = workspaceWith(['api', 'web']);
+    const ran = [];
+    const p = scripted(['y', '', 'y', '']); // apply, all repos (default), bump-pin, run
+    const code = await upgradeAction({ prompter: p, exec: async (a) => { ran.push(a); return 0; } }, state);
+    assert.strictEqual(code, 0);
+    const file = path.join(ws, 'repos.json');
+    assert.deepStrictEqual(ran, [['upgrade', '--config', file], ['upgrade', '--config', file, '--apply', '--bump-pin']]);
+  });
+
+  atest('shell actions: upgrade with a subset names the repos; declining applies nothing', async () => {
+    const { ws, state } = workspaceWith(['api', 'web']);
+    const file = path.join(ws, 'repos.json');
+    const ran = [];
+    const exec = async (a) => { ran.push(a); return 0; };
+    await upgradeAction({ prompter: scripted(['y', '2', '', '']), exec }, state); // only web, no bump, run
+    assert.deepStrictEqual(ran[1], ['upgrade', '--config', file, '--apply', '--repo', 'web']);
+    ran.length = 0;
+    await upgradeAction({ prompter: scripted(['']), exec }, state); // default: do not apply
+    assert.deepStrictEqual(ran, [['upgrade', '--config', file]]);
+  });
+
+  atest('shell actions: upgrade conflicts (exit 3) are explained and returned', async () => {
+    const { state } = workspaceWith(['api']);
+    const p = scripted(['y', '', '', '']);
+    const code = await upgradeAction({ prompter: p, exec: async (a) => (a.includes('--apply') ? 3 : 0) }, state);
+    assert.strictEqual(code, 3);
+    assert.ok(p.out.join('').includes('conflict'));
+  });
+
+  test('shell actions: upgrade is not offered without a workspace or without a managed repo', () => {
+    const none = detectState(tmpRepo(), '0.17.0');
+    assert.ok(!buildMenu(none).some((m) => m.value === 'upgrade'));
+    assert.strictEqual(buildMenu(none).find((m) => m.value === 'workspace').label, 'Create a workspace');
+    const ws = tmpRepo();
+    fs.mkdirSync(path.join(ws, 'x'));
+    fs.writeFileSync(path.join(ws, 'repos.json'), JSON.stringify({ repos: [{ name: 'x', path: 'x', stack: ['unknown'] }] }));
+    assert.ok(!buildMenu(detectState(ws, '0.17.0')).some((m) => m.value === 'upgrade'));
+    assert.deepStrictEqual(buildUpgradeApply({ file: 'f', repos: ['a'], all: true, bumpPin: false }).argv, ['upgrade', '--config', 'f', '--apply']);
+  });
+}
+
 // ------------------------------------------------------------------- runner
 
 (async () => {

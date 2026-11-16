@@ -15,6 +15,8 @@
 //   cairn docs            list the project's own docs for the agents (the "docs" key)
 //   cairn context         cross-repo authored context layer (prototype)
 //   cairn preset          what the bundled presets offer
+//   cairn shell           interactive home for the setup commands (bare `cairn` in a terminal)
+//   cairn wizard          interactive install for one repo
 
 const HELP = `cairn — shared AI workflow scaffolding
 
@@ -31,10 +33,30 @@ Usage: cairn <command> [options]
   docs <cmd> [...]      list the project's own docs for the agents (cairn docs --help)
   context <cmd> [...]   cross-repo authored context layer (cairn context --help)
   preset <cmd> [...]    what the bundled presets offer (cairn preset --help)
+  shell [options]       interactive home for the setup commands (also: bare cairn in a terminal)
+  wizard [options]      interactive install for one repo (cairn wizard --help)
   version               print version
 
 Run \`cairn <command> --help\` for command options.
 `;
+
+// Commands that ask questions are async; a UserError is a one-line message, not a stack trace.
+function runAsync(fn) {
+  Promise.resolve()
+    .then(fn)
+    .then(
+      (code) => { process.exitCode = code; },
+      (err) => {
+        if (err && err.userError) {
+          console.error(err.message);
+          process.exitCode = 2;
+          return;
+        }
+        console.error(err && err.stack ? err.stack : String(err));
+        process.exitCode = 1;
+      },
+    );
+}
 
 function main() {
   const [command, ...rest] = process.argv.slice(2);
@@ -92,6 +114,21 @@ function main() {
       );
       return;
 
+    case 'wizard':
+      Promise.resolve(require('../lib/wizard/cli').main(rest)).then(
+        (code) => { process.exitCode = code; },
+        (err) => {
+          if (err && err.userError) {
+            console.error(err.message);
+            process.exitCode = 2;
+            return;
+          }
+          console.error(err && err.stack ? err.stack : String(err));
+          process.exitCode = 1;
+        },
+      );
+      return;
+
     case 'preset':
       process.exitCode = require('../lib/preset/cli').main(rest);
       return;
@@ -103,6 +140,17 @@ function main() {
       return;
 
     case undefined:
+      if (process.stdin.isTTY && process.stdout.isTTY) {
+        runAsync(() => require('../lib/shell/cli').main([]));
+        return;
+      }
+      process.stdout.write(HELP);
+      return;
+
+    case 'shell':
+      runAsync(() => require('../lib/shell/cli').main(rest));
+      return;
+
     case 'help':
     case '--help':
     case '-h':

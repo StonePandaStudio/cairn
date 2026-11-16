@@ -90,6 +90,14 @@ folder, and its docs are worded for Codex. See "Start a Codex-based project".
 A repo with no `ai/` folder yet. For several repos that make up one project, do steps 1–2 in
 each, then step 3 once, then step 4. Using Codex? See "Start a Codex-based project" below.
 
+Prefer menus to flags? `npm i -D @stonepandastudio/cairn`, then run `npx cairn` in a terminal
+(or `cairn shell`). It looks at where you are (a cairn repo, part of a workspace, neither), shows it,
+and offers the actions that apply, with arrow keys and enter (numbered choices when piped). "Set up
+this folder" asks about hosts, stack, tracker, workspace and docs, shows the plan, runs the commands
+below for you and prints them at the end. `cairn wizard [--dry-run]` is that one flow on its own.
+It also creates or extends a workspace (`repos.json`: pick the repos next to it) and upgrades cairn across
+a workspace (the report first, then apply; it never commits). Sync, docs and doctor are planned for the shell.
+
 1. **Install and init.** `--stack` is framework first, then add-ons; `cairn preset list`
    shows what exists (`unknown` gives the core agents with no stack rules).
    ```bash
