@@ -4673,10 +4673,8 @@ test('single repo: with no repos.json, the current repo alone is the workspace (
   const { listProviders } = require('../lib/tracker');
   const { PassThrough } = require('stream');
 
-  const presets = listPresets();
-  const frameworks = presets.filter((x) => x.kind === 'framework');
-  const addOns = presets.filter((x) => x.kind !== 'framework');
-  const NONE_FRAMEWORK = String(frameworks.length + 1);
+  const stackChecklist = require('../lib/wizard/cli').stackOptions();
+  const tick = (...names) => names.map((n) => stackChecklist.findIndex((o) => o.value === n) + 1).join(',');
 
   // Same interface as the real prompter, answers read from a list ('' takes the default).
   function scripted(answers) {
@@ -4701,7 +4699,7 @@ test('single repo: with no repos.json, the current repo alone is the workspace (
   }
 
   // Answers for a run that ends at the "Run these now" question: no docs dir, no workspace.
-  const plain = (...tail) => ['', NONE_FRAMEWORK, 'none', '', 'n', '', '', '', ...tail];
+  const plain = (...tail) => ['', 'none', '', 'n', '', '', '', ...tail];
 
   atest('wizard: answers become the init, workspace, docs and register commands', async () => {
     const repo = tmpRepo();
@@ -4710,8 +4708,7 @@ test('single repo: with no repos.json, the current repo alone is the workspace (
     const ran = [];
     const p = scripted([
       '',                                                     // hosts: claude
-      String(frameworks.findIndex((x) => x.name === 'nestjs') + 1),
-      String(addOns.findIndex((x) => x.name === 'typeorm') + 1),
+      tick('nestjs', 'typeorm'),                              // stack: one checklist
       '',                                                     // validation stack default
       String(listProviders().indexOf('youtrack') + 1),
       'PROOF',
@@ -4746,7 +4743,7 @@ test('single repo: with no repos.json, the current repo alone is the workspace (
   });
 
   atest('wizard: stops at the first failing command and lists the rest', async () => {
-    const p = scripted(['', NONE_FRAMEWORK, 'none', '', 'n', '', '', '', '']);
+    const p = scripted(['', 'none', '', 'n', '', '', '', '']);
     const ran = [];
     const code = await runWizard({ prompter: p, repo: tmpRepo(), exec: async (argv) => { ran.push(argv[0]); return ran.length === 1 ? 5 : 0; } });
     assert.strictEqual(code, 5);
@@ -4887,11 +4884,9 @@ test('single repo: with no repos.json, the current repo alone is the workspace (
     const answers = [];
     const out = [];
     // line-mode style scripted prompter, same shape as the wizard tests use
-    // menu 1 = "Set up this folder"; wizard: hosts, framework (none), add-ons, tracker, workspace,
+    // menu 1 = "Set up this folder"; wizard: hosts, stack (none), tracker, workspace,
     // render, register, tools, run-now (declined); then the menu again: 5 = quit
-    const { listPresets } = require('../lib/presets');
-    const none = String(listPresets().filter((x) => x.kind === 'framework').length + 1);
-    const script = ['1', '', none, 'none', '', 'n', '', '', '', 'n', '5'];
+    const script = ['1', '', 'none', '', 'n', '', '', '', 'n', '5'];
     const p = {
       write: (s) => out.push(s),
       ask: async (_t, def) => { const a = script.shift(); return a === '' && def !== undefined ? def : a; },
@@ -5269,7 +5264,6 @@ test('single repo: with no repos.json, the current repo alone is the workspace (
       close() {},
     };
   }
-  const NONE_FW = String(listPresets().filter((x) => x.kind === 'framework').length + 1);
 
   atest('back: runSteps skips steps that do not apply, in both directions', async () => {
     const log = [];
@@ -5289,7 +5283,7 @@ test('single repo: with no repos.json, the current repo alone is the workspace (
   atest('back: the wizard re-asks the previous step, keeps its answer, and skips steps that no longer apply', async () => {
     // hosts, framework, add-ons, tracker (none), then BACK at the workspace question lands on the tracker
     // (the project-key step does not apply to "none"); then answer on to the end.
-    const p = scripted(['', NONE_FW, 'none', '', 'BACK', '', 'n', '', '', '', 'n']);
+    const p = scripted(['', 'none', '', 'BACK', '', 'n', '', '', '', 'n']);
     const ran = [];
     await runWizard({ prompter: p, repo: tmpRepo(), exec: async (a) => { ran.push(a); return 0; } });
     assert.strictEqual(p.asked.filter((t) => t === 'Issue tracker').length, 2);
@@ -5565,7 +5559,6 @@ test('single repo: with no repos.json, the current repo alone is the workspace (
   const { runWizard } = require('../lib/wizard/cli');
   const { listPresets } = require('../lib/presets');
   const bin = path.join(__dirname, '..', 'bin', 'cairn.js');
-  const NONE_FW = String(listPresets().filter((x) => x.kind === 'framework').length + 1);
 
   function scripted(answers) {
     const asked = [];
@@ -5589,7 +5582,7 @@ test('single repo: with no repos.json, the current repo alone is the workspace (
     };
   }
   // hosts, framework (none), add-ons, tracker, workspace n, render, register, tools, [agent commands], run now
-  const flow = (...mid) => ['', NONE_FW, 'none', '', 'n', '', '', '', ...mid, ''];
+  const flow = (...mid) => ['', 'none', '', 'n', '', '', '', ...mid, ''];
 
   atest('together: init in the wizard also offers the agent commands when this machine lacks them', async () => {
     const home = tmpRepo(); // nothing installed here
@@ -5737,6 +5730,94 @@ test('single repo: with no repos.json, the current repo alone is the workspace (
     } finally {
       console.log = log;
     }
+  });
+}
+
+// ------------------------------------------------------ the stack checklist
+
+{
+  const { stackOptions, orderStack, runWizard } = require('../lib/wizard/cli');
+  const { Back } = require('../lib/errors');
+
+  function scripted(answers) {
+    const asked = [];
+    const next = (t) => {
+      if (!answers.length) throw new Error(`asked more than the script answered (at: ${t})`);
+      asked.push(String(t).trim());
+      const a = answers.shift();
+      if (a === 'BACK') throw new Back();
+      return a;
+    };
+    return {
+      asked,
+      write() {},
+      ask: async (t, def) => { const a = next(t); return a === '' && def !== undefined ? def : a; },
+      confirm: async (t, def) => { const a = next(t); return a === '' ? def : a === 'y'; },
+      choose: async (t, opts, def = 0) => { const a = next(t); return a === '' ? opts[def].value : opts[Number(a) - 1].value; },
+      multi: async (t, opts, defs = []) => {
+        const a = next(t);
+        if (a === '') return defs.map((i) => opts[i].value);
+        return a === 'none' ? [] : a.split(',').map((n) => opts[Number(n) - 1].value);
+      },
+      close() {},
+    };
+  }
+  const options = stackOptions();
+  const tick = (...names) => names.map((n) => options.findIndex((o) => o.value === n) + 1).join(',');
+  // after the stack questions: tracker, workspace n, render, register, tools, run now (yes)
+  const rest = ['', 'n', '', '', '', ''];
+  const run = async (answers) => {
+    const p = scripted(answers);
+    const ran = [];
+    await runWizard({ prompter: p, repo: tmpRepo(), home: process.env.CAIRN_HOME, exec: async (a) => { ran.push(a); return 0; } });
+    return { p, ran };
+  };
+  const stackArg = (argv) => argv[argv.indexOf('--stack') + 1];
+
+  test('stack checklist: one list, frameworks first, then ORM, styling, infrastructure', () => {
+    const kinds = options.map((o) => o.kind);
+    const lastFramework = kinds.lastIndexOf('framework');
+    assert.ok(kinds.indexOf('framework') === 0 && kinds.slice(0, lastFramework + 1).every((k) => k === 'framework'));
+    assert.ok(options.every((o) => o.hint.startsWith(`${o.kind}: `)));
+    assert.ok(['spring', 'react', 'jpa-flyway', 'docker'].every((n) => options.some((o) => o.value === n)));
+  });
+
+  test('stack checklist: orderStack keeps list order, lets a chosen primary lead, and falls back to unknown', () => {
+    assert.deepStrictEqual(orderStack([], null), ['unknown']);
+    assert.deepStrictEqual(orderStack(['docker', 'react'], null), ['react', 'docker']);
+    assert.deepStrictEqual(orderStack(['docker', 'react', 'spring', 'jpa-flyway'], 'react'), ['react', 'spring', 'jpa-flyway', 'docker']);
+    assert.deepStrictEqual(orderStack(['docker', 'react', 'spring', 'jpa-flyway'], null), ['react', 'spring', 'jpa-flyway', 'docker'].sort((a, b) => options.findIndex((o) => o.value === a) - options.findIndex((o) => o.value === b)));
+    // a primary that was not ticked is ignored
+    assert.deepStrictEqual(orderStack(['react'], 'spring'), ['react']);
+  });
+
+  atest('stack checklist: several frameworks ticked -> asks which is primary and puts it first', async () => {
+    const { p, ran } = await run(['', tick('spring', 'react', 'jpa-flyway', 'docker'), '2', ...rest]);
+    assert.ok(p.asked.some((t) => t.startsWith('Which is the primary stack')));
+    const stack = stackArg(ran[0]).split(',');
+    assert.strictEqual(stack.length, 4);
+    // the two frameworks are offered in list order; "2" is the second of them
+    const frameworks = options.filter((o) => o.kind === 'framework' && ['spring', 'react'].includes(o.value)).map((o) => o.value);
+    assert.strictEqual(stack[0], frameworks[1]);
+    assert.deepStrictEqual([...stack].sort(), ['docker', 'jpa-flyway', 'react', 'spring']);
+  });
+
+  atest('stack checklist: one framework needs no primary question; none ticked means unknown', async () => {
+    const one = await run(['', tick('nestjs', 'typeorm'), '', ...rest]); // validation stack default, then the rest
+    assert.ok(!one.p.asked.some((t) => t.startsWith('Which is the primary stack')));
+    assert.strictEqual(stackArg(one.ran[0]), 'nestjs,typeorm');
+    const none = await run(['', 'none', ...rest]);
+    assert.strictEqual(stackArg(none.ran[0]), 'unknown');
+    const addOnsOnly = await run(['', tick('docker'), ...rest]);
+    assert.strictEqual(stackArg(addOnsOnly.ran[0]), 'docker');
+  });
+
+  atest('stack checklist: going back from the primary question re-asks the checklist with the ticks kept', async () => {
+    const p = scripted(['', tick('spring', 'react'), 'BACK', '', '1', ...rest]); // back, keep ticks, primary 1
+    const ran = [];
+    await runWizard({ prompter: p, repo: tmpRepo(), home: process.env.CAIRN_HOME, exec: async (a) => { ran.push(a); return 0; } });
+    assert.strictEqual(p.asked.filter((t) => t.startsWith('Stack: tick')).length, 2);
+    assert.strictEqual(stackArg(ran[0]).split(',').length, 2);
   });
 }
 
