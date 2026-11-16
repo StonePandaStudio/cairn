@@ -5224,6 +5224,154 @@ test('single repo: with no repos.json, the current repo alone is the workspace (
   });
 }
 
+// ------------------------------------------------------------- going back
+
+{
+  const { Back } = require('../lib/errors');
+  const { runSteps } = require('../lib/wizard/steps');
+  const { runWizard } = require('../lib/wizard/cli');
+  const { runShell } = require('../lib/shell/cli');
+  const { workspaceAction, upgradeAction } = require('../lib/shell/actions');
+  const { docsAction, syncAction } = require('../lib/shell/repo-actions');
+  const { createPrompter } = require('../lib/wizard/prompt');
+  const { detectState } = require('../lib/shell/state');
+  const { listPresets } = require('../lib/presets');
+  const { PassThrough } = require('stream');
+
+  // Scripted prompter; the answer 'BACK' is what Esc is. `asked` records every question's text.
+  function scripted(answers) {
+    const out = [];
+    const asked = [];
+    const next = (t) => {
+      if (!answers.length) throw new Error(`asked more than the script answered (at: ${t})`);
+      asked.push(String(t).trim());
+      const a = answers.shift();
+      if (a === 'BACK') throw new Back();
+      return a;
+    };
+    return {
+      out,
+      asked,
+      write: (s) => out.push(s),
+      ask: async (t, def) => { const a = next(t); return a === '' && def !== undefined ? def : a; },
+      confirm: async (t, def) => { const a = next(t); return a === '' ? def : a === 'y'; },
+      choose: async (t, opts, def = 0) => { const a = next(t); return a === '' ? opts[def].value : opts[Number(a) - 1].value; },
+      multi: async (t, opts, defs = []) => {
+        const a = next(t);
+        if (a === '') return defs.map((i) => opts[i].value);
+        return a === 'none' ? [] : a.split(',').map((n) => opts[Number(n) - 1].value);
+      },
+      close() {},
+    };
+  }
+  const NONE_FW = String(listPresets().filter((x) => x.kind === 'framework').length + 1);
+
+  atest('back: runSteps skips steps that do not apply, in both directions', async () => {
+    const log = [];
+    let backOnce = true;
+    const steps = [
+      { id: 'a', run: async (p, s) => { log.push('a'); s.a = 1; } },
+      { id: 'b', when: (s) => s.a === 2, run: async () => { log.push('b'); } },
+      { id: 'c', run: async () => { log.push('c'); if (backOnce) { backOnce = false; throw new Back(); } } },
+      { id: 'd', run: async () => { log.push('d'); } },
+    ];
+    await runSteps({}, steps, {});
+    assert.deepStrictEqual(log, ['a', 'c', 'a', 'c', 'd']); // b never applies, so back from c lands on a
+    await assert.rejects(runSteps({}, [{ id: 'x', run: async () => { throw new Back(); } }], {}), (e) => e.isBack);
+    await assert.rejects(runSteps({}, [{ id: 'x', when: () => false, run: async () => {} }, { id: 'y', run: async () => { throw new Back(); } }], {}), (e) => e.isBack);
+  });
+
+  atest('back: the wizard re-asks the previous step, keeps its answer, and skips steps that no longer apply', async () => {
+    // hosts, framework, add-ons, tracker (none), then BACK at the workspace question lands on the tracker
+    // (the project-key step does not apply to "none"); then answer on to the end.
+    const p = scripted(['', NONE_FW, 'none', '', 'BACK', '', 'n', '', '', '', 'n']);
+    const ran = [];
+    await runWizard({ prompter: p, repo: tmpRepo(), exec: async (a) => { ran.push(a); return 0; } });
+    assert.strictEqual(p.asked.filter((t) => t === 'Issue tracker').length, 2);
+    assert.ok(!p.asked.includes('Tracker project key (e.g. PROOF)'));
+    assert.deepStrictEqual(ran, []); // declined at the end
+  });
+
+  atest('back: Back at the wizard\'s first step leaves it; nothing runs', async () => {
+    const ran = [];
+    await assert.rejects(runWizard({ prompter: scripted(['BACK']), repo: tmpRepo(), exec: async (a) => { ran.push(a); return 0; } }), (e) => e.isBack);
+    assert.deepStrictEqual(ran, []);
+  });
+
+  atest('back: the hub returns to the menu after Back in an action, and Back at the menu quits', async () => {
+    const dir = tmpRepo();
+    // menu: "Set up this folder" (1) -> hosts: BACK -> menu again -> BACK -> shell ends
+    const p = scripted(['1', 'BACK', 'BACK']);
+    const code = await runShell({ prompter: p, cwd: dir, exec: async () => 0 });
+    assert.strictEqual(code, 0);
+    assert.strictEqual(p.asked.filter((t) => t === 'What next?').length, 2);
+  });
+
+  function twoRepos() {
+    const ws = tmpRepo();
+    for (const n of ['api', 'web']) {
+      fs.mkdirSync(path.join(ws, n, '.git'), { recursive: true });
+      fs.writeFileSync(path.join(ws, n, 'cairn.config.json'), JSON.stringify({ cairn: '0.17.0', stack: ['unknown'] }));
+    }
+    fs.writeFileSync(path.join(ws, 'repos.json'), JSON.stringify({ repos: [{ name: 'api', path: 'api' }, { name: 'web', path: 'web' }] }));
+    return { ws, state: detectState(path.join(ws, 'web'), '0.17.0') };
+  }
+
+  atest('back: upgrade goes from the repo list back to the apply question', async () => {
+    const { state } = twoRepos();
+    const p = scripted(['y', 'BACK', 'n']); // apply, repos -> back, apply again: no
+    const ran = [];
+    await upgradeAction({ prompter: p, exec: async (a) => { ran.push(a); return 0; } }, state);
+    assert.strictEqual(p.asked.filter((t) => t.startsWith('Apply it?')).length, 2);
+    assert.strictEqual(ran.length, 1); // only the report
+  });
+
+  atest('back: workspace creation steps back from the plan to the extra-folder question', async () => {
+    const ws = tmpRepo();
+    fs.mkdirSync(path.join(ws, 'x', '.git'), { recursive: true });
+    const state = detectState(ws, '0.17.0');
+    // file default, pick x, extras '', stack, plan confirm BACK -> stacks again ('nestjs'), confirm no
+    const p = scripted(['', '1', '', 'unknown', 'BACK', 'nestjs', 'n']);
+    const ran = [];
+    await workspaceAction({ prompter: p, exec: async (a) => { ran.push(a); return 0; } }, state);
+    assert.deepStrictEqual(ran, []);
+    assert.strictEqual(p.asked.filter((t) => t.startsWith('Stack for x')).length, 2);
+  });
+
+  atest('back: docs goes from the target back to the menu; sync leaves with Back', async () => {
+    const repo = tmpRepo();
+    fs.writeFileSync(path.join(repo, 'cairn.config.json'), JSON.stringify({ cairn: '0.17.0', stack: ['unknown'] }));
+    const state = detectState(repo, '0.17.0');
+    const ran = [];
+    const exec = async (a) => { ran.push(a); return 0; };
+    const p = scripted(['2', 'BACK', '4']); // add -> target BACK -> menu again -> Back item
+    await docsAction({ prompter: p, exec }, state);
+    assert.strictEqual(p.asked.filter((t) => t.startsWith('Project docs (')).length, 2);
+    await assert.rejects(syncAction({ prompter: scripted(['BACK']), exec }, state), (e) => e.isBack);
+  });
+
+  atest('back: Esc on a terminal and `<` on a pipe both go back', async () => {
+    const input = new PassThrough();
+    const tty = createPrompter({ input, output: new PassThrough(), tty: true });
+    const pending = tty.choose('Pick', [{ value: 'a', label: 'A' }]);
+    input.write('\x1b'); // a lone Esc is told from an arrow key by a short timer
+    const keepAlive = setInterval(() => {}, 50); // on a real terminal stdin keeps the process alive
+    try {
+      await assert.rejects(pending, (e) => e.isBack);
+    } finally {
+      clearInterval(keepAlive);
+    }
+    tty.close();
+
+    const pipe = new PassThrough();
+    const line = createPrompter({ input: pipe, output: new PassThrough(), tty: false });
+    pipe.write('<\nkeep\n');
+    await assert.rejects(line.ask('x'), (e) => e.isBack);
+    assert.strictEqual(await line.ask('y'), 'keep');
+    line.close();
+  });
+}
+
 // ------------------------------------------------------------------- runner
 
 (async () => {

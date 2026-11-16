@@ -117,6 +117,10 @@ prompter is in `lib/wizard/prompt.js` (raw keypresses, no dependency; numbered l
   install-tools): `lib/shell/repo-actions.js`.
 - Next: a single-repo upgrade path, stack detection as a pre-fill, `workspace remove` and `override` in the
   shell, then the host-side commands.
+- ✅ Back: Esc (TTY) or `<` (piped) throws `Back` (lib/errors.js); flows are step lists (lib/wizard/steps.js) that
+  re-ask the previous step with its old answer as the default; Back at the first step returns to the menu,
+  Back at the menu leaves. A step that does not prompt must have a `when`, or going back bounces off it.
+  A lone Esc waits ~500 ms (readline's escape timeout) to be told apart from an arrow key.
 - Each menu item must have a test asserting the argv it builds; the equivalent commands are always printed.
 - Not yet tried in a real terminal by anyone but the tests (PassThrough streams); check Windows Terminal.
 - Later: host-side commands (/cairn-init, /cairn-upgrade, ...) that call the same CLI non-interactively.
