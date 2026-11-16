@@ -52,11 +52,16 @@ what is new, marked `already added` if you mention one.
 1. **Scan** this repo as below.
 {{/if}}
    - Directories named `docs`, `doc`, `docum`, `documentation`, `wiki`, `adr`, `decisions`, `rfc`,
-     `design`, `specs`, `architecture`, plus root files such as `README*`, `ARCHITECTURE.md`,
-     `CONTRIBUTING.md`, `DESIGN.md`, and any other directory holding several `.md` files.
-   - Skip `node_modules`, `dist`, `build`, `coverage`, `vendor`, `.git`, `_cairn`, `ai/`, `.claude`,
-     `.agents`, changelogs, licenses and generated API docs (typedoc, swagger output). Go at most three
-     levels deep and list at most 30 candidates; say when you cut the list.
+     `design`, `specs`, `architecture`, plus root files such as `ARCHITECTURE.md`,
+     `CONTRIBUTING.md`, `DESIGN.md`, and any other directory holding several `.md` files. The root
+     `README.md` is not a candidate: D.1 reads it anyway.
+   - Skip `node_modules`, `dist`, `build`, `coverage`, `vendor`, `ai/`, any directory whose name starts
+     with `.` or `_` (tool folders and generated output such as `_cairn`, `.claude`, `.agents`,
+     `_bmad-output`), changelogs, licenses and generated API docs (typedoc, swagger output). A
+     spec-driven tool's current specs (for example `openspec/specs`) are documentation; its in-flight
+     or archived change records (`openspec/changes`, `.../archive`), work plans and tool instructions
+     are not: list them unchecked, or leave them out. Count depth in levels below the repo root. Go at most three levels deep and list at most 30 candidates; say when
+     you cut the list.
    - Per candidate, note its path, the number of `.md` files, the first heading of a sample, and the
      last git change (`git log -1 --format=%cs -- <path>`), so a stale one is visible.
    - Files that are not Markdown (HTML, PDF, docx) are listed as *found, not readable yet*; do not
@@ -64,7 +69,9 @@ what is new, marked `already added` if you mention one.
 {{#if workspace}}3.{{else}}2.{{/if}} **Show a checklist and wait.** A numbered list{{#if workspace}}, grouped by repo{{/if}}: path, file count, heading
    sample, last change, and a one-line guess at what it is about. Pre-check the ones that are clearly
    project docs; leave a stale, tiny or unclear one unchecked. A folder is one line: say whether you
-   would add it as one entry per file (the default) or as a single entry. The user answers with
+   would add it as one entry per file (the default) or as a single entry. Every entry becomes a row in
+   the **Project docs** table that the agents read on each task, so for a folder of more than about 15
+   files say so and recommend either picking the files that matter or one entry for the folder. The user answers with
    something like "all except 3, 5", "only 1, 2" or "none". No answer means nothing is added.
 {{#if workspace}}4.{{else}}3.{{/if}} **Register what was chosen.** Run `npx cairn docs add <paths…> --dry-run`, show the result, and on
    a yes run it for real (`--no-expand` for a folder kept as one entry; `--about` and `--when` only when

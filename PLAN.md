@@ -71,7 +71,7 @@ For a repo that has code and docs the sequence is: `context install-tools` → `
 `code_symbol`. Rewrite "Start on a repo that already has code", "Set up code lookups" and "Everyday
 workflow" to match, and state `add-frontmatter` as an "only if".
 
-**5. ✅ `/discover` finds the project docs itself (new step D.0).** Built; not yet tried on a real repo (spravaspis first).
+**5. ✅ `/discover` finds the project docs itself (new step D.0).** Built. Trial on a clean copy of spravaspis (2026-11-16): `init --render`, `install-tools` (Serena, 179 s warm-up), `register`, `docs add docum --dry-run` (34 entries, Cyrillic headings intact) and an agent run of D.0 up to the checklist all worked. Findings fixed: skip `.`/`_` dirs (`_bmad-output`), do not list the root README, archived/in-flight spec folders unchecked, recommend picking or one entry for a folder over ~15 files. Not yet run: the full interactive `/discover` (answer the checklist, `docs add`, `sync`, re-read, drafts) in a Codex session.
 Depends on item 2 (`docs add`). Today discovery only reads docs already listed under `docs`.
 - **Scan, read-only.** Candidate dirs: `docs`, `doc`, `docum`, `documentation`, `wiki`, `adr`,
   `decisions`, `rfc`, `design`, `specs`, `architecture`; root files `README*`, `ARCHITECTURE.md`,
