@@ -29,14 +29,14 @@ first trial.
 
 ### Planned, in order
 
-**1. `cairn context install-tools` (rename of `context setup`).**
+**1. ✅ `cairn context install-tools` (rename of `context setup`).**
 Installs Serena (and optionally codebase-memory-mcp) into `_cairn/tools/` and warms each repo's
 language server. `setup` stays as a silent alias: it is in 0.15.0 and in published docs. Flags are
 unchanged (`--provider`, `--no-warm`). The help text says it also warms the language servers.
 Touches: `lib/context/cli.js`, README, `INFRASTRUCTURE.md`, `infrastructure.mmd` (it names `cairn
 context setup`; keep the diagram current), the "not installed" hints, tests.
 
-**2. `cairn docs add|list|remove` (new).**
+**2. ✅ `cairn docs add|list|remove` (new).**
 Fills the `docs` key without hand-editing JSON.
 - `docs add <path>… [--about <text>] [--when <text>]`. A file becomes one entry. A folder expands to
   one entry per `.md` file under it, with `about` taken from the file's first heading unless given;
@@ -53,7 +53,7 @@ Fills the `docs` key without hand-editing JSON.
   sibling repo (item 5). Check what `normalizeDocs` allows today. A source-only docs repo (no `ai/`,
   no `cairn.config.json`) must be readable as a plain folder.
 
-**3. `cairn context add-frontmatter` (rename of `context adopt`).**
+**3. ✅ `cairn context add-frontmatter` (rename of `context adopt`).**
 The name says what it does: it adds `type:` (from the folder) and, with `--link-candidates`,
 `counterpartOf:` to docs already in `ai/contexts/` that have no frontmatter. `adopt` stays as an
 alias. It is not part of the main flow; it is for a repo that already had hand-written
@@ -64,7 +64,7 @@ Touches: `lib/context/cli.js`, `adopt.js` help text, `presets/core/agents/discov
 `commands/discover.md` (both say `cairn context adopt`; **this changes every snapshot**, review it
 once), README, `INFRASTRUCTURE.md`.
 
-**4. README order fix.**
+**4. ✅ README order fix** (written for the flow before item 5: `docs add` is a manual optional step).
 For a repo that has code and docs the sequence is: `context install-tools` → `context register` →
 `docs add` → (`context add-frontmatter`, only for old `ai/contexts/` docs) → `/discover`.
 `register` comes before `/discover` because discovery confirms `describes:` anchors with
