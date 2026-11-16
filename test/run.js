@@ -4150,10 +4150,11 @@ test('adopt: a file with a byte-order mark keeps it first, and the result parses
   assert.ok(again.startsWith('﻿---\ntype: entity\ncounterpartOf: a:b\n---\n'));
 });
 
-test('adopt: CLI is a dry run by default, --write applies, an unterminated block is reported and kept', () => {
+test('add-frontmatter: CLI is a dry run by default, --write applies, an unterminated block is reported and kept; `adopt` is an alias', () => {
   const { ws, config, put } = adoptWs();
   const bin = path.join(__dirname, '..', 'bin', 'cairn.js');
-  const run = (...a) => spawnSync(process.execPath, [bin, 'context', 'adopt', '--config', config, '--json', ...a], { encoding: 'utf8' });
+  const run = (...a) => spawnSync(process.execPath, [bin, 'context', 'add-frontmatter', '--config', config, '--json', ...a], { encoding: 'utf8' });
+  const old = (...a) => spawnSync(process.execPath, [bin, 'context', 'adopt', '--config', config, '--json', ...a], { encoding: 'utf8' });
   const f = path.join(ws, 'backend/ai/contexts/entities/invoice.md');
   const before = fs.readFileSync(f, 'utf8');
 
@@ -4161,6 +4162,8 @@ test('adopt: CLI is a dry run by default, --write applies, an unterminated block
   assert.strictEqual(dry.status, 0, dry.stderr);
   assert.strictEqual(JSON.parse(dry.stdout).write, false);
   assert.strictEqual(fs.readFileSync(f, 'utf8'), before, 'dry run writes nothing');
+  assert.deepStrictEqual(JSON.parse(old().stdout), JSON.parse(dry.stdout), 'the old name runs the same command');
+  assert.ok(!/^\s+adopt/m.test(spawnSync(process.execPath, [bin, 'context', '--help'], { encoding: 'utf8' }).stdout), 'help names only the new command');
 
   const bad = put('backend', 'ai/contexts/features/broken.md', '---\nstatus: x\n# never closed\n');
   const wrote = run('--write');

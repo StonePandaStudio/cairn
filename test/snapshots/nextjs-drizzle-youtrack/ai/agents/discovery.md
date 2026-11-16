@@ -126,7 +126,7 @@ For docs that already exist but carry no `describes:` (typically written by hand
 the convention). This is the one case where an existing context is touched, and only its
 **frontmatter**: you add lines, you never change the body or a key that is already there.
 
-1. Run `npx cairn context adopt` first (dry run, then `--write` once the user agrees).
+1. Run `npx cairn context add-frontmatter` first (dry run, then `--write` once the user agrees).
    It adds `type:` from the folder and, with `--link-candidates`, `counterpartOf:` for
    same-path pairs. Do not hand-write those two.
 2. For each doc with no `describes:` whose subject is one named code symbol, find the

@@ -384,14 +384,16 @@ the active servers. As with Claude Code, start Codex at the repo root: the paths
 entry are relative to `cwd`, and a session started elsewhere will not find the server.
 Without the server the skills still work; code lookups fall back to plain file search.
 
-**Existing docs (brownfield, once).** Docs written before cairn have no frontmatter, so
-`check` can say nothing about them:
+**Old `ai/contexts/` docs (only if you have them).** Docs you wrote by hand in `ai/contexts/`
+before cairn have no frontmatter, so `check` can say nothing about them. Skip this for a repo
+whose contexts `/discover` wrote:
 ```bash
-cairn context adopt                      # dry run: what would be added
-cairn context adopt --link-candidates --write
+cairn context add-frontmatter            # dry run: what would be added
+cairn context add-frontmatter --link-candidates --write
 ```
-This adds `type:` from the category folder and, with `--link-candidates`, `counterpartOf:`
-for same-path pairs in another repo (review the pairs first). It only adds frontmatter
+This adds `type:` from the category folder and, with `--link-candidates`, the cross-repo link
+`counterpartOf:` for same-path pairs in another repo (review the pairs first). It never touches
+files outside `ai/contexts/`; project docs are listed with `cairn docs add` instead. It only adds frontmatter
 lines: bodies and existing keys are never touched, and a second run adds nothing. Then run
 `/discover adopt` in each repo: the discovery agent proposes a `describes:` line per doc
 (confirming the class with `code_symbol`), you confirm, it writes only those lines.
@@ -703,7 +705,7 @@ read-only on source and delegates searching to `code-scout`.
 What counts as a doc comes from each stack's `discover-targets` slot (TypeORM and Drizzle
 entities, Nest modules, Angular and React pages and features, Next.js routes and server
 actions). A stack without one still gets the command, with an empty list. Not yet built:
-`cairn context adopt`, which would move existing off-convention docs onto the layout.
+a command that would move existing off-convention docs onto the layout.
 
 ### QA pipeline for existing code
 
