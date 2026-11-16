@@ -96,7 +96,7 @@ and offers the actions that apply, with arrow keys and enter (numbered choices w
 this folder" asks about hosts, stack, tracker, workspace and docs, shows the plan, runs the commands
 below for you and prints them at the end. `cairn wizard [--dry-run]` is that one flow on its own.
 It also creates or extends a workspace (`repos.json`: pick the repos next to it) and upgrades cairn across
-a workspace (the report first, then apply; it never commits). Sync, docs and doctor are planned for the shell.
+a workspace (the report first, then apply; it never commits). The rest of the day-to-day is there too: sync (preview, then merge), project docs (list, add, remove), contexts and code lookups (check, register, install-tools), and the workspace doctor.
 
 1. **Install and init.** `--stack` is framework first, then add-ons; `cairn preset list`
    shows what exists (`unknown` gives the core agents with no stack rules).

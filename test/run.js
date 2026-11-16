@@ -4990,7 +4990,7 @@ test('single repo: with no repos.json, the current repo alone is the workspace (
     // now it is a workspace: the menu offers to add, not to create, and offers an upgrade
     const after = detectState(ws, '0.17.0');
     const menu = buildMenu(after).map((m) => m.value);
-    assert.deepStrictEqual(menu, ['init-here', 'upgrade', 'workspace', 'init-other', 'quit']);
+    assert.deepStrictEqual(menu, ['init-here', 'upgrade', 'sync', 'workspace', 'docs', 'context', 'doctor', 'init-other', 'quit']);
     assert.strictEqual(buildMenu(after).find((m) => m.value === 'workspace').label, 'Add repos to the workspace');
     // a second pass only offers what is not in yet (nothing here), so it says so and runs nothing
     const ran = [];
@@ -5060,6 +5060,167 @@ test('single repo: with no repos.json, the current repo alone is the workspace (
     fs.writeFileSync(path.join(ws, 'repos.json'), JSON.stringify({ repos: [{ name: 'x', path: 'x', stack: ['unknown'] }] }));
     assert.ok(!buildMenu(detectState(ws, '0.17.0')).some((m) => m.value === 'upgrade'));
     assert.deepStrictEqual(buildUpgradeApply({ file: 'f', repos: ['a'], all: true, bumpPin: false }).argv, ['upgrade', '--config', 'f', '--apply']);
+  });
+}
+
+// ------------------------------------------------- shell: repo-level actions
+
+{
+  const { detectState } = require('../lib/shell/state');
+  const { buildMenu } = require('../lib/shell/cli');
+  const { syncAction, docsAction, doctorAction, contextAction, managedRepos, docsEntries } = require('../lib/shell/repo-actions');
+
+  function scripted(answers) {
+    const out = [];
+    const next = () => {
+      if (!answers.length) throw new Error('the action asked more than the script answered');
+      return answers.shift();
+    };
+    return {
+      out,
+      write: (s) => out.push(s),
+      ask: async (_t, def) => { const a = next(); return a === '' && def !== undefined ? def : a; },
+      confirm: async (_t, def) => { const a = next(); return a === '' ? def : a === 'y'; },
+      choose: async (_t, opts, def = 0) => { const a = next(); return a === '' ? opts[def].value : opts[Number(a) - 1].value; },
+      multi: async (_t, opts, defs = []) => {
+        const a = next();
+        if (a === '') return defs.map((i) => opts[i].value);
+        return a === 'none' ? [] : a.split(',').map((n) => opts[Number(n) - 1].value);
+      },
+      close() {},
+    };
+  }
+  const recorder = (code = () => 0) => {
+    const ran = [];
+    return { ran, exec: async (argv, o) => { ran.push(argv); return code(argv, o); } };
+  };
+
+  // A managed repo, optionally with docs and a rendered ai/AGENTS.md.
+  function managedRepo({ docs = [], rendered = false } = {}) {
+    const repo = tmpRepo();
+    fs.writeFileSync(path.join(repo, 'cairn.config.json'), JSON.stringify({ cairn: '0.17.0', stack: ['unknown'], docs }));
+    if (rendered) {
+      fs.mkdirSync(path.join(repo, 'ai'));
+      fs.writeFileSync(path.join(repo, 'ai', 'AGENTS.md'), '# x');
+    }
+    return repo;
+  }
+
+  test('repo actions: a lone managed repo gets sync, docs and context but no upgrade or doctor', () => {
+    const repo = managedRepo();
+    const menu = buildMenu(detectState(repo, '0.17.0')).map((m) => m.value);
+    assert.deepStrictEqual(menu, ['sync', 'workspace', 'docs', 'context', 'init-other', 'quit']);
+    assert.deepStrictEqual(managedRepos(detectState(repo, '0.17.0')).map((r) => r.path), [repo]);
+  });
+
+  atest('repo actions: sync previews first, applies only on yes, and explains a conflict', async () => {
+    const repo = managedRepo();
+    const state = detectState(repo, '0.17.0');
+    const a = recorder();
+    await syncAction({ prompter: scripted(['n']), exec: a.exec }, state);
+    assert.deepStrictEqual(a.ran, [['sync', '--repo', repo, '--dry-run']]);
+
+    const b = recorder();
+    await syncAction({ prompter: scripted(['y']), exec: b.exec }, state);
+    assert.deepStrictEqual(b.ran, [['sync', '--repo', repo, '--dry-run'], ['sync', '--repo', repo]]);
+
+    const p = scripted(['y']);
+    const code = await syncAction({ prompter: p, exec: async (argv) => (argv.includes('--dry-run') ? 0 : 3) }, state);
+    assert.strictEqual(code, 3);
+    assert.ok(p.out.join('').includes('conflict'));
+  });
+
+  atest('repo actions: with a workspace, sync asks which repo and defaults to the current one', async () => {
+    const ws = tmpRepo();
+    for (const n of ['api', 'web']) {
+      fs.mkdirSync(path.join(ws, n));
+      fs.writeFileSync(path.join(ws, n, 'cairn.config.json'), JSON.stringify({ cairn: '0.17.0', stack: ['unknown'] }));
+    }
+    fs.writeFileSync(path.join(ws, 'repos.json'), JSON.stringify({ repos: [{ name: 'api', path: 'api' }, { name: 'web', path: 'web' }] }));
+    const state = detectState(path.join(ws, 'web'), '0.17.0');
+    const r = recorder();
+    await syncAction({ prompter: scripted(['', 'n']), exec: r.exec }, state); // default repo = web
+    assert.deepStrictEqual(r.ran, [['sync', '--repo', path.join(ws, 'web'), '--dry-run']]);
+    const r2 = recorder();
+    await syncAction({ prompter: scripted(['1', 'n']), exec: r2.exec }, state);
+    assert.deepStrictEqual(r2.ran, [['sync', '--repo', path.join(ws, 'api'), '--dry-run']]);
+  });
+
+  atest('repo actions: docs add previews, then adds, then syncs when ai/ exists', async () => {
+    const repo = managedRepo({ rendered: true });
+    fs.mkdirSync(path.join(repo, 'docs'));
+    const state = detectState(repo, '0.17.0');
+    const r = recorder();
+    // docs menu: add (2); target: found "docs" (default 1); keep as one entry? no; add it: yes
+    await docsAction({ prompter: scripted(['2', '', '', 'y']), exec: r.exec }, state);
+    assert.deepStrictEqual(r.ran, [
+      ['docs', 'add', 'docs', '--repo', repo, '--dry-run'],
+      ['docs', 'add', 'docs', '--repo', repo],
+      ['sync', '--repo', repo],
+    ]);
+  });
+
+  atest('repo actions: docs add of a custom path honours "one entry", and skips sync without ai/', async () => {
+    const repo = managedRepo();
+    fs.mkdirSync(path.join(repo, 'specs'));
+    const state = detectState(repo, '0.17.0');
+    const r = recorder();
+    // add (2); no known folders found, so the only option is "another path" (1); path; one entry yes; add yes
+    await docsAction({ prompter: scripted(['2', '1', 'specs', 'y', 'y']), exec: r.exec }, state);
+    assert.deepStrictEqual(r.ran, [
+      ['docs', 'add', 'specs', '--repo', repo, '--no-expand', '--dry-run'],
+      ['docs', 'add', 'specs', '--repo', repo, '--no-expand'],
+    ]);
+  });
+
+  atest('repo actions: docs list and remove', async () => {
+    const repo = managedRepo({ docs: ['docs/a.md', { path: 'docs/b.md', about: 'b' }] });
+    assert.deepStrictEqual(docsEntries(repo), ['docs/a.md', 'docs/b.md']);
+    const state = detectState(repo, '0.17.0');
+    const l = recorder();
+    await docsAction({ prompter: scripted(['1']), exec: l.exec }, state);
+    assert.deepStrictEqual(l.ran, [['docs', 'list', '--repo', repo]]);
+    const r = recorder();
+    await docsAction({ prompter: scripted(['3', '2']), exec: r.exec }, state); // remove; second entry
+    assert.deepStrictEqual(r.ran, [['docs', 'remove', 'docs/b.md', '--repo', repo]]);
+    const n = recorder();
+    await docsAction({ prompter: scripted(['4']), exec: n.exec }, state); // back
+    assert.deepStrictEqual(n.ran, []);
+  });
+
+  atest('repo actions: doctor and contexts target the workspace file, or the repo when alone', async () => {
+    const ws = tmpRepo();
+    fs.mkdirSync(path.join(ws, 'api'));
+    fs.writeFileSync(path.join(ws, 'api', 'cairn.config.json'), JSON.stringify({ cairn: '0.17.0', stack: ['unknown'] }));
+    fs.writeFileSync(path.join(ws, 'repos.json'), JSON.stringify({ repos: [{ name: 'api', path: 'api' }] }));
+    const state = detectState(ws, '0.17.0');
+    const file = path.join(ws, 'repos.json');
+
+    const d = recorder();
+    await doctorAction({ prompter: scripted([]), exec: d.exec }, state);
+    assert.deepStrictEqual(d.ran, [['doctor', '--config', file]]);
+
+    const c = recorder();
+    await contextAction({ prompter: scripted(['2']), exec: c.exec }, state); // register
+    assert.deepStrictEqual(c.ran, [['context', 'register', '--config', file]]);
+
+    const alone = managedRepo();
+    const lone = detectState(alone, '0.17.0');
+    const calls = [];
+    const e = { ran: calls, exec: async (argv, o) => { calls.push([argv, o && o.cwd]); return 0; } };
+    await contextAction({ prompter: scripted(['1']), exec: e.exec }, lone); // check
+    assert.deepStrictEqual(calls, [[['context', 'check'], alone]]);
+  });
+
+  atest('repo actions: install-tools asks before the long download', async () => {
+    const repo = managedRepo();
+    const state = detectState(repo, '0.17.0');
+    const no = recorder();
+    await contextAction({ prompter: scripted(['3', 'n']), exec: no.exec }, state);
+    assert.deepStrictEqual(no.ran, []);
+    const yes = recorder();
+    await contextAction({ prompter: scripted(['3', 'y']), exec: yes.exec }, state);
+    assert.deepStrictEqual(yes.ran, [['context', 'install-tools']]);
   });
 }
 

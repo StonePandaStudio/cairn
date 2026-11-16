@@ -113,8 +113,10 @@ prompter is in `lib/wizard/prompt.js` (raw keypresses, no dependency; numbered l
 - ✅ Workspace create/extend, and upgrade (report, then apply with a repo subset and `--bump-pin`);
   `lib/shell/actions.js`, shared plan helpers in `lib/wizard/plan.js`. Upgrade is offered only with a
   workspace, because `cairn upgrade` needs a repos.json (a lone managed repo has no upgrade item yet).
-- Next, in order: sync, docs (add/list/remove), doctor, context tools (register, install-tools), a
-  single-repo upgrade path, then stack detection as a pre-fill.
+- ✅ Sync (preview then merge), docs (list/add/remove, then sync), doctor, contexts (check, register,
+  install-tools): `lib/shell/repo-actions.js`.
+- Next: a single-repo upgrade path, stack detection as a pre-fill, `workspace remove` and `override` in the
+  shell, then the host-side commands.
 - Each menu item must have a test asserting the argv it builds; the equivalent commands are always printed.
 - Not yet tried in a real terminal by anyone but the tests (PassThrough streams); check Windows Terminal.
 - Later: host-side commands (/cairn-init, /cairn-upgrade, ...) that call the same CLI non-interactively.
