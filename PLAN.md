@@ -6,8 +6,9 @@ where we are in it.
 
 ## Next (2026-11-13) — command names, project docs in the flow, interactive tool
 
-Everything below lands in **0.18.0** (0.16.0 and 0.17.0 were skipped: the same changes were first numbered 0.16.0 and 0.17.0, never published; 0.15.0 is the last release), which is not published yet, so
-renames cost nothing now and need only aliases for what 0.15.0 already shipped.
+Most of what is below shipped in 0.16.0 and 0.17.0 (both published). The interactive shell, the agent
+commands and the stack checklist are new in **0.18.0**, which is not published yet, so their names cost
+nothing to change.
 
 ### Where we are
 
