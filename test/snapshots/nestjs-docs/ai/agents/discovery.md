@@ -121,6 +121,9 @@ the table list **Documented, not found in code**: subjects only a doc mentions, 
 heading. The user decides whether each becomes a context; one that does is written with the doc as
 its `source` and says in its body that no code was found.
 
+State the language the drafts will be written in, as one line under the table (rule in D.4), so
+the user can change it.
+
 The user removes rows, renames them or adds an area. Write only what they confirm.
 
 ### D.4 — Write
@@ -168,7 +171,13 @@ describes: entity Invoice
 - Add `counterpartOf: <repo>:<path>` only when a sibling repo's doc is named in the
   Workspace table of `ai/AGENTS.md` **and** you have read it. Otherwise leave it out;
   `cairn context check` will suggest pairs.
-- Short beats complete. Leave a section out rather than pad it.
+- **Language.** Write in the language of the repo's existing `ai/contexts/` docs. With none, use
+  the language of the listed project docs, and English when that does not settle it.
+  Keep code identifiers, paths and frontmatter keys as they are. The user can override it when
+  confirming D.3.
+- Short beats complete. Leave a section out rather than pad it. Do not copy what the source already
+  states in full (a configuration or environment-variable table, a list of routes, a schema): say
+  what it is for and point to the file.
 - **Facts from the project docs.** When a doc states something the code cannot show (why,
   a business rule, a constraint, a term), put it under `## From the project docs`: short bullets,
   each ending with its source, e.g. `(docum/arch.md § Layers)`. Paraphrase. Quote at most a line,
@@ -178,8 +187,7 @@ describes: entity Invoice
   both under `## Doc vs code`: what the doc says, what the code does or "not found in code", each
   with its citation. Do not pick a side and do not edit the doc. It also goes under *Needs a human*.
 - List the docs you drew from under `## References`, next to the code files.
-- Write in the language the repo's existing `ai/` docs use, with domain terms spelled as the
-  project docs spell them.
+- Spell domain terms as the project docs spell them.
 
 ### D.5 — Report
 

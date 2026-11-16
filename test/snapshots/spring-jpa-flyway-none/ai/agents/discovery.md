@@ -111,6 +111,9 @@ A subject is **exists** when any context from D.1 covers it: the same path, the 
 and never propose a second doc for it. If an existing doc looks wrong, off the
 convention or stale, list it under *Needs a human* in the report; do not touch it.
 
+State the language the drafts will be written in, as one line under the table (rule in D.4), so
+the user can change it.
+
 The user removes rows, renames them or adds an area. Write only what they confirm.
 
 ### D.4 — Write
@@ -155,7 +158,13 @@ describes: entity Invoice
 - Add `counterpartOf: <repo>:<path>` only when a sibling repo's doc is named in the
   Workspace table of `ai/AGENTS.md` **and** you have read it. Otherwise leave it out;
   `cairn context check` will suggest pairs.
-- Short beats complete. Leave a section out rather than pad it.
+- **Language.** Write in the language of the repo's existing `ai/contexts/` docs. With none, use
+  the language of the README, and English when that does not settle it.
+  Keep code identifiers, paths and frontmatter keys as they are. The user can override it when
+  confirming D.3.
+- Short beats complete. Leave a section out rather than pad it. Do not copy what the source already
+  states in full (a configuration or environment-variable table, a list of routes, a schema): say
+  what it is for and point to the file.
 
 ### D.5 — Report
 
